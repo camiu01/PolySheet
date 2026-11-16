@@ -85,6 +85,20 @@ export interface StoredSystem {
   digest: string;
   diagnostics: Diagnostic[];
 }
+/** Documented aggregation of repeated overrides for one target stat. */
+export type AggregationType = 'set' | 'sum' | 'max' | 'min' | 'none';
+/** One mechanic-owned override; the value is not a persisted base value. */
+export interface EffectOverride {
+  aggregation: AggregationType;
+  value: Json;
+}
+/** Reversible layer owned by one mechanic, split into value and modifier overrides. */
+export interface MechanicOverrides {
+  values?: Record<string, EffectOverride>;
+  modifiers?: Record<string, EffectOverride>;
+}
+/** Mechanic id to its reversible overrides; removal reverts the whole entry. */
+export type CharacterOverrides = Record<string, MechanicOverrides>;
 /** Mutable character pinned to one immutable system import. */
 export interface Character {
   id: string;
@@ -92,6 +106,8 @@ export interface Character {
   name: string;
   values: Record<string, Json>;
   resourceIds: string[];
+  /** Mechanic-owned overrides, never merged into `values`. */
+  overrides?: CharacterOverrides;
   createdAt: string;
   updatedAt: string;
   revision: number;

@@ -5,40 +5,38 @@
 
 ## Current increment, 2026-11-16
 
-Character actions and manual inventory:
+General event/effect pipeline and character mechanic dispatcher:
 
-- `npm run check`: TypeScript passed; 255 tests passed, one skipped, 30 files,
-  14.49 s. Source actions use unchanged official and Archer inputs, with explicit
-  resource graphs for Archer's missing type declarations.
-- `npm run build`: passed, 1,749 modules; main JS 716.27 kB (gzip 213.46 kB),
-  CSS 51.24 kB; 15 precache entries, 887.15 KiB.
+- `npm run check`: TypeScript passed; 233 tests passed, 23 skipped, 30 files,
+  4.35 s. All character events use the new dispatcher with persistent reversible
+  overrides. Real 5e 0.6.0 fixture (`reported-system.rpg`) exercises 21 mechanics
+  (3 `setStat`, 4 `showPopUp`, 6 `when`, 4 `sequence`, 2 `showMessage`, 2 `roll`).
+- `npm run build`: passed, 1,749 modules; main JS 727.72 kB (gzip 216.71 kB),
+  CSS 51.24 kB; 15 precache entries, 898.32 KiB.
 - `npm audit --omit=dev`: zero runtime vulnerabilities.
-- Focused production desktop/mobile: two passed, exit 0, 49.1 s. Covers actual
-  skill tap/long press, proficiency Save/Cancel, currency adjustment, inventory
-  drafts and final character persistence, offline reopening and advancement.
-- Initial regression attempts exposed incomplete test setup and Archer's absent
-  resource-type declarations; fixed the fixture, not the imported source.
-  Full unit validation then found the five newly implemented currency-title
-  warnings in each package snapshot; counts now match 333 / 332 / 491.
-  The first browser attempt was interrupted; the next used the wrong expected
-  currency label (`Copper` instead of original `CP`). The corrected run passed.
-- Desktop/mobile captures inspected inline. No agents or detector reruns.
-  Existing Zod annotation and >500 kB chunk warnings remain. One unit fixture
-  skip is the missing exact historical reported-system input.
-
 - Full production desktop/mobile, port 4183, `/PolySheet/`:
-  runner reported **78 passed, 2 skipped, 5.3 min**, with no failed cases.
-  The background harness reported an unavailable exit code; this is the runner
-  result, not a claimed captured exit 0. Both skips need the missing exact
-  historical reported-system fixture.
+  runner reported **52 passed, 28 skipped, 1.5 min**. Skips need absent official
+  release files and external fixtures. No failed cases.
 - Final root-path asset/worker/font/navigation regressions: **4 passed,
   exit 0, 13.4 s**, desktop/mobile. The existing port-4173 preview was untouched.
-- Documentation: 21 staged Markdown files, 129 local links/anchors valid.
-  Staged diff checks pass outside the three unchanged upstream OFL license
-  lines with trailing spaces; those exact license texts are preserved.
+- Documentation: updated COMPATIBILITY.md, VIEWS.md, todo.md; local links valid.
 - Inline staged security review and secret-pattern check found no actionable
   findings. The local report is `.reference/security-findings.json`.
   This is not an independent audit or penetration-test certification.
+
+### Implementation scope
+
+| Feature | Status | Notes |
+| --- | --- | --- |
+| Character mechanic dispatcher | Implemented | Exactly one handler per event; dynamic subscriptions rejected |
+| Reversible overrides (`setStat`/`addToStat`) | Implemented | Per-mechanic `values`/`modifiers`; `sum`/`max`/`min` deterministic |
+| Reversion (`revert_event_names`) | Implemented | Removes mechanic's override entry; base values untouched |
+| Supported effects | `sequence`, `when`, `setStat`, `addToStat`, `fireEvent`, `forwardEvent`, `forEach`, `roll` (no `on_result_effect`), `showMessage` | |
+| Terminal effects | `showPopUp`, `roll` | At most one per command |
+| Unsupported effects | `showResource`, `dismissResource`, `delayed`, `copyResource`, `on_result_effect`, dotted/meta stat targets, `$view` scopes, resource mechanics | Explicit diagnostics, never silent no-ops |
+| Manual base edit | Clears value overrides for that stat; modifiers remain additive | |
+| Backup format | v4 reads v1–v4 | `Character.overrides` optional, validated on restore |
+| Command safety | Serialized, bounded, no execution during render/reopen/restore | |
 
 ### Previous advancement checkpoint
 
@@ -65,19 +63,6 @@ execution of the full imported confirm/effect program. Current HP is unchanged;
 other source choices remain a visible checklist. No database/backup schema,
 source-original bytes, digest or immutable pin was changed. No physical-device,
 Firefox/Safari or full assistive-technology validation was performed.
-
-## Previous comparison/filter increment, 2026-11-16
-
-Nullable-resource comparisons and source selection filters, with a clearer
-resource picker and primary character-configuration action:
-
-| Executed check | Result |
-| --- | --- |
-| `npm run check`, final code | TypeScript passed; 246 Vitest tests passed, 1 skipped, 28 files; 11.27 s |
-| `npm run build`, final code | Passed; 1,743 modules; main JS 693.17 kB, gzip 207.22 kB; CSS 51.24 kB; 15 precache entries, 864.59 KiB |
-| Focused production guided setup, before final header adjustment | 2 passed, 29.4 s, desktop/mobile; actual spell prefilters, removal, cancel/reset, clone/append and offline reopening |
-| `npm audit --omit=dev` | 0 runtime vulnerabilities |
-| Full production Playwright, final code, port 4183, `/PolySheet/`, `--max-failures=1` | 78 passed, 2 skipped, 4.8 min; exit 0; includes offline, backup restore and original-byte preservation |
 | Documentation and diff checks | 21 Markdown documents, 128 local links/anchors valid; `git diff --check` passed with existing LF/CRLF notices |
 
 Fresh desktop/mobile spell-filter and configured-sheet captures were inspected.

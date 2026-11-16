@@ -1,13 +1,14 @@
 /**
  * @file Source value controls: ticker, button, select and menu button.
  * @remarks Inputs are staged through the enclosing session or patched directly.
- * Event dispatch is not implemented, so a source event stays explicitly visible.
+ * Character buttons dispatch their source event; resource views keep it visible
+ * but disabled.
  */
 import { useState } from 'react';
 import { createEvaluator } from '../engine/formulas';
 import { enumerationEntries, type EnumerationEntry } from '../engine/enumerations';
 import type { View } from '../domain/model';
-import { boundedNumber, inputValue, resourceReferenceId, saveInput, sourceIcons, textValue, viewColor } from './view-support';
+import { boundedNumber, canSourceEvent, inputValue, resourceReferenceId, saveInput, sourceIcons, textValue, viewColor } from './view-support';
 import { it } from './it';
 import type { RenderContext } from './renderer';
 import { Modal } from './shared';
@@ -132,16 +133,19 @@ export function SourceTicker({ node: v, context: ctx, evaluate }: {
 	</div>;
 }
 
-/** Source `button`: renders source text and enabled state; events stay disabled. */
-export function SourceButton({ node: v, evaluate }: {
+/** Source `button`: renders source text and fires its character event when supported. */
+export function SourceButton({ node: v, context: ctx, evaluate }: {
 	node: View; context: RenderContext; evaluate: (value: unknown) => unknown;
 }) {
 	const text = v.text == null ? '' : textValue(evaluate(v.text));
 	const enabled = v.enabled == null ? true : evaluate(v.enabled) === true;
-	const hasEvent = v.event != null || v.event_names != null;
+	const event = v.event ?? null;
+	const can = event != null && canSourceEvent(ctx, event);
+	const unsupported = v.event_names != null || event != null && !can;
 	return <div className="source-button">
-		<button type="button" className="button secondary" disabled={!enabled || hasEvent}>{text}</button>
-		{hasEvent && <small className="unsupported-note">{it.eventNotExecuted}</small>}
+		<button type="button" className="button secondary" disabled={!enabled || !can}
+			onClick={() => can && ctx.onEvent?.(event)}>{text}</button>
+		{unsupported && <small className="unsupported-note">{it.eventNotExecuted}</small>}
 	</div>;
 }
 

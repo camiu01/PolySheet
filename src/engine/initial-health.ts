@@ -2,6 +2,7 @@
 import { isResourceReference, type Character, type ResourceInstance, type StoredSystem, type SystemDefinition } from '../domain/model';
 import { supportsAbilitySetup } from './ability-setup';
 import { createEvaluator, RuntimeResource } from './formulas';
+import { resolveCharacterOverrides } from './overrides';
 import { it } from '../ui/it';
 
 /** Restrict the helper to declared D&D health and class-wrapper contracts. */
@@ -22,9 +23,11 @@ export function initialHealth(system: StoredSystem, character: Character, resour
   const wrapper = resources.find(record => record.id === wrapperId && record.systemKey === system.key);
   const definition = system.definition.resources.find(resource => resource.id === wrapper?.definitionId);
   if (!wrapper || !definition || definition.id !== 'class_details') throw new Error(it.setupAutoHpUnavailable);
+  const overrides = resolveCharacterOverrides(character.overrides);
   const environment = { resources, resourceDefinitions: system.definition.resources,
     enumerations: system.definition.enumerated_types, createdAt: character.createdAt,
-    character: new RuntimeResource(`character:${character.id}`, system.definition.character_stats, character.values, character.createdAt) };
+    overrides: overrides.values, modifiers: overrides.modifiers,
+    character: new RuntimeResource(`character:${character.id}`, system.definition.character_stats, character.values, character.createdAt, {}, overrides.values, undefined, overrides.modifiers) };
   const root = createEvaluator(system.definition.character_stats, character.values, undefined, environment);
   const details = createEvaluator(definition.stats, wrapper.values, undefined, environment);
   const die = details.get('class.actual_hit_die'), modifiers = details.get('class.actual_hp_modifiers');

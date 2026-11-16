@@ -4,8 +4,9 @@
  * verified synchronous sequence of one set override per target.
  * @see https://docs.rpg-companion.app/System/CombatSystem
  */
-import { jsonValue, matchesType, object, type Character, type Combat, type ResourceInstance, type Stat, type StoredSystem } from '../domain/model';
+import { jsonValue, matchesType, object, type Character, type Combat, type Json, type ResourceInstance, type Stat, type StoredSystem } from '../domain/model';
 import { createEvaluator, RuntimeResource, type EvaluationEnvironment } from './formulas';
+import { resolveCharacterOverrides } from './overrides';
 import { rollDice } from './dice';
 import { checkReferences } from '../domain/references';
 
@@ -28,10 +29,13 @@ export function combatContext(system: StoredSystem, combat: Combat, characters: 
     const type = definition.combatant_types.find(t => t.id === fighter.typeId);
     if (!type) throw new Error('Tipo combattente mancante.');
     let stats: Stat[], values: Record<string, unknown>, createdAt = fighter.createdAt;
+    let overrides: Record<string, Json> = fighter.overrides, modifiers: Record<string, Json> = {};
     if (fighter.characterId) {
       const character = characters.find(c => c.id === fighter.characterId && c.systemKey === system.key);
       if (!character || type.template_resource_id !== 'character' || type.instance_resource_id) throw new Error('Personaggio del combattente non valido.');
       stats = system.definition.character_stats; values = character.values; createdAt = character.createdAt;
+      const resolved = resolveCharacterOverrides(character.overrides);
+      overrides = resolved.values as Record<string, Json>; modifiers = resolved.modifiers as Record<string, Json>;
     } else if (!type.instance_resource_id && fighter.resourceId) {
       const source = resource(fighter.resourceId);
       stats = source.stats; values = source.values; createdAt = source.createdAt ?? fighter.createdAt;
@@ -46,7 +50,7 @@ export function combatContext(system: StoredSystem, combat: Combat, characters: 
       $instance_resource_id: type.instance_resource_id ?? null
     };
     if (fighter.templateId) variables.$resource = resource(fighter.templateId);
-    const scope = new RuntimeResource(`combatant:${fighter.id}`, stats, values, createdAt, variables, fighter.overrides);
+    const scope = new RuntimeResource(`combatant:${fighter.id}`, stats, values, createdAt, variables, overrides, undefined, modifiers);
     variables.$combatant = scope;
     scopes.set(fighter.id, scope);
   }
@@ -60,7 +64,7 @@ export function combatContext(system: StoredSystem, combat: Combat, characters: 
       const scope = scopes.get(id);
       if (!scope) throw new Error('Combattente non trovato.');
       return createEvaluator(scope.stats, scope.values, undefined, {
-        ...environment, createdAt: scope.createdAt, overrides: scope.overrides,
+        ...environment, createdAt: scope.createdAt, overrides: scope.overrides, modifiers: scope.modifiers,
         variables: { ...globals, ...scope.variables }
       });
     }

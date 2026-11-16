@@ -39,7 +39,7 @@ The displayed list is truncated, so it cannot establish the complete backlog.
   including the original Spells class-name filter. Keep unsupported types and
   invalid formulas visible; this does not install a spell compendium.
 
-- [ ] Implement the general event/effect pipeline after verifying source scopes,
+- [x] Implement the general event/effect pipeline after verifying source scopes,
   execution order, aggregation, reversal and failure behavior. Existing combat
   initialization and explicit character showPopUp/roll commands are bounded
   subsets, not this pipeline.

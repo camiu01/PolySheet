@@ -11,7 +11,9 @@ export class RuntimeResource {
     readonly key: string, readonly stats: Stat[], readonly values: Record<string, unknown>,
     readonly createdAt?: string, readonly variables: Record<string, unknown> = {},
     readonly overrides: Record<string, unknown> = {},
-    readonly instanceId?: string
+    readonly instanceId?: string,
+    /** Additive modifier overrides, never stored as base values. */
+    readonly modifiers: Record<string, unknown> = {}
   ) {}
 }
 export interface EvaluationEnvironment {
@@ -21,7 +23,10 @@ export interface EvaluationEnvironment {
   resources?: ResourceInstance[];
   resourceDefinitions?: ResourceDefinition[];
   variables?: Record<string, unknown>;
+  /** Explicit mechanic value overrides, resolved outside base values. */
   overrides?: Record<string, unknown>;
+  /** Additive modifier overrides applied after value overrides. */
+  modifiers?: Record<string, unknown>;
   /** Raw system `enumerated_types`, resolved lazily for enumerated formulas. */
   enumerations?: unknown[];
   /** Explicit opt-in for commands such as combat initialization, never rendering. */
@@ -358,7 +363,7 @@ for (const [type, compare] of [
  * Resource membership is captured once; its lookup index is built only on demand.
  */
 export function createEvaluator(stats: Stat[], values: Record<string, unknown> = {}, limits = { steps: 10000, depth: 64 }, environment: EvaluationEnvironment = {}) {
-  const root = new RuntimeResource('root', stats, values, environment.createdAt, environment.variables, environment.overrides);
+  const root = new RuntimeResource('root', stats, values, environment.createdAt, environment.variables, environment.overrides, undefined, environment.modifiers);
   const scopes = new Map<string, RuntimeResource>();
   const resourceRecords = environment.resources?.slice();
   let resources: Map<string, ResourceInstance> | undefined;
@@ -471,6 +476,12 @@ export function createEvaluator(stats: Stat[], values: Record<string, unknown> =
         else if (s.type === 'base') result = Object.hasOwn(scope.values, id) ? scope.values[id] : s.default_value;
         else if (s.type === 'calculated') result = evaluate(s.components, scope);
         else throw new Error(`Tipo statistica non supportato: ${s.type}`);
+        if (Object.hasOwn(scope.modifiers, id)) {
+          const base = result, delta = scope.modifiers[id];
+          if (typeof base !== 'number' || typeof delta !== 'number' || !Number.isFinite(delta))
+            throw new Error(`Modificatore non numerico per ${id}`);
+          result = base + delta;
+        }
         const resourceResult = s.value_type === 'resource' && result instanceof RuntimeResource;
         const resourceArray = s.value_type === 'array' && s.sub_value_type === 'resource' && Array.isArray(result)
           && result.every(v => v instanceof RuntimeResource || isResourceReference(v));

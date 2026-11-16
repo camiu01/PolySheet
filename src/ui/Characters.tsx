@@ -16,6 +16,7 @@ import { BaseValueEditor } from './BaseValueEditor';
 import { RuntimeResource } from '../engine/formulas';
 import { CharacterCreator } from './CharacterCreator';
 import { useCharacterEvents } from './CharacterEvents';
+import { resolveCharacterOverrides } from '../engine/overrides';
 import { CharacterProgression } from './CharacterProgression';
 
 /** List persisted characters; creation never claims to execute the official flow. */
@@ -65,11 +66,14 @@ export const CharacterSheet = memo(function CharacterSheet({ character, system, 
   const [progression, setProgression] = useState(false);
   const events = useCharacterEvents(system, character);
   const resources = useLiveQuery(() => db.resources.where('systemKey').equals(system.key).toArray(), [system.key]) ?? [];
+  const overrides = resolveCharacterOverrides(character.overrides);
   const change = (id: string, value: unknown) => { void run(() => setCharacterValue(character.id, id, value)); };
   const context = {
     canEvent: events.canEvent, onEvent: events.onEvent, eventBusy: events.eventBusy,
-    character: new RuntimeResource(`character:${character.id}`, system.definition.character_stats, character.values, character.createdAt),
-    stats: system.definition.character_stats, values: character.values, onChange: change,
+    character: new RuntimeResource(`character:${character.id}`, system.definition.character_stats,
+      character.values, character.createdAt, {}, overrides.values, undefined, overrides.modifiers),
+    stats: system.definition.character_stats, values: character.values,
+    overrides: overrides.values, modifiers: overrides.modifiers, onChange: change,
     systemKey: system.key, createdAt: character.createdAt, resources, resourceDefinitions: system.definition.resources,
     enumerations: system.definition.enumerated_types,
     onCommit: (patch: import('../persistence/views').ValuePatch, additions?: import('../domain/model').ResourceInstance[]) => commitCharacterView(character.id, patch, additions)

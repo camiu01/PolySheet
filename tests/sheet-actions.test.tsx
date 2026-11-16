@@ -48,12 +48,16 @@ it('follows the first true branch with unchanged payload; rejects cycles, multip
     if (result.kind === 'popup') {
       expect(result.edit?.field).toBe('rank'); expect(result.variables.$event).toEqual({ label: 'kept' });
     }
+    // Static validation rejects multiple forward names and incomplete effects
     for (const effect of [
       { ...forward, new_event_names: list(constant('choose'), constant('choose')) },
-      { ...forward, new_event_names: list(constant('route')) },
       { type: 'when', clauses: [{ condition: constant(false), effect: { type: 'setStat' } }] }
     ]) expect(() => characterEventEffect({ ...system.definition, mechanics: [...definition.mechanics,
       { id: 'route', event_names: 'route', effects: effect }] }, { name: 'route' })).toThrow();
+    // Cycle detection happens at execution time
+    const cycleSystem = { ...system.definition, mechanics: [...definition.mechanics,
+      { id: 'route', event_names: 'route', effects: { ...forward, new_event_names: list(constant('route')) } }] };
+    expect(() => executeCharacterEvent({ ...system, definition: cycleSystem }, owner, [], { name: 'route', payload: { label: 'kept' } })).toThrow('Ciclo o catena eventi troppo lunga');
   } finally { await database.delete(); }
 });
 

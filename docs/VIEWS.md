@@ -49,29 +49,44 @@ Disable the option to retain manual HP entry. Without a class, no automatic
 value is guessed; existing-character configuration never resets HP. Special
 bonuses, later leveling and later Constitution changes are not automated.
 
-## Explicit character events
+## Explicit character events and general effect pipeline
 
-Stat long presses now expose the same bounded actions through a separate
-keyboard-accessible button. Static single-target forwarding and first-true
-branches support the original skill tap. A single enum popup can explicitly
-save a direct base-string field; all other editable-effect semantics remain
-unsupported. See [current contracts and limits](COMPATIBILITY.md#character-actions-and-manual-inventory-2026-11-16).
-The following presentation subset remains available as before.
+Stat long presses and source button `event` fields now dispatch through the
+character-level mechanic dispatcher. Static single-target forwarding and
+first-true `when` branches support the original skill tap and condition removal.
+A single enum popup can explicitly save a direct base-string field. Reverting
+an event (`revert_event_names`) removes that mechanic's reversible overrides
+entirely.
 
-Character-sheet avatar buttons and stat taps can execute one static root
-mechanic with bounded branches/forwarding to `showPopUp` or an explicit
-`roll` list. Official 5e INFORMATION opens its original
-view; `rollStat` uses its actual source bonus and advantage/disadvantage formula.
-Normal dice and bounded `min(...)`/`max(...)` pools are supported, including the
-source's signed expressions such as `1d20 + -1`. Results show dice and totals;
+Character-sheet avatar `bottom_*_button_event` and stat `on_tap_event`/
+`on_long_tap_event` can execute one static root mechanic with bounded branches
+to `showPopUp` or an explicit `roll` list. Official 5e INFORMATION opens its
+original view; `rollStat` uses its actual source bonus and advantage/disadvantage
+formula. Normal dice and bounded `min(...)`/`max(...)` pools are supported,
+including signed expressions such as `1d20 + -1`. Results show dice and totals;
 they do not modify the character or enter persistent roll history.
 
 Each click reads a fresh exact-pin snapshot and is protected against overlapping
 dispatch. Drafts, nested resources and combat do not forward events to the owner.
 Unknown options, ambiguous/dynamic subscriptions, callbacks, sequences and
-persistent override effects remain blocked. There is no general event engine or automatic
-execution during rendering/reopening/restore. Import diagnostics remain
+persistent override effects remain blocked. Commands are serialized, bounded and
+never execute during rendering, reopening or restore. Import diagnostics remain
 conservative and still report the broader mechanic/event surface.
+
+The general effect pipeline now supports value and modifier overrides at
+character scope: `sequence`, `when`, `setStat`, `addToStat`, `fireEvent`,
+`forwardEvent`, `forEach`, `roll` (without `on_result_effect`), `showMessage`.
+Value overrides (`setStat`) and modifier overrides (`addToStat`) are stored
+separately per mechanic and combined with deterministic `sum`/`max`/`min`
+aggregation; `set`/`none` clashes require an upstream user prompt and stay a
+visible error. A manual base edit clears value overrides for that field;
+modifiers remain additive. Terminal effects (`showPopUp`, `roll`) execute at
+most one per command. Reversion removes the mechanic's override entry.
+
+Unsupported: `$view`-dependent scopes, resource-owned mechanics, `showResource`,
+`dismissResource`, `delayed`, `copyResource`, dotted/meta stat targets beyond
+direct ids, `on_result_effect`, asynchronous branches, nested popups/rolls in
+sequences. These paths fail explicitly with a diagnostic, never as silent no-ops.
 
 ## Use
 

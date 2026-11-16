@@ -12,8 +12,21 @@ export interface InputContext {
 	values: Record<string, unknown>;
 	drafts?: Record<string, unknown>;
 	overrides?: Record<string, unknown>;
+	modifiers?: Record<string, unknown>;
 	onChange?: (id: string, value: unknown) => void;
 	onInput?: (viewId: string, statId: string, value: unknown) => void;
+}
+
+/** Character-only event gate shared by source controls; resource views never dispatch. */
+export function canSourceEvent(context: {
+	drafts?: Record<string, unknown>;
+	stats: Stat[];
+	character?: { stats: Stat[] };
+	canEvent?: (event: unknown) => boolean;
+	onEvent?: (event: unknown) => void;
+}, event: unknown) {
+	return event != null && !context.drafts && context.stats === context.character?.stats
+		&& context.canEvent?.(event) === true && !!context.onEvent;
 }
 
 
@@ -74,9 +87,11 @@ export function boundedNumber(value: unknown): number | undefined {
 
 /** Current value for one input view, preferring session drafts over persisted values. */
 export function inputValue(v: View, ctx: InputContext, s: Stat) {
-	return ctx.drafts && Object.hasOwn(ctx.drafts, v.id) ? ctx.drafts[v.id]
+	const base = ctx.drafts && Object.hasOwn(ctx.drafts, v.id) ? ctx.drafts[v.id]
 		: ctx.overrides && Object.hasOwn(ctx.overrides, s.id) ? ctx.overrides[s.id]
 		: Object.hasOwn(ctx.values, s.id) ? ctx.values[s.id] : s.default_value;
+	const modifier = ctx.modifiers?.[s.id];
+	return typeof base === 'number' && typeof modifier === 'number' ? base + modifier : base;
 }
 
 /** Route one input change to the session draft or the persisted owner. */

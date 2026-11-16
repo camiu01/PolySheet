@@ -90,7 +90,7 @@ describe('backup v2 and legacy v1', () => {
   });
   it('rejects unsupported versions, source tampering, duplicates and dangling links', async () => {
     await setup(); const text = await exportBackup(database); const original = JSON.parse(text);
-    await expect(validateBackup(JSON.stringify({ ...original, version: 4 }))).rejects.toThrow();
+    await expect(validateBackup(JSON.stringify({ ...original, version: 5 }))).rejects.toThrow();
     const tampered = structuredClone(original); tampered.systems[0].original += '\n';
     await expect(validateBackup(JSON.stringify(tampered))).rejects.toThrow('alterato');
     const duplicates = structuredClone(original); duplicates.characters.push(duplicates.characters[0]);

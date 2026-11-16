@@ -1,5 +1,5 @@
 /**
- * @file PolySheet backup v3; reads legacy v1/v2 without changing source identities.
+ * @file PolySheet backup v4; reads legacy v1/v2/v3 without changing source identities.
  * @remarks Source imports are revalidated and rehashed before any data is changed.
  */
 import { z } from 'zod';
@@ -17,7 +17,7 @@ const date = z.string().datetime();
 const schema = z.object({
   // The original format tag stays readable so backups exported before the rename still restore.
   format: z.union([z.literal('polysheet-backup'), z.literal('sheetcore-backup')]),
-  version: z.union([z.literal(1), z.literal(2), z.literal(3)]), exportedAt: date,
+  version: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]), exportedAt: date,
   systems: z.array(z.object({
     key: id, original: z.string(), source: z.string().max(2000), digest: id, importedAt: date,
     artifact: z.object({ format: z.literal('gzip-json'), base64: z.string().max(Math.ceil(8 * 1024 * 1024 / 3) * 4) }).strict().optional()
@@ -25,7 +25,11 @@ const schema = z.object({
   characters: z.array(z.object({
     id, systemKey: id, name: z.string().max(500), values: record,
     resourceIds: z.array(id).max(10000), createdAt: date, updatedAt: date,
-    revision: z.number().int().nonnegative()
+    revision: z.number().int().nonnegative(),
+    overrides: z.record(z.string(), z.object({
+      values: z.record(z.string(), z.object({ aggregation: z.enum(['set','sum','max','min','none']), value: z.unknown() })).optional(),
+      modifiers: z.record(z.string(), z.object({ aggregation: z.enum(['set','sum','max','min','none']), value: z.unknown() })).optional()
+    })).optional()
   })).max(10000),
   resources: z.array(z.object({
     id, systemKey: id, definitionId: id, name: z.string().max(500), values: record, createdAt: date.optional(),
@@ -116,6 +120,23 @@ export async function validateBackup(text: string) {
       if (!stat || stat.type !== 'base') throw new Error(`Valore sconosciuto o calcolato nel backup: ${key}`);
       if (['string', 'integer', 'decimal', 'bool', 'array', 'resource', 'photo'].includes(stat.value_type) && !matchesType(value, stat.value_type, stat.sub_value_type))
         throw new Error(`${entry.id}.${key}: tipo non valido`);
+    }
+    if ('overrides' in entry && entry.overrides) {
+      const stats = 'definitionId' in entry ? system.definition.resources.find(r => r.id === entry.definitionId)?.stats : system.definition.character_stats;
+      if (!stats) throw new Error('Definizione risorsa mancante per override');
+      for (const [_mechanicId, layers] of Object.entries(entry.overrides)) {
+        if (!layers || typeof layers !== 'object') throw new Error('Struttura override non valida');
+        for (const layer of ['values', 'modifiers'] as const) {
+          if (layers[layer]) {
+            for (const [statId, item] of Object.entries(layers[layer])) {
+              if (!stats.find(s => s.id === statId)) throw new Error(`Override per statistica sconosciuta: ${statId}`);
+              if (!['set','sum','max','min','none'].includes(item.aggregation as string)) throw new Error(`Aggregazione non valida: ${item.aggregation}`);
+              if (item.value == null || (['integer','decimal'].includes(stats.find(s => s.id === statId)?.value_type ?? '') && typeof item.value !== 'number'))
+                throw new Error(`Valore override non valido per ${statId}`);
+            }
+          }
+        }
+      }
     }
     checkReferences(stats, entry.values, data.resources as ResourceInstance[], entry.systemKey);
   }

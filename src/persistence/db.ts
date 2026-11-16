@@ -3,6 +3,7 @@ import Dexie, { type EntityTable } from 'dexie';
 import { jsonValue, matchesType, type Character, type Combat, type Preferences, type ResourceInstance, type Roll, type Stat, type StoredSystem } from '../domain/model';
 import { checkReferences, referencedIds } from '../domain/references';
 import { it } from '../ui/it';
+import { clearValueOverrides } from '../engine/overrides';
 
 /** Schema v3 adds encounters; legacy upgrades preserve every value and system pin. */
 export class SheetDatabase extends Dexie {
@@ -94,6 +95,9 @@ export async function setCharacterValue(id: string, statId: string, value: unkno
       checkReferences([s], { [statId]: value }, records, c.systemKey);
     }
     c.values[statId] = jsonValue(value);
+    // A manual base edit wins over mechanic value overrides for that field; modifiers remain additive.
+    c.overrides = clearValueOverrides(c.overrides, statId);
+    if (c.overrides && !Object.keys(c.overrides).length) delete c.overrides;
     if (statId === (system?.definition.character_display_name ?? 'name') && typeof value === 'string') c.name = value || 'Senza nome';
     c.updatedAt = new Date().toISOString(); c.revision++;
     await database.characters.put(c);

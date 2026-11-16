@@ -1,6 +1,7 @@
-/** @file Source-derived level/HP assistance, not an interpreter for persistent effect overrides. */
+/** @file Source-derived level/HP assistance over effective character values. */
 import { isResourceReference, object, type Character, type ResourceInstance, type StoredSystem } from '../domain/model';
 import { createEvaluator, RuntimeResource } from './formulas';
+import { resolveCharacterOverrides } from './overrides';
 import { rollDice } from './dice';
 import { it } from '../ui/it';
 
@@ -44,10 +45,11 @@ export function progressionContract(system: StoredSystem) {
 /** Build fresh evaluators whenever a staged class or character value changes. */
 export function progressionEvaluator(system: StoredSystem, character: Character, resources: ResourceInstance[], variables = {}) {
   if (character.systemKey !== system.key || resources.some(record => record.systemKey !== system.key)) throw new Error(it.progressionUnsupported);
+  const overrides = resolveCharacterOverrides(character.overrides);
   return createEvaluator(system.definition.character_stats, character.values, undefined, {
     resources, resourceDefinitions: system.definition.resources, enumerations: system.definition.enumerated_types,
-    createdAt: character.createdAt, variables,
-    character: new RuntimeResource(`character:${character.id}`, system.definition.character_stats, character.values, character.createdAt)
+    createdAt: character.createdAt, variables, overrides: overrides.values, modifiers: overrides.modifiers,
+    character: new RuntimeResource(`character:${character.id}`, system.definition.character_stats, character.values, character.createdAt, {}, overrides.values, undefined, overrides.modifiers)
   });
 }
 

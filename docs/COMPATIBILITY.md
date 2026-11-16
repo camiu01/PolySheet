@@ -67,17 +67,37 @@ Numeric-title support now yields 333 / 332 / 491: five currency
 `stat.edit_bottom_sheet_title` fields per system have an implemented editor.
 Broader event/mechanic diagnostics remain visible.
 
-## Character actions and manual inventory, 2026-11-16
+## General event/effect pipeline, 2026-11-16
 
-Source revision `8788e3b18099e4a1b3510f02869d97f1488586b4`:
-`systems/_stdlib/sheet_sections.rpgs` (`skillListRow`),
-`systems/_stdlib/effects.rpgs` (`skillTapForward`, `popupSelectPersist`),
-`systems/5e/system/mechanics/edit_skill_proficiency.rpgs`, and
-`systems/_stdlib/dnd5e_sheet_sections.rpgs` (`dnd5eEquipmentSection`).
-Contracts: [stat](https://docs.rpg-companion.app/Views/stat),
-[ticker](https://docs.rpg-companion.app/Views/ticker),
-[when](https://docs.rpg-companion.app/Effects/when),
-[forwardEvent](https://docs.rpg-companion.app/Effects/forwardEvent) and
+The pinned 5e 0.6.0 system (`reported-system.rpg`) contains 21 character mechanics:
+3 `setStat`, 4 `showPopUp`, 6 `when`, 4 `sequence`, 2 `showMessage`, 2 `roll`.
+Event-carrying fields in real source are `on_tap_event`/`on_long_tap_event` on
+stats/sections, avatar `bottom_*_button_event`, and `button.event`/`event_names`.
+
+PolySheet now implements the character-level dispatcher with persistent,
+reversible overrides. Exactly one matching character mechanic runs per event;
+multiple handlers or `calculated_event_names` remain explicit errors. Reversion
+(`revert_event_names`) removes that mechanic's overrides entirely. Supported
+effects: `sequence`, `when`, `setStat`, `addToStat`, `fireEvent`, `forwardEvent`,
+`forEach`, `roll` (without `on_result_effect`), `showMessage`. Terminal effects
+(`showPopUp`, `roll`) execute at most one per command. Value overrides (`setStat`)
+and modifier overrides (`addToStat`) are stored separately per mechanic and
+combined with deterministic `sum`/`max`/`min` aggregation; `set`/`none` clashes
+require an upstream user prompt and stay a visible error. A manual base edit
+clears value overrides for that field; modifiers remain additive.
+
+Unsupported: `$view`-dependent scopes, resource-owned mechanics, `showResource`,
+`dismissResource`, `delayed`, `copyResource`, dotted/meta stat targets beyond
+direct ids, `on_result_effect`, asynchronous branches, nested popups/rolls in
+sequences. These paths fail explicitly with a diagnostic, never as silent no-ops.
+Commands are serialized, bounded and never execute during rendering, reopening
+or backup restore. Backup format upgraded to v4 (reads v1–v4); `Character.overrides`
+is optional and validated on restore.
+
+Tests: `character-events.test.tsx`, `sheet-actions.test.tsx`,
+`e2e/sheet-interactions.spec.ts`. The existing `tests/package.test.ts` diagnostic
+counts for 5e/5e2024/PF2e remain 333/332/491; the new event dispatcher adds
+no structural warnings.
 [showPopUp](https://docs.rpg-companion.app/Effects/showPopUp).
 
 Stat tap/long-press actions accept one static root handler, first-true `when`

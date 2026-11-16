@@ -32,7 +32,7 @@ export const viewFields: Record<string, string[]> = {
   collapsible: ['title', 'subtitle', 'subviews', 'start_expanded'],
   viewPager: ['subviews', 'names', 'color'],
   ticker: ['stat', 'style', 'button_location', 'button_look', 'change_amount', 'allowed_values', 'min_value_allowed', 'max_value_allowed', 'calculated_min_value_allowed', 'calculated_max_value_allowed', 'label', 'label_alignment', 'should_auto_save', 'always_show_sign', 'hide_value', 'edit_bottom_sheet_title'],
-  button: ['text', 'enabled'],
+  button: ['text', 'enabled', 'event', 'event_names'],
   select: ['stat', 'meta_stat', 'options', 'allowed_options', 'resource_options', 'resource_saved_stat', 'max_selection_amount', 'options_display_stat', 'multi_select', 'style', 'should_auto_save'],
   menuButton: ['icon_name', 'icon_size', 'icon_color', 'options', 'allowed_options'],
   resource: ['resource_id', 'stat', 'view_type'],
@@ -257,8 +257,8 @@ export function diagnose(system: SystemDefinition): Diagnostic[] {
       report(`${path}.options`, 'Enumerazione richiesta', 'error');
     if (v.type === 'select' && typeof v.options !== 'string' && v.resource_options == null && v.meta_stat == null)
       report(`${path}.options`, 'Sorgente delle opzioni richiesta', 'error');
-    if (v.type === 'button' && (v.event != null || v.event_names != null))
-      report(`${path}.event`, 'Evento del pulsante non eseguito da PolySheet.');
+    if (v.type === 'button' && v.event_names != null)
+      report(`${path}.event_names`, 'Nomi evento dinamici del pulsante non supportati.');
   }
   function checkStats(stats: Stat[], path: string) {
     unique(stats, path);
