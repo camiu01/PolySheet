@@ -12,7 +12,7 @@ export function referencedIds(stat: Stat, value: unknown): string[] {
 export function checkReferences(stats: Stat[], values: Record<string, unknown>, resources: ResourceInstance[], systemKey: string) {
   for (const stat of stats) for (const id of referencedIds(stat, values[stat.id])) {
     const record = resources.find(r => r.id === id);
-    if (!record || record.systemKey !== systemKey || (stat.resource_type && record.definitionId !== stat.resource_type))
+    if (!record || record.catalogSource || record.systemKey !== systemKey || (stat.resource_type && record.definitionId !== stat.resource_type))
       throw new Error(`${stat.id}: risorsa mancante, di tipo errato o appartenente a un’altra versione (${id}).`);
   }
 }

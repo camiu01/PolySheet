@@ -22,7 +22,7 @@ export function CombatTracker({ systems, system, characters, run }: {
   const [name, setName] = useState('');
   const combat = combats.find(c => c.id === selected) ?? combats[0];
   return <>
-    <PageHeading eyebrow="AL TAVOLO / INCONTRI" title={it.combat} description={it.combatHelp} />
+    <PageHeading title={it.combat} description={it.combatHelp} />
     <SystemSelect systems={systems} value={system?.key ?? ''} onChange={useUi.getState().selectSystem} />
     {!system?.definition.combat_system ? <Empty title={it.noCombatSystem} /> : <>
       <form className="combat-toolbar" onSubmit={e => {
@@ -52,7 +52,7 @@ function CombatDetail({ system, combat, resources, characters, run }: {
     const definition = context.definition;
     const chosen = definition.combatant_types.find(t => t.id === typeId) ?? definition.combatant_types[0];
     const sources = chosen?.template_resource_id === 'character' ? characters
-      : resources.filter(r => r.definitionId === chosen?.template_resource_id);
+      : resources.filter(r => !r.catalogSource && r.definitionId === chosen?.template_resource_id);
     const source = sources.find(s => s.id === sourceId) ?? sources[0];
     const order = initiativeOrder(combat);
     const eligible = eligibleCombatants(system, combat);

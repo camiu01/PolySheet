@@ -1,4 +1,6 @@
 node_modules/
+/.codegraph/
+/.factory/
 dist/
 .reference/
 test-results/

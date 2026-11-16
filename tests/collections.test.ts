@@ -5,6 +5,7 @@ import { expect, it } from 'vitest';
 import { createEvaluator } from '../src/engine/formulas';
 import { parseSystem } from '../src/importing/system';
 import { demo } from '../src/demo';
+import { it as copy } from '../src/ui/it';
 import { base, constant, list, stat } from './fixtures/capabilities';
 
 it('sorts homogeneous selectors stably without mutating the original array', () => {
@@ -24,6 +25,41 @@ it('sorts homogeneous selectors stably without mutating the original array', () 
     { sort_by_selector: constant(true) }, { sort_by_value_key: '__proto__.x' },
     { components: list(constant(1), constant('a')) }
   ]) expect(() => e.evaluate({ ...sort, ...bad })).toThrow();
+});
+
+it('uses the approved ascending compatibility order only when sortBy omits order', () => {
+  const values = [{ level: 3, id: 'last' }, { level: 1, id: 'first' }, { level: 1, id: 'second' }];
+  const original = structuredClone(values);
+  const sort = { type: 'sortBy', components: stat('entries'), sort_by_selector: stat('$sortByValue.level') };
+  const e = createEvaluator([], {}, undefined, { variables: { entries: values } });
+  expect(e.evaluate(sort)).toEqual([values[1], values[2], values[0]]);
+  expect(e.evaluate({ ...sort, sort_by_value_key: 'item', sort_by_selector: stat('item.level') })).toEqual([values[1], values[2], values[0]]);
+  expect(e.evaluate({ ...sort, components: list(constant(10), constant(2)), sort_by_selector: stat('$sortByValue') })).toEqual([2, 10]);
+  expect(e.evaluate({ ...sort, components: list(constant('b'), constant('a')), sort_by_selector: stat('$sortByValue') })).toEqual(['a', 'b']);
+  expect(e.evaluate({ ...sort, components: list() })).toEqual([]);
+  expect(values).toEqual(original);
+  expect(Object.hasOwn(sort, 'order')).toBe(false);
+  for (const order of [null, undefined, '', false, 0, 'ascending', {}, [], ['asc'], ['desc']]) {
+    expect(() => e.evaluate({ ...sort, order })).toThrow('Ordine sortBy non valido');
+  }
+});
+
+it('warns about omitted sortBy order without changing source and rejects explicit invalid orders', () => {
+  const components = { type: 'sortBy', components: list(constant(3), constant(1)), sort_by_selector: stat('$sortByValue') };
+  const source = (formula: unknown) => JSON.stringify({ ...demo, character_stats: [{
+    id: 'sorted', name: 'Sorted', type: 'calculated', value_type: 'array', sub_value_type: 'integer', components: formula
+  }] });
+  const parsed = parseSystem(source(components));
+  expect(parsed.diagnostics.filter(d => d.path.startsWith('$.character_stats'))).toEqual([{
+    path: '$.character_stats[0].components.order', message: copy.sortOrderDefault, severity: 'warning'
+  }]);
+  expect(parsed.definition.character_stats[0].components).toEqual(components);
+  expect(createEvaluator(parsed.definition.character_stats).get('sorted')).toEqual([1, 3]);
+  for (const order of [null, '', false, 0, 'ascending', {}, [], ['asc'], ['desc']]) {
+    expect(parseSystem(source({ ...components, order })).diagnostics).toContainEqual(expect.objectContaining({
+      path: '$.character_stats[0].components.order', severity: 'error'
+    }));
+  }
 });
 
 it('uses strict null and string operations without coercion', () => {
@@ -99,7 +135,7 @@ it('diagnoses missing operands, invalid order and nested unsupported expressions
     expect(parseSystem(JSON.stringify(source)).diagnostics.filter(d => d.path.startsWith('$.character_stats'))).toEqual([]);
   }
   for (const components of [
-    { type: 'sortBy', components: list(), sort_by_selector: constant(1) },
+    { type: 'sortBy', components: list(), sort_by_selector: constant(1), order: 'invalid' },
     { type: 'flatMap', components: list() }, { type: 'contains', haystack: list() },
     { type: 'isNull' }, { type: 'notNull' }, { type: 'toLowerCase' }, { type: 'findFirst', components: [] }
   ]) expect(parseSystem(JSON.stringify({ ...demo, character_stats: [{

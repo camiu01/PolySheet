@@ -104,6 +104,14 @@ export interface ResourceInstance {
   name: string;
   values: Record<string, Json>;
   createdAt?: string;
+  /** Upstream identity, distinct from this copy's local reference ID. */
+  sourceId?: string;
+  /** Root of one imported or privately cloned resource graph. */
+  catalogGroup?: string;
+  /** Exact immutable JSON retained only on an imported catalog root. */
+  catalogSource?: { original: string; source: string; digest: string };
+  /** A retained original that cannot be assigned without unsupported source semantics. */
+  catalogIssue?: string;
 }
 /** Internal, version-pinned encounter. Initialization overrides are not base values. */
 export interface Combat {

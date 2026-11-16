@@ -2,6 +2,7 @@
 import Dexie, { type EntityTable } from 'dexie';
 import { jsonValue, matchesType, type Character, type Combat, type Preferences, type ResourceInstance, type Roll, type Stat, type StoredSystem } from '../domain/model';
 import { checkReferences, referencedIds } from '../domain/references';
+import { it } from '../ui/it';
 
 /** Schema v3 adds encounters; legacy upgrades preserve every value and system pin. */
 export class SheetDatabase extends Dexie {
@@ -29,7 +30,7 @@ export class SheetDatabase extends Dexie {
   }
 }
 export const db = new SheetDatabase();
-export const defaultPreferences: Preferences = { id: 'app', theme: 'light', historyLimit: 100 };
+export const defaultPreferences: Preferences = { id: 'app', theme: 'dark', historyLimit: 100 };
 /** Clone base defaults only; calculated stats always remain definitions. */
 export function initialValues(stats: Stat[]) {
   return Object.fromEntries(stats.filter(s => s.type === 'base').map(s => [s.id, jsonValue(s.default_value)]));
@@ -43,20 +44,38 @@ export async function installSystem(system: StoredSystem, database = db) {
     await database.systems.add(system);
   });
 }
+/**
+ * Remove only one exact import, its resources and rolls, never its users.
+ * @remarks Latest character/encounter pins block the entire transaction.
+ */
+export async function deleteSystem(key: string, database = db) {
+  await database.transaction('rw', database.tables, async () => {
+    if (!await database.systems.get(key)) return;
+    if (await database.characters.where('systemKey').equals(key).count()
+      || await database.combats.where('systemKey').equals(key).count()) throw new Error(it.systemInUse);
+    await database.resources.where('systemKey').equals(key).delete();
+    await database.rolls.where('systemKey').equals(key).delete();
+    await database.systems.delete(key);
+  });
+}
 /** Create a manual character. Official creation-page effects are never invoked. */
-export async function createCharacter(system: StoredSystem, name: string, database = db) {
+export async function createCharacter(input: StoredSystem, name: string, database = db) {
   if (!name.trim() || name.length > 100) throw new Error('Inserisci un nome da 1 a 100 caratteri.');
-  const values = initialValues(system.definition.character_stats);
-  const nameId = system.definition.character_display_name ?? 'name';
-  const nameStat = system.definition.character_stats.find(s => s.id === nameId);
-  if (nameStat?.type === 'base' && nameStat.value_type === 'string') values[nameId] = name.trim();
-  const now = new Date().toISOString();
-  const character: Character = {
-    id: crypto.randomUUID(), systemKey: system.key, name: name.trim(), values,
-    resourceIds: [], createdAt: now, updatedAt: now, revision: 0
-  };
-  await database.characters.add(character);
-  return character;
+  return database.transaction('rw', database.systems, database.characters, async () => {
+    const system = await database.systems.get(input.key);
+    if (!system) throw new Error(it.noSystemSelected);
+    const values = initialValues(system.definition.character_stats);
+    const nameId = system.definition.character_display_name ?? 'name';
+    const nameStat = system.definition.character_stats.find(s => s.id === nameId);
+    if (nameStat?.type === 'base' && nameStat.value_type === 'string') values[nameId] = name.trim();
+    const now = new Date().toISOString();
+    const character: Character = {
+      id: crypto.randomUUID(), systemKey: system.key, name: name.trim(), values,
+      resourceIds: [], createdAt: now, updatedAt: now, revision: 0
+    };
+    await database.characters.add(character);
+    return character;
+  });
 }
 /**
  * Patch one base field against the latest persisted record inside a transaction.
@@ -103,7 +122,8 @@ export async function detachResource(characterId: string, resourceId: string, da
 /** Save one roll and trim the global history atomically to the configured limit. */
 export async function saveRoll(roll: Roll, limit: number, database = db) {
   if (!Number.isInteger(limit) || limit < 1 || limit > 1000) throw new Error('Limite storico non valido');
-  await database.transaction('rw', database.rolls, async () => {
+  await database.transaction('rw', database.systems, database.rolls, async () => {
+    if (!await database.systems.get(roll.systemKey)) throw new Error(it.noSystemSelected);
     await database.rolls.add(roll);
     const ordered = await database.rolls.orderBy('createdAt').reverse().primaryKeys();
     await database.rolls.bulkDelete(ordered.slice(limit));

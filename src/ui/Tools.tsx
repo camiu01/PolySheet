@@ -15,6 +15,7 @@ import { RenderView } from './renderer';
 import { CompatibilityBadge, Empty, Modal, PageHeading, SystemSelect, Warning, download, readFile, type Run } from './shared';
 import { useUi } from './store';
 import { it } from './it';
+import { CatalogImport } from './CatalogImport';
 
 interface SystemPageProps { systems: StoredSystem[]; system?: StoredSystem; run: Run }
 function Selector({ systems, system }: Omit<SystemPageProps, 'run'>) {
@@ -34,18 +35,21 @@ export function Resources({ systems, system, characters, run }: SystemPageProps 
   const eligible = characters.filter(c => c.systemKey === system?.key);
   const selectedCharacter = eligible.some(c => c.id === characterId) ? characterId : eligible[0]?.id ?? '';
   return <>
-    <PageHeading eyebrow="02 / ARCHIVIO" title={it.resources} description={it.resourceSubtitle}
+    <PageHeading title={it.resources} description={it.resourceSubtitle}
       action={<button className="button primary" disabled={!defs.length} onClick={() => { setDefinitionId(defs[0]?.id ?? ''); setEditing('new'); }}><Plus size={18} />{it.newResource}</button>} />
     <Selector systems={systems} system={system} /><Warning>{it.resourceHelp}</Warning>
-    {!system ? <Empty title={it.noSystemSelected} /> : resources.length ? <div className="resource-grid">{resources.map(r => {
+    {system && <CatalogImport key={system.key} system={system} run={run} />}
+    {!system ? <Empty title={it.noSystemSelected} /> : resources.length ? <div className="resource-grid">{resources.filter(r => !r.catalogGroup || r.catalogGroup === r.id).map(r => {
       const d = defs.find(d => d.id === r.definitionId);
       return <article key={r.id} className="resource-card"><div className="card-title-row"><span className="eyebrow">{d?.name}</span><button className="icon-button danger-text" aria-label={`${it.delete} ${r.name}`} onClick={() => setDeleting(r)}><Trash2 size={17} /></button></div>
-        <h2>{r.name}</h2>{d?.display_view ? <RenderView input={d.display_view} context={{
+        <h2>{r.name}</h2>{r.catalogSource ? <><p className="muted">{it.catalogEntry}</p>
+          {r.catalogIssue && <Warning>{it.catalogUnavailable}: {r.catalogIssue}</Warning>}</> : d?.display_view ? <RenderView input={d.display_view} context={{
           systemKey: system.key, stats: d.stats, values: r.values, createdAt: r.createdAt, resources, resourceDefinitions: defs,
           enumerations: system.definition.enumerated_types
         }} /> : <p className="muted">{it.noResourceView}</p>}
-        <button className="link-button" onClick={() => { setDefinitionId(r.definitionId); setEditing(r); }}>{it.edit}</button>
-        {eligible.length > 0 && <div className="resource-attach"><label className="field"><span>{it.characters}</span><select aria-label={`${it.characters} · ${r.name}`} value={selectedCharacter} onChange={e => setCharacterId(e.target.value)}>{eligible.map(c => <option value={c.id} key={c.id}>{c.name}</option>)}</select></label>
+        {r.catalogSource ? <button className="link-button" onClick={() => download(r.catalogSource!.original, `${r.definitionId}.rpg.json`)}>{it.exportCatalog}</button>
+          : <button className="link-button" onClick={() => { setDefinitionId(r.definitionId); setEditing(r); }}>{it.edit}</button>}
+        {!r.catalogSource && eligible.length > 0 && <div className="resource-attach"><label className="field"><span>{it.characters}</span><select aria-label={`${it.characters} · ${r.name}`} value={selectedCharacter} onChange={e => setCharacterId(e.target.value)}>{eligible.map(c => <option value={c.id} key={c.id}>{c.name}</option>)}</select></label>
           <button className="button secondary" onClick={() => void run(() => attachResource(selectedCharacter, r.id))}>{it.attach}</button></div>}
       </article>;
     })}</div> : <Empty title={it.noResources}>{it.resourceHelp}</Empty>}
@@ -65,7 +69,7 @@ export function DicePage({ systems, system, preferences, run }: SystemPageProps 
   const sorted = [...rolls].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const latest = sorted[0];
   return <>
-    <PageHeading eyebrow={it.diceEyebrow} title={it.dice} description={it.diceSubtitle} /><Selector systems={systems} system={system} />
+    <PageHeading title={it.dice} description={it.diceSubtitle} /><Selector systems={systems} system={system} />
     <div className="dice-layout"><section className="dice-panel"><Dices size={36} /><h2>{it.roll}</h2><p className="muted">{it.manualDice}</p>
       {system && !system.definition.dice && <Warning>{it.noDice}</Warning>}
       <form onSubmit={e => { e.preventDefault(); void run(async () => {
@@ -87,10 +91,11 @@ export function DicePage({ systems, system, preferences, run }: SystemPageProps 
 /** Display precise import diagnostics without claiming whole-system compatibility. */
 export function Diagnostics({ systems, system }: Omit<SystemPageProps, 'run'>) {
   return <>
-    <PageHeading eyebrow={it.diagnosticsEyebrow} title={it.diagnostics} description={it.diagnosticSubtitle} /><Selector systems={systems} system={system} />
+    <PageHeading title={it.diagnostics} description={it.diagnosticSubtitle} /><Selector systems={systems} system={system} />
     <div className="notice"><ShieldCheck size={21} /><p>{it.diagnosticHelp}</p></div>
     {system ? <><div className="diagnostic-summary"><FileCheck2 size={26} /><div><h2>{system.definition.name} · v{system.definition.version}</h2><p className="muted">{system.diagnostics.length} {it.issues} · SHA-256 <code>{system.digest.slice(0, 16)}…</code></p></div><CompatibilityBadge system={system} /></div>
       <p className="muted">{it.provenance}: {system.source}</p>
+      {system.diagnostics.some(d => d.message === it.sortOrderDefault) && <Warning>{it.sortOrderDefault}</Warning>}
       {system.diagnostics.length ? <><Warning>{it.rulesWarning}</Warning><div className="diagnostic-list">{system.diagnostics.slice(0, 100).map((d, i) => <article key={i}><span className={`badge ${d.severity === 'error' ? 'badge-error' : 'badge-warning'}`}>{d.severity === 'error' ? it.errorLabel : it.unsupported}</span><div><code>{d.path}</code><p>{d.message}</p></div></article>)}</div>
         {system.diagnostics.length > 100 && <p className="muted">{it.displayedDiagnostics}</p>}</> : <div className="notice notice-success"><ShieldCheck size={20} /><p>{it.noDiagnostics}</p></div>}
     </> : <Empty title={it.noSystemSelected} />}
@@ -102,7 +107,7 @@ export function Settings({ preferences, run }: { preferences: Preferences; run: 
   const [backup, setBackup] = useState<{ text: string; data: ValidBackup } | null>(null);
   const [restoring, setRestoring] = useState(false);
   return <>
-    <PageHeading eyebrow={it.settingsEyebrow} title={it.settings} description={it.settingsSubtitle} />
+    <PageHeading title={it.settings} description={it.settingsSubtitle} />
     <div className="settings-grid"><section className="settings-panel"><h2>{it.appearance}</h2><div className="theme-options">{(['light', 'dark'] as const).map(theme => <button key={theme} className={`theme-option ${preferences.theme === theme ? 'selected' : ''}`} aria-pressed={preferences.theme === theme} onClick={() => void run(() => db.preferences.put({ ...preferences, theme }))}>{theme === 'light' ? <Sun /> : <Moon />}{theme === 'light' ? it.light : it.dark}</button>)}</div>
       <label className="field"><span>{it.historyLimit}</span><input type="number" min={1} max={1000} defaultValue={preferences.historyLimit} key={preferences.historyLimit} onBlur={e => {
         const historyLimit = Number(e.target.value);
@@ -121,7 +126,6 @@ export function Settings({ preferences, run }: { preferences: Preferences; run: 
           if (f) void run(async () => { const text = await readFile(f, 32 * 1024 * 1024); setBackup({ text, data: await validateBackup(text) }); });
         }} />
       </section></div>
-    <div className="privacy-panel"><ShieldCheck size={30} /><div><h2>{it.privacyTitle}</h2><p className="muted">{it.privacyHelp}</p><p className="muted">{it.independent}</p></div></div>
     {backup && <Modal title={it.restoreTitle} onClose={() => !restoring && setBackup(null)}><p>{it.restoreHelp}</p><p>{backup.data.systems.length} {it.systems} · {backup.data.characters.length} {it.characters} · {backup.data.resources.length} {it.resources} · {backup.data.rolls.length} {it.rollsLabel}</p><div className="modal-actions"><button className="button secondary" disabled={restoring} onClick={() => setBackup(null)}>{it.cancel}</button><button className="button danger" disabled={restoring} onClick={() => {
       setRestoring(true); void run(async () => {
         try { await restoreBackup(backup.text); setBackup(null); useUi.getState().navigate('characters'); } finally { setRestoring(false); }

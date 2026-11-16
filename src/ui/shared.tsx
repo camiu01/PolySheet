@@ -13,11 +13,11 @@ export function Modal({ title, children, onClose, bottomSheet = false }: { title
   useEffect(() => { const dialog = ref.current; dialog?.showModal(); return () => dialog?.close(); }, []);
   return createPortal(<dialog ref={ref} className={bottomSheet ? 'source-bottom-sheet' : undefined} onCancel={event => { event.preventDefault(); onClose(); }} aria-label={title}>
     <div className="modal-heading"><h2>{title}</h2><button className="icon-button" aria-label={it.close} onClick={onClose}><X size={20} /></button></div>
-    {children}
+    <div className="modal-body">{children}</div>
   </dialog>, document.body);
 }
-export function PageHeading({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: ReactNode }) {
-  return <header className="page-heading"><div><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p className="muted">{description}</p></div>{action}</header>;
+export function PageHeading({ title, description, action }: { title: string; description: string; action?: ReactNode }) {
+  return <header className="page-heading"><div><h1>{title}</h1><p className="muted">{description}</p></div>{action}</header>;
 }
 export function SystemSelect({ systems, value, onChange }: { systems: StoredSystem[]; value: string; onChange: (key: string) => void }) {
   return <label className="field system-select"><span>{it.chooseSystem}</span><select value={value} onChange={e => onChange(e.target.value)}>

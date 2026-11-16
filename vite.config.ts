@@ -15,13 +15,13 @@ export default defineConfig({
         short_name: 'PolySheet',
         description: 'Schede di gioco locali, senza account.',
         lang: 'it', start_url: './', scope: './',
-        display: 'standalone', background_color: '#f6f5f0', theme_color: '#253e36',
+        display: 'standalone', background_color: '#111417', theme_color: '#111417',
         icons: [
           { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
         ]
       },
-      workbox: { globPatterns: ['**/*.{js,css,html,svg,png,json}'], navigateFallback: 'index.html' }
+      workbox: { globPatterns: ['**/*.{js,css,html,svg,png,json,woff2}'], navigateFallback: 'index.html' }
     })
   ],
   test: {

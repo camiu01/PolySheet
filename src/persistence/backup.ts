@@ -9,6 +9,7 @@ import { matchesType, object, type Combat, type ResourceInstance } from '../doma
 import { checkReferences } from '../domain/references';
 import { eligibleCombatants, initiativeOrder } from '../engine/combat';
 import { db, type SheetDatabase } from './db';
+import { catalogDigest, prepareCatalogTemplate } from '../importing/catalog';
 
 const record = z.record(z.string(), z.unknown());
 const id = z.string().min(1).max(500);
@@ -27,7 +28,10 @@ const schema = z.object({
     revision: z.number().int().nonnegative()
   })).max(10000),
   resources: z.array(z.object({
-    id, systemKey: id, definitionId: id, name: z.string().max(500), values: record, createdAt: date.optional()
+    id, systemKey: id, definitionId: id, name: z.string().max(500), values: record, createdAt: date.optional(),
+    sourceId: id.optional(), catalogGroup: id.optional(),
+    catalogIssue: z.string().max(100000).optional(),
+    catalogSource: z.object({ original: z.string(), source: z.string().max(2000), digest: z.string().regex(/^[a-f0-9]{64}$/) }).strict().optional()
   })).max(10000),
   combats: z.array(z.object({
     id, systemKey: id, name: z.string().min(1).max(100), difficulty: id.nullable(),
@@ -86,6 +90,22 @@ export async function validateBackup(text: string) {
     systems.push({ ...prepared, importedAt: s.importedAt });
   }
   const byKey = new Map(systems.map(s => [s.key, s]));
+  for (const resource of data.resources) {
+    if (resource.catalogGroup && !data.resources.some(r => r.id === resource.catalogGroup && r.systemKey === resource.systemKey && r.catalogGroup === r.id))
+      throw new Error('Gruppo catalogo mancante o non valido.');
+    if (resource.catalogSource) {
+      const system = byKey.get(resource.systemKey);
+      if (!system || resource.catalogGroup !== resource.id || await catalogDigest(resource.catalogSource.original) !== resource.catalogSource.digest)
+        throw new Error('Originale catalogo alterato.');
+      const preview = await prepareCatalogTemplate(resource.catalogSource.original, resource.catalogSource.source, system);
+      if (preview.resources[0].definitionId !== resource.definitionId || preview.resources[0].sourceId !== resource.sourceId
+        || preview.resources[0].name !== resource.name || Object.keys(resource.values).length
+        || data.resources.some(r => r.id !== resource.id && r.catalogGroup === resource.id))
+        throw new Error('Identità catalogo non valida.');
+      resource.catalogIssue = preview.resources[0].catalogIssue;
+    }
+    if (resource.catalogIssue && !resource.catalogSource) throw new Error('Diagnostica catalogo senza originale.');
+  }
   for (const entry of [...data.characters, ...data.resources]) {
     const system = byKey.get(entry.systemKey);
     if (!system) throw new Error(`Sistema mancante: ${entry.systemKey}`);
@@ -131,7 +151,7 @@ export async function validateBackup(text: string) {
           throw new Error('Sorgente e istanza combattente incoerenti.');
         if (type.template_resource_id) {
           const sourceId = type.instance_resource_id ? f.templateId : f.resourceId;
-          if (!sourceId || !data.resources.some(r => r.id === sourceId && r.systemKey === combat.systemKey && r.definitionId === type.template_resource_id))
+          if (!sourceId || !data.resources.some(r => r.id === sourceId && !r.catalogSource && r.systemKey === combat.systemKey && r.definitionId === type.template_resource_id))
             throw new Error('Risorsa combattente mancante.');
         } else if (f.resourceId || f.templateId) throw new Error('Sorgente inattesa nel combattente.');
         const stats = system!.definition.resources.find(r => r.id === type.instance_resource_id)?.stats ?? [];

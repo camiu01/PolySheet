@@ -1,6 +1,6 @@
 # Threat Model for PolySheet
 
-Last updated: 2026-11-13. Version: 1.3.0. Method: STRIDE.
+Last updated: 2026-11-16. Version: 1.4.0. Method: STRIDE.
 This is a source review, not a penetration-test or compliance certification.
 
 ## 1. System Overview
@@ -51,16 +51,34 @@ metadata. Remote URL import is user initiated and subject to browser CORS.
 - Photos: 1 MiB PNG/JPEG, dimensions at most 4096 per axis, canonical Base64.
   Browser file selection also tests actual image decoding before saving.
 - HTTPS reader: no URL credentials; timeout and streamed bounds; cookies omitted.
-  Public GitHub discovery adds two metadata reads and an explicit selected-file
-  download at a pinned commit. No clone, proxy or remote document merge.
+  Public GitHub discovery adds two metadata reads and selected files at one
+  pinned commit. Source catalogs add bounded metadata and original JSON reads.
+  No clone, proxy, compiler or remote document merge.
   API payloads use the bounded JSON parser. Complete trees are required, with
   20,000 entries/100 candidates; symlinks/submodules are excluded. Paths are
   validated and encoded, and remote response URLs do not choose download hosts.
+- Catalog links: 1,000 files/24 MiB per remote batch, still 8 MiB per file.
+  Generic web folders need an explicit JSON index; unique relative paths remain
+  within its directory, with no cross-host paths, parent traversal, nested
+  indexes or HTML crawling. Index bytes count toward the web batch budget.
+  Unknown sizes stream sequentially against the remaining budget.
+- Catalog persistence: one immutable exact-original/digest record per template.
+  Unsupported typed content stays visibly nonassignable. Private bounded graphs
+  materialize only through explicit assignment; no rule effects are invented.
+  Templates cannot become mutable references or combat sources. Backup validation
+  reparses originals and checks template identity/shape; bundle writes validate
+  the projected bounded backup inside one rollback-capable transaction.
+- System removal: explicit exact-version confirmation, with resources and rolls
+  removed atomically. Current character/encounter pins block removal. Creators
+  share the system-table transaction, preventing orphan pins from stale forms.
 - Local fixture scripts: argument-array Git subprocesses at pinned commits;
   no external compiler/tool code execution or automatic publication.
 - Source forms: independent input-ID scopes, safe palette/hex colors, bounded
   view walks, validation-before-Save, busy/dismissal guards, atomic latest-owner
-  patches and local resource creation/assignment. Imported events remain inert.
+  patches and local resource creation/assignment. Only bounded explicit
+  character actions run: static handlers/forwarding, first-true branches,
+  presentation rolls/popups and a single direct-field enum popup save.
+  Unknown effects and implicit resource/combat/draft forwarding remain blocked.
 
 ## 4. Critical Assets & Data Classification
 
@@ -85,7 +103,7 @@ They are threat scenarios, not assertions of exploitable findings.
 | Imports | S: misleading publisher labels; T: altered originals; R: disputed input; I: token-bearing provenance; D: compression/depth bombs; E: executable payload | Explicit preview/source warning; exact hashes; query-free provenance; bounded streams/parser; no execution | Medium/possible: no publisher signatures or licensing verification |
 | Interpreter | S: forged contextual identity; T: prototype traversal/coercion; R: opaque outcomes; I: unrelated scope access; D: cycles/list growth; E: arbitrary code/effects | Trusted scope objects, own properties, typed references; visible errors; shared budgets/cycle detection; explicit roll capability and initializer allowlists | Medium/possible: partial upstream semantics; large-library performance not certified |
 | Persistence/backup | S: foreign system IDs; T: dangling links/partial restore; R: no audit ledger; I: local data access; D: quota exhaustion; E: computed-field writes | Same-version validation, source rehashing, transaction rollback, latest-record base-only patches and constrained initializer overrides | Medium/possible: local profile compromise, eviction, and last-committed-write wins on the same field |
-| UI/photos | S: source text posing as app text; T: HTML/SVG/script input; R: accidental edits; I: remote image beacons; D: large images; E: event execution | Visible source/support labels; React text; PNG/JPEG-only data URLs; no remote images; confirmations and save indicator; events unsupported | Medium/possible: no encryption or protection against malicious browser extensions; headers depend on host |
+| UI/photos | S: source text posing as app text; T: HTML/SVG/script input; R: accidental edits; I: remote image beacons; D: large images; E: event execution | Visible source/support labels; React text; PNG/JPEG-only data URLs; no remote images; confirmations and save indicator; bounded explicit character actions only | Medium/possible: no encryption or protection against malicious browser extensions; headers depend on host |
 | PWA/host | S: compromised host; T: replaced assets; R: unclear update origin; I: same-origin compromise; D: stale/evicted caches; E: malicious service worker | HTTPS deployment, prompt-based updates, shell-only precache, independent IndexedDB | High/uncommon: host/dependency compromise is outside application input controls; two-version rollout untested |
 | CI/tooling | S: substituted dependencies/actions; T: PR deployment; R: unclear provenance; I: credential/artifact disclosure; D: hostile build tooling; E: excessive token permissions | Lockfile, full action SHA pins, no persisted checkout credentials, read-only verify, dependent deployment gate, dist-only artifact, fixed Git argument arrays | Medium/possible: known development-tool advisories; Actions/Pages hosted run still requires verification |
 
@@ -151,6 +169,11 @@ automated LLM scanning service or a new enforced CI gate.
   Only public repository metadata is queried; no local records or tokens are sent.
 
 ## 9. Version Changelog
+
+- 1.4.0 (2026-11-16): Compact original catalogs, private manual assignments and
+  bounded GitHub/web-index retrieval; no CDN CORS bypass or new backend.
+  Backup template checks, mutable-reference/combat guards and exact-import
+  removal with protected pins and transactional concurrent-creation checks.
 
 - 1.3.0 (2026-11-13): Explicit manual resource editing despite invalid source
   forms, latest-record transactional patches, busy dismissal guards and local

@@ -27,8 +27,8 @@ More specific directory instructions take precedence within their scope.
 - Write documentation, identifiers and JSDoc/TSDoc in English.
 - Keep application UI copy Italian, centralized in `src/ui/it.ts`. Preserve
   imported labels in their original language.
-- Match the existing notebook-style UI, CSS tokens, accessible controls and
-  responsive layout. Do not introduce a second design system.
+- Match the existing grimoire-style UI, CSS tokens, accessible controls and
+  responsive layout documented in `DESIGN.md`. Do not introduce a second design system.
 - Keep rule evaluation independent of React. Use the existing formula/view
   registries, domain validators and persistence operations.
 - Zustand holds ephemeral UI state; Dexie owns persistent domain data.
@@ -119,7 +119,7 @@ or deployment behavior. PowerShell 5.1 does not support `&&` or `||`; check
 - Wait for the save transaction to finish before testing reload persistence.
 - Real-source tests use local-only pinned fixtures and may explicitly skip on
   a clean checkout. Report skips; never describe them as verified integrations.
-  Preparation commands are documented in `README.md`.
+  Preparation commands are documented in `docs/DEVELOPMENT.md`.
 - Use `LIVE_RPG_IMPORT=1` only for an intentional live, read-only provider check.
   Controlled HTTP fixtures do not establish public-host availability or CORS.
 - Run final checks against the delivered code. Update `docs/VERIFICATION.md`

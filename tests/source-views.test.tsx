@@ -98,6 +98,22 @@ it('keeps source button and menu events visible instead of executing them', () =
   expect(menu).toHaveTextContent('Evento importato non eseguito da PolySheet');
 });
 
+it('uses upstream scalar identity for source resource options and reopens the selected choice', () => {
+  const onChange = vi.fn();
+  const definition: ResourceDefinition = { id: 'race', name: 'Race', stats: [base('name', 'string', '')] };
+  const record: ResourceInstance = { id: 'private-child', sourceId: 'upstream-child', systemKey: 'sys',
+    definitionId: 'race', name: 'Riva', values: { name: 'Riva' } };
+  render(<RenderView input={{ id: 'subrace', type: 'select', stat: 'subrace_id',
+    resource_options: list(constant({ resourceId: record.id }, 'resource')), options_display_stat: 'name' }}
+    context={{ stats: [base('subrace_id', 'string', null)], values: { subrace_id: 'upstream-child' },
+      systemKey: 'sys', resources: [record], resourceDefinitions: [definition], onChange }} />);
+  expect(screen.getByRole('combobox', { name: 'subrace_id' })).toHaveValue('private-child');
+  fireEvent.change(screen.getByRole('combobox', { name: 'subrace_id' }), { target: { value: '' } });
+  expect(onChange).toHaveBeenLastCalledWith('subrace_id', null);
+  fireEvent.change(screen.getByRole('combobox', { name: 'subrace_id' }), { target: { value: 'private-child' } });
+  expect(onChange).toHaveBeenLastCalledWith('subrace_id', 'upstream-child');
+});
+
 it('lists referenced resource instances without offering creation in display mode', () => {
   const definition = {
     id: 'note', name: 'Nota', stats: [base('title', 'string', '')],

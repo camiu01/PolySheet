@@ -12,7 +12,19 @@ fieldset.field{min-width:0;border:1px solid #9ba69e55;border-radius:12px;padding
 .combatant-current{outline:2px solid #738e66;outline-offset:2px}
 .combatant-card .base-grid{margin-top:14px}
 .combat-meta{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.source-form-fields{border:0;padding:0;margin:0;min-width:0}
+.source-form-fields,.source-form-controls{border:0;padding:0;margin:0;min-width:0}
+.ability-setup h4,.setup-health h4{font-size:20px;margin:20px 0 8px}
+.ability-setup>p,.setup-health>p{max-width:68ch}
+.field-help{font-size:12px;line-height:1.65;color:var(--muted);margin:6px 0 16px;overflow-wrap:anywhere}
+.ability-fields{display:grid;margin:20px 0;border-top:1px solid var(--line)}
+.ability-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(100px,160px);align-items:center;gap:16px;padding:14px 0;border-bottom:1px solid var(--line)}
+.ability-row label{font-weight:600}.ability-row .field-help{margin-bottom:0}
+.ability-row input,.ability-row select{width:100%;min-width:0;min-height:44px}
+.ability-budget{font-variant-numeric:tabular-nums;color:var(--accent)}
+.ability-rolls{padding-left:24px;line-height:2;font-variant-numeric:tabular-nums}
+.ability-rolls del{color:var(--muted)}
+.setup-health{margin-top:28px}
+@media(max-width:480px){.ability-row{grid-template-columns:minmax(0,1fr) 116px;gap:12px}}
 .source-avatar-section{border:1px solid var(--line);border-radius:12px;padding:24px;background:var(--surface);margin-bottom:24px}
 .source-avatar-center{display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px}
 .source-avatar-stacks{display:flex;justify-content:space-between;gap:16px}
@@ -24,5 +36,11 @@ fieldset.field{min-width:0;border:1px solid #9ba69e55;border-radius:12px;padding
 .check-label-left{flex-direction:row-reverse;justify-content:flex-end}
 details.collapse-icon-closed-only[open]>summary{list-style:none}
 details.collapse-icon-closed-only[open]>summary::-webkit-details-marker{display:none}
-dialog.source-bottom-sheet{margin:auto auto 0;border-bottom:0;border-radius:16px 16px 0 0;width:min(100%,720px);max-width:720px}
+dialog.source-bottom-sheet{margin:auto;border:1px solid var(--line);border-radius:8px;width:min(calc(100% - 32px),720px);max-width:720px}
 .repository-address{overflow-wrap:anywhere}
+.resource-prefilters{min-width:0;margin:0 0 20px;padding:12px 16px;border:1px solid var(--line);border-radius:4px}
+.resource-prefilters legend{padding:0 6px;font-size:13px;font-weight:600}
+.resource-prefilters .field-help{margin:0 0 8px}
+.resource-prefilters .check-field{align-items:center;overflow-wrap:anywhere}
+.character-sheet-actions{flex-shrink:0;gap:12px}
+@media(max-width:760px){.character-sheet-actions{width:100%}.character-sheet-actions>.primary{flex:1}.character-sheet-actions>.icon-button{border:1px solid var(--line)}}

@@ -12,6 +12,7 @@ import { demoOriginal } from '../src/demo';
 import { SheetDatabase, createCharacter, installSystem } from '../src/persistence/db';
 import { exportBackup, restoreBackup, validateBackup } from '../src/persistence/backup';
 import { createEvaluator } from '../src/engine/formulas';
+import { it as copy } from '../src/ui/it';
 
 const gzip = (value: string | Uint8Array) => Uint8Array.from(gzipSync(value));
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
@@ -179,5 +180,49 @@ for (const [file, version] of [
     expect(imported.diagnostics.filter(d => d.severity === 'error')).toEqual([]);
     expect(artifactBytes(imported.artifact!.base64)).toEqual(bytes);
     expect(createEvaluator(imported.definition.character_stats, { strength_score: 15 }).get('strength_modifier')).toBe(2);
+  });
+}
+
+for (const [id, version, digest, stats, definitions, defaults, warnings] of [
+  ['5e', '0.9.1', '5de5642ad7281d7a99566a518d916e43c24f0c2046c4c40b8042e5074ac3ea3b', 317, 50, 6, 333],
+  ['5e2024', '0.9.1', 'ce0ff5a339a0412b5c5c971680c5d009c2a7e04bd9cb65b9cafd8670966c9ad6', 317, 50, 6, 332],
+  ['pf2e', '0.3.0', 'a0f6f3d56e432e1f60625b06e374c21af8237ec01f3ef93024ed45c321b3e679', 760, 61, 14, 491]
+] as const) {
+  const file = resolve(`.reference/official-releases-2026-11-16/${id}-system.rpg`);
+  it.skipIf(!existsSync(file))(`imports unchanged official ${id} with the visible ascending compatibility policy`, async () => {
+    const bytes = Uint8Array.from(readFileSync(file));
+    expect(createHash('sha256').update(bytes).digest('hex')).toBe(digest);
+    const imported = await prepareImport(bytes, file);
+    expect(imported.definition.id).toBe(id);
+    expect(imported.definition.version).toBe(version);
+    expect(imported.definition.character_stats).toHaveLength(stats);
+    expect(imported.definition.resources).toHaveLength(definitions);
+    expect(imported.diagnostics.filter(d => d.severity === 'error')).toEqual([]);
+    expect(imported.diagnostics).toHaveLength(warnings);
+    expect(imported.diagnostics.filter(d => d.message === copy.sortOrderDefault)).toHaveLength(defaults);
+    expect(artifactBytes(imported.artifact!.base64)).toEqual(bytes);
+    if (id === '5e') {
+      const sort = imported.definition.character_stats.find(s => s.id === 'race_traits')!.components!;
+      expect(sort.type).toBe('sortBy');
+      expect(sort.components).toEqual({ type: 'stat', stat: 'race.current_level_traits' });
+      expect(Object.hasOwn(sort, 'order')).toBe(false);
+      const traits = [{ min_level: 4, id: 'late' }, { min_level: 1, id: 'first' }, { min_level: 1, id: 'second' }];
+      const e = createEvaluator([], {}, undefined, { variables: { race: { current_level_traits: traits } } });
+      expect(e.evaluate(sort)).toEqual([traits[1], traits[2], traits[0]]);
+      expect(traits.map(t => t.id)).toEqual(['late', 'first', 'second']);
+    }
+    const database = new SheetDatabase(`official-${crypto.randomUUID()}`);
+    try {
+      await installSystem(imported, database);
+      await installSystem(imported, database);
+      expect(await database.systems.count()).toBe(1);
+      const backup = await exportBackup(database);
+      await restoreBackup(backup, database);
+      const restored = (await database.systems.get(imported.key))!;
+      expect(restored.digest).toBe(digest);
+      expect(restored.original).toBe(imported.original);
+      expect(restored.diagnostics).toEqual(imported.diagnostics);
+      expect(artifactBytes(restored.artifact!.base64)).toEqual(bytes);
+    } finally { await database.delete(); }
   });
 }

@@ -9,6 +9,7 @@ export interface GithubSnapshot {
   repository: string;
   commit: string;
   files: { path: string; size: number }[];
+  catalogFiles?: { path: string; size: number }[];
 }
 const shaPattern = /^[a-f0-9]{40}$/i;
 const systemName = /^(system\.rpg|system\.rpg\.json|system\.json)$/i;
@@ -47,11 +48,11 @@ async function apiJson(url: URL) {
 }
 
 /**
- * Resolve a branch/default branch to a commit before listing conventional system files.
+ * Resolve a branch/default branch and list all regular files at one immutable commit.
  * @remarks Two bounded public API reads; no token, submodule traversal or partial trees.
  * A filename is a candidate, never proof of a valid monolithic system.
  */
-export async function discoverGithub(input: string, ref = ''): Promise<GithubSnapshot> {
+export async function listGithubFiles(input: string, ref = ''): Promise<GithubSnapshot> {
   const repository = githubRepository(input);
   if (!repository) throw new Error(it.repositoryUnsupported);
   if (ref.length > 200 || /[\u0000-\u001f\u007f]/.test(ref)) throw new Error(it.repositoryInvalid);
@@ -75,17 +76,24 @@ export async function discoverGithub(input: string, ref = ''): Promise<GithubSna
     const entry = object(input);
     if (entry.type !== 'blob' || !['100644', '100755'].includes(String(entry.mode))) continue;
     if (!safePath(entry.path)) throw new Error(it.repositoryInvalid);
-    if (!systemName.test(entry.path.split('/').at(-1)!)) continue;
     if (paths.has(entry.path) || typeof entry.size !== 'number' || !Number.isSafeInteger(entry.size) || entry.size < 0)
       throw new Error(it.repositoryInvalid);
     paths.add(entry.path);
-    if (entry.size > MAX_SYSTEM_BYTES) throw new Error(it.repositoryFileTooLarge);
     files.push({ path: entry.path, size: entry.size });
-    if (files.length > 100) throw new Error(it.repositoryTooMany);
   }
-  if (!files.length) throw new Error(it.repositoryNoSystems);
   files.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
   return { repository, commit: commit.toLowerCase(), files };
+}
+
+/** Discover conventional systems and source catalogs without requiring a repository clone. */
+export async function discoverGithub(input: string, ref = ''): Promise<GithubSnapshot> {
+  const snapshot = await listGithubFiles(input, ref);
+  const files = snapshot.files.filter(f => systemName.test(f.path.split('/').at(-1)!));
+  const catalogFiles = snapshot.files.filter(f => /^systems\/[a-z0-9_-]+\/resource_instances\/(?:class|race|species|ancestry|heritage|background)_[^/]+\.rpg\.json$/i.test(f.path));
+  if ([...files, ...catalogFiles].some(f => f.size > MAX_SYSTEM_BYTES)) throw new Error(it.repositoryFileTooLarge);
+  if (files.length > 100) throw new Error(it.repositoryTooMany);
+  if (!files.length) throw new Error(it.repositoryNoSystems);
+  return { ...snapshot, files, ...(catalogFiles.length ? { catalogFiles } : {}) };
 }
 
 /** Download only the selected file at the discovered commit, then apply normal validation. */

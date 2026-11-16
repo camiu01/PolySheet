@@ -34,8 +34,10 @@ All displayed system labels and formulas come from the pinned import.
   original app's locale/timezone behavior; parity across those settings is unverified.
 - Local photo envelope `{url, base64}`; only validated PNG/JPEG bytes are rendered.
   Remote URLs are retained but never fetched. No SVG or external image execution.
-- Resource references use PolySheet's own `{resourceId}` representation. Resource
-  archives and upstream resource-instance interchange remain unsupported.
+- Resource references use PolySheet's own `{resourceId}` representation. General
+  resource archives and mutable upstream instance interchange remain unsupported.
+  Separate class/ancestry catalogs use immutable originals and private manual
+  assignment, not direct combat sources.
 - Combat variables include `$combatants`, `$combat`, `$combat_difficulty`,
   `$combatant` and template `$resource`. Initiative is descending, followed by the
   source's numeric tie-breakers. Complete ties never get an invented winner.

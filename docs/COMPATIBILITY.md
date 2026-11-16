@@ -1,4 +1,265 @@
-# Compatibility, source audit, and first vertical slice
+# Compatibility and source evidence
+
+[Documentation index](README.md) · [Executed checks](VERIFICATION.md) ·
+[Local fixture preparation](DEVELOPMENT.md#external-fixtures)
+
+## Reading import results
+
+An imported file passes through four separate stages. Passing one does not
+establish the next.
+
+| Stage | What it establishes | What it does not establish |
+| --- | --- | --- |
+| 1. Decode | An accepted JSON or verified gzip-JSON system envelope, within byte/UTF-8 limits | That the document defines a valid system |
+| 2. Validate the definition | Required structure and interpreted-field checks pass; errors block installation | That every formula, component or event is implemented |
+| 3. Check runtime support | Diagnostics identify supported handlers and unsupported fields/scopes | That every path will work with missing or later user data |
+| 4. Exercise actual use | A stated workflow produces independently expected results, saves and reopens correctly | Full system playability or parity with the original app |
+
+"Supported" means the stated subset and inputs have tests. "Partial" means some
+paths work but rule-affecting omissions remain. "Unsupported" means PolySheet
+rejects the format or leaves the action visibly unexecuted. A preview with zero
+errors may still have hundreds of warnings and produce runtime errors on
+unpopulated resource references. No diagnostic count is a compatibility certificate.
+
+## Nullable resources and selection filters, 2026-11-16
+
+The 5e race definition's `weapons` calculation tests
+`current_level_weapon != null`; `selected_subrace_has_weapon` also tests a
+resource against null. These original predicates previously failed the
+scalar-only comparison guard. `equals` and `notEquals` now allow a typed
+resource reference or trusted runtime resource to be compared with null,
+without dereferencing, coercion or deep object comparison. Resource-to-resource
+equality and arbitrary object operands remain unsupported. Consecutive
+`notEquals` semantics are unchanged.
+
+Evidence: the local Archer 0.9.1 composed JSON, `resources[id=race].stats`,
+and the unchanged official 5e package with SHA-256
+`5de5642ad7281d7a99566a518d916e43c24f0c2046c4c40b8042e5074ac3ea3b`.
+With private Fighter/Human catalogs from revision
+`8788e3b18099e4a1b3510f02869d97f1488586b4`, `all_weapons` contains the
+catalog's single Unarmed Strike; `attuned_weapons` and `attuned_resources`
+are empty, not errors. This does not execute equipment effects.
+
+[selectResources](https://docs.rpg-companion.app/Views/selectResources) defines
+`filters` as parent-scope formulas keyed by declared
+[SearchFilter](https://docs.rpg-companion.app/System/SearchFilter) stats.
+Official 5e `character_sheet_sections[15].view.header[3].filters.classes`
+maps class wrappers to class names. The local picker now evaluates that
+unchanged formula against the actual parent draft/owner and filters the
+correct pinned local records. Filters remain visible and removable; reopening
+restores the source proposal. They are search aids, never class prerequisites.
+
+The supported local matching policy is strict equality for scalars, any
+overlap for selected arrays, and conjunction across different fields.
+Null or an empty selection leaves that field unrestricted. String, bool and
+finite numeric filters are supported, including calculated candidate fields;
+unknown filters, unsupported types and formula errors remain visible.
+The docs do not specify the original client's complete search implementation,
+so this does not claim full compendium parity. Inline creation does not apply
+search filters. No external spell compendium is installed or fabricated.
+
+Tests: `resource-comparison.test.ts`, `resource-filters.test.tsx`,
+`imported-resource-filters.test.ts` and the desktop/mobile guided-setup case.
+The latter checks cancel without writes, reset on reopen, clone/append and
+offline reopening. Original bytes and backup/database versions are unchanged.
+The filter increment had 338 / 337 / 496 warnings for 5e / 5e2024 / PF2e.
+Numeric-title support now yields 333 / 332 / 491: five currency
+`stat.edit_bottom_sheet_title` fields per system have an implemented editor.
+Broader event/mechanic diagnostics remain visible.
+
+## Character actions and manual inventory, 2026-11-16
+
+Source revision `8788e3b18099e4a1b3510f02869d97f1488586b4`:
+`systems/_stdlib/sheet_sections.rpgs` (`skillListRow`),
+`systems/_stdlib/effects.rpgs` (`skillTapForward`, `popupSelectPersist`),
+`systems/5e/system/mechanics/edit_skill_proficiency.rpgs`, and
+`systems/_stdlib/dnd5e_sheet_sections.rpgs` (`dnd5eEquipmentSection`).
+Contracts: [stat](https://docs.rpg-companion.app/Views/stat),
+[ticker](https://docs.rpg-companion.app/Views/ticker),
+[when](https://docs.rpg-companion.app/Effects/when),
+[forwardEvent](https://docs.rpg-companion.app/Effects/forwardEvent) and
+[showPopUp](https://docs.rpg-companion.app/Effects/showPopUp).
+
+Stat tap/long-press actions accept one static root handler, first-true `when`
+branches and static single-target forwarding retaining payload. All branches
+are preflighted, with depth eight and 2,000 effect-node bounds. Cycles, multiple
+targets, ambiguous/dynamic subscriptions, callbacks, sequences and override
+effects remain unsupported. Long press fires after 600 ms, cancels on movement
+or cancellation and suppresses the trailing pointer click. A separate native
+button provides the same action for keyboard users. Resource/combat/draft events
+are never implicitly forwarded to the character.
+
+Editable popups accept only one enum `select`, explicit Save and
+`should_persist_on_save`. Its `meta_stat` must resolve to a direct string base
+field. Save revalidates the event, target and option against the latest owner;
+Cancel writes nothing and unrelated edits survive. This is a direct user edit,
+not persistent `setStat` support. A configured level-one Fighter with Dexterity
+16 rolls Acrobatics as `1d20 + 3`; selecting Proficient displays +5.
+The Archer regression supplies explicit source resource graphs because that
+older serialization omits resource-type declarations. It does not establish
+guided catalog setup or typed inventory discovery for Archer.
+
+Eligible numeric `stat.edit_bottom_sheet_title` opens a centered delta editor,
+after tap-event/detail-view precedence. Tickers require unit step and no
+allowed-values list. Bounds are checked against the latest value, without
+coercion; Cancel writes nothing. Original CP uses label `CP` and title `Copper`.
+Formula colors in text, icons, chips and list items now share the evaluator and
+palette/hex guard used by stat colors. Arbitrary CSS stays invalid.
+
+Setup discovers explicitly typed item/weapon/armor arrays and reuses their
+source edit views. Instances and links stay local until the final character
+Save commits them atomically. Existing sheets retain source resource controls.
+No initial equipment, compendium or equip bonus is inferred. Nested
+`create_if_empty` cost/weight editors remain visibly unsupported and retain
+nullable source defaults. Schema, backup versions and original bytes are unchanged.
+Tests: `tests/sheet-actions.test.tsx` and desktop/mobile guided-setup acceptance.
+
+## Support at a glance
+
+| Area | Status | Boundary |
+| --- | --- | --- |
+| Monolithic JSON / gzip-JSON system `.rpg` | Supported format, partial runtime | Exact originals retained; unknown binary variants and indexes rejected |
+| Sentieri example | Supported example | Original, deliberately small MIT content; not a full game-system benchmark |
+| Official 5e, 5e2024 and PF2e systems | Partial | Observed packages can install under the stated compatibility policy; full gameplay is not verified |
+| Formulas and sheet components | Partial | Only registered, documented handlers/fields/scopes; see the [matrix](#compatibility-matrix) |
+| Source forms and selectors | Partial | Real scoped Save/Cancel, enumeration options and local-resource selection; see [views](VIEWS.md) |
+| Manual character/resource editing | Supported subset | Typed base values and exact-import references, not official creation-rule validation |
+| Class/race/background/ancestry/heritage JSON catalogs | Partial | Compact immutable templates, local compiled system once, explicit private assignment; incompatible entries stay nonassignable |
+| Resource links | Supported discovery, partial catalog semantics | Direct JSON, GitHub root/file/folder, web `index.json`; same strict root types and caps, no HTML crawl or CORS proxy |
+| Remove an installed system | Supported subset | Exact-version confirmation; removes related resources/rolls, blocks character/encounter pins and stale concurrent creation |
+| Combat | Partial | Explicit bounded initialization, initiative and turns, not general events; see [combat](COMBAT.md) |
+| General events, lifecycle effects, equipment and progression | Unsupported | No inferred bonuses, effect stacking/reversal or automatic leveling |
+| Split authoring trees and RPGScript | Unsupported compilation | Metadata discovery does not merge sources or provide a browser compiler |
+| Book/class/race resource archives | Unsupported | A system import does not install a compendium |
+
+Repository metadata can identify systems without compiling their sources.
+The user-approved workflow uses a local compiled system once because the
+official CDN blocks cross-origin browser reads. Catalog JSON comes from a
+pinned GitHub commit. See [the import flow](GITHUB_IMPORT.md#source-repositories-and-automatic-catalogs).
+
+For omitted `sortBy.order`, PolySheet deliberately uses ascending order with a
+visible warning. The user approved this policy; upstream default behavior remains
+unverified. An explicitly invalid order is still an error. See the
+[dated policy and original packages](#official-compiler-follow-up-2026-11-16).
+
+## Find the evidence
+
+- [Format boundaries](#format-boundaries): source, package and internal formats.
+- [Feature matrix](#compatibility-matrix): contracts, real pointers and tests.
+- [Source inspection](#inspected-sources): pinned repositories, hashes and tooling.
+- [Reported HP failure](#reported-empty-class-hp-failure): manual prerequisites,
+  strict errors and recovery without invented rules.
+- [Extension gates](#verification-and-extension-gates): evidence needed before
+  expanding the claim.
+- [Verification](VERIFICATION.md): dated runs, skips and remaining gaps.
+- [Notices](../NOTICE.md): licenses and redistribution restrictions.
+
+The remaining sections retain the technical source audit and implementation
+history. Their dates and pinned revisions matter; older limitations can be
+superseded by a later documented increment, not by successful decoding alone.
+
+## Source catalog increment, 2026-11-16
+
+The inspected clean source checkout is
+[8788e3b18099e4a1b3510f02869d97f1488586b4](https://github.com/blastervla/rpg-companion-app-systems/tree/8788e3b18099e4a1b3510f02869d97f1488586b4).
+Strict mapping uses the original nested `{resource_id, stats: {field: {value}}}`
+envelope, declared base types and same-import references. Source IDs remain
+separate from private local IDs. No defaults, casts or rule effects repair source
+data. Exact originals are retained even when a template is nonassignable.
+
+| System | Templates retained | Assignable | Nonassignable |
+| --- | ---: | ---: | ---: |
+| 5e 0.9.1 | 208 (16 classes, 101 races, 91 backgrounds) | 208 | 0 |
+| 5e2024 / 5.5e 0.9.1 | 74 (12 classes, 46 race/species files, 16 backgrounds) | 55 | 19 |
+| PF2e 0.3.0 | 141 (9 classes, 8 ancestries, 50 heritages, 74 backgrounds) | 141 | 0 |
+
+5e Druid and 5e2024 Druid are now assignable as complete snapshots with
+validated removal history, as detailed below. The 2024 Fighter, Ranger and Rogue include
+fractional item weights where the compiled definition declares an integer.
+The 2024 Guard, Guide and Soldier backgrounds have the same mismatch at
+`stats.selectable_equipments.value[0].stats.options.value[0].stats.item.value.stats.weight.value.stats.value`.
+Thirteen 2024 species files declare `system: "5e"` rather than `5e2024`.
+These originals remain visible and exportable, but are not silently coerced,
+partially stripped or offered as assignable.
+
+All templates are compact originals, not eagerly expanded instance graphs.
+Even without backgrounds, the complete 5e class/race graphs contain 18,174 resource nodes, beyond the existing
+10,000-instance cap. Selecting a compatible template creates only that
+character's private graph; supported formulas can read it, but privileges,
+bonuses and progression are not automatically executed. Catalog roots cannot be
+used directly as mutable typed references or combat sources.
+
+The batch has a separate 1,000-file/24 MiB budget; each file still obeys 8 MiB
+and parser limits. Global instance and 32 MiB backup caps are unchanged.
+Installation refuses a bundle that would make the bounded backup unreadable.
+See [catalog use](VIEWS.md#catalogs-and-character-assignment) and
+[executed verification](VERIFICATION.md) for the actual covered paths.
+
+The resource screen accepts the same originals via direct JSON, GitHub
+file/folder/root links or a web folder with an explicit `index.json`. This adds
+retrieval, not new root types or RPG semantics. Web index paths cannot escape
+their directory, select another host or recurse. See [link contracts](VIEWS.md#resource-links).
+
+### Background and subrace selection
+
+At the same pinned revision, all three compiled systems declare the character
+base field `background` as a `background` resource reference. Its JSON catalogs
+use the same complete nested envelope as classes and races. Assignment copies
+the graph privately; it grants no equipment, bonuses or effects.
+
+For 5e and 5e2024, `character_stats/subrace_id` is a nullable base string,
+not a resource reference. The `race` resource's base `subraces` array contains
+`race` children. The source
+[creation selector](https://github.com/blastervla/rpg-companion-app-systems/blob/8788e3b18099e4a1b3510f02869d97f1488586b4/systems/5e/system/character_creation_flow/01_item_1.rpgs)
+uses those children as options; `resources/race/stats.rpgs` finds the selected
+child by comparing its `.id` with `$character.subrace_id`.
+
+The manual catalog panel therefore stores the retained upstream child ID,
+never the private UUID. It recognizes this control only when those declared
+base types match and no custom `id` stat overrides instance identity. No
+separate subrace catalog or PF2e equivalent is inferred. Saving rechecks the
+latest assigned race transactionally. Catalog-panel race replacement/clearing
+clears its dependent selection atomically, retaining the old resource graph.
+An unmatched ID from existing/manual data remains visible, not silently repaired;
+generic manual fields and source forms retain their separate save behavior.
+Original MIT fixtures, real 5e children and backup round trips test this mapping.
+
+### Druid removal history
+
+The reported 5e failure is in
+`systems/5e/resource_instances/class_druid_druid.rpg.json`,
+`$.stats.archetypes.value[1].stats.features.remove_ids`, at the pinned revision.
+It contains `["circle_spells"]`; the accompanying current `value` has six full
+children and none has that ID. The 2024 Druid has the corresponding wrapper at
+`$.stats.archetypes.value[0].stats.features.remove_ids`: `["natural_recovery"]`,
+with five current children and no matching ID.
+
+The repository's
+[resource-instance editing notes](https://github.com/blastervla/rpg-companion-app-systems/blob/8788e3b18099e4a1b3510f02869d97f1488586b4/.claude/skills/rpg-resource-instance-editor/SKILL.md)
+describe these IDs as deletion history for the original client's incremental
+merge. PolySheet does not merge remote changes into existing instances: every
+assignment materializes a new private snapshot. The retained current children
+are therefore the independently expected six/five above, without the retired
+entry. No existing graph, even one sharing an upstream ID, is deleted.
+
+Only declared resource-array base fields accept optional `remove_ids`.
+It must be a unique list of at most 10,000 nonempty string IDs, each at most
+500 characters, accompanying a complete array `value`. IDs also present among
+current children are rejected: upstream conflict precedence was not established.
+Other wrapper properties, reference-only payloads, wrong types and partial
+patches still fail. Exact originals, hashes, limits and backup format stay intact.
+The public Resource page describes definitions, not these merge semantics;
+the attempted `/System/ResourceInstance` page returned 404.
+
+Old persisted blockers are derived diagnostics, not immutable source content.
+Startup revalidates blocked originals offline and updates only a still-current
+record's cached issue. Reimport also refreshes that cache without replacing IDs;
+assignment reparses the actual source instead of trusting an obsolete blocker.
+Tests cover existing blocked imports, parallel refreshes/edits, private graphs,
+invalid metadata, the 10,000/10,001 gate and exact backup restoration. This adds
+no class privileges, bonuses, HP, progression or event execution; its historical
+479 system warnings were separate and visible. The later scoped increment's
+count at that checkpoint was 339, without implying full compatibility.
 
 ## Inspected sources
 
@@ -71,6 +332,284 @@ The docs describe extension/desktop dev tools, but no verified browser compiler
 or standalone decoder implementation was established. README calls tools MIT,
 while `LICENSE.md` does not supply that grant. Because both dependencies and
 licensing need further verification, **no external tool code is reused**.
+
+### Official compiler follow-up, 2026-11-16
+
+With the user's permission, the Windows desktop Dev Tool was installed under
+gitignored `.reference/official-dev-tool/installed`. The official RPGScript
+extension package 1.3.0 also contains a Windows x64
+`refresh_system_builder.exe`, despite its Marketplace README listing only
+bundled macOS support. Its separate `LICENSE.txt` supplies an MIT grant for
+the extension package. This does not resolve the conflicting creative-content
+licenses above or grant a browser runtime implementation.
+
+The packaged compiler cannot produce a verified complete build of the pinned
+`8788e3b18099e4a1b3510f02869d97f1488586b4` source. It rejects
+`systems/5e/system/combat_system/combatant_types/monster_instance/index.rpgs:8:30`
+with `unknown argument "is_defeated"`. Neither downloaded tool's schema declares
+that field. `scripts/publish_release.py` in the source checkout explicitly says
+the authoritative compiler is inside the original app's `dev_tool` directory;
+the standalone compiler is stale and lacks `is_defeated`.
+
+The compiler can emit partial files after parse errors. Those files are not
+evidence of a valid build and must not be imported as complete systems. No
+source fields were removed, no schema checks were disabled, and no tool code
+or game content was added to the distributed application.
+
+The same publication script names the official content CDN. Its live
+[system manifest](https://d2dmd8x0lyn9l8.cloudfront.net/systems.json) advertised
+5e 0.9.1, 5e2024 0.9.1 and PF2e 0.3.0 on 2026-11-16. The user authorized
+investigating these releases instead of substituting them silently for repository
+sources. Exact system packages and JSON resource indexes were downloaded into
+gitignored `.reference/official-releases-2026-11-16/`.
+
+### Beginner ability generation and explicit presentation events
+
+#### Source-derived guided advancement and remaining effect-engine investigation
+
+`src/engine/progression.ts` and `src/persistence/progression.ts` now implement a
+separate, explicitly manual level/HP assistant. They recognize the class and
+health branches in the pinned 5e confirm program, evaluate its increment and
+roll/average/max HP formulas against fresh staged owner/resource snapshots, and
+derive the target ceiling from imported progression tables. No independent
+level, prerequisite, subclass-threshold or hit-die tables are supplied.
+The selected class advances to a requested total level; a new multiclass gets
+a private graph, source duplicate-class rejection and explicit manual
+prerequisite acknowledgement. Subclass options/thresholds come from the class.
+Current HP stays unchanged. Subclass selection is applied at its threshold.
+
+This assistant intentionally commits permanent manual base edits, not
+`addToStat` modifier overrides. It does not execute `on_level_up_confirm`,
+its popup callbacks, proficiency/ASI/feat/spell/infusion assignments or
+mechanic reversal. The UI requires acknowledgement of this boundary and
+retains a separate-choices checklist. Full automatic progression diagnostics
+remain accurate and are not suppressed. A successful command is not evidence
+of original-app override parity. Existing backup v3/readers 1/2 and Dexie v3
+remain unchanged because no new persisted fields are introduced.
+
+Writes recheck revision and class level, validate the latest graph and
+subclass, reject directly shared wrappers and roll back clones/HP on failure.
+Tests use the unchanged official 5e release and private Fighter/Wizard graphs:
+Fighter CON 14 progresses 12 → 20 → 28 maximum HP with average gains; adding
+Wizard gives 34, while current HP remains 12. Maximum and deterministic roll
+branches, repeated/stale commands and duplicate/unacknowledged multiclass are
+also exercised. This is source-formula verification, not complete game parity.
+
+User decision: when an imported system omits multiclass prerequisites, allow
+multiclassing only after an explicit manual-verification acknowledgement.
+Do not supply independent D&D prerequisite tables or imply automatic checks.
+
+There is a remaining source-contract blocker for persistent progression:
+the inspected 5e confirm program uses `addToStat` with
+`aggregation_type: "set"` for both `$class_details.class_level` and `base_hp`.
+`addToStat` documents modifier overrides; the tool schema only lists
+`max`, `min`, `none`, `set`, `sum`. Neither establishes how `set` combines
+repeated executions or interacts with prior value/modifier overrides.
+Replacing a +1 modifier on every level-up would leave a base-level-one
+class stuck at level two; accumulating it or modifying base values without
+evidence would also invent the missing semantics. The public sitemap has no
+AggregationType/override contract, and the attempted dedicated pages returned
+404. This is not resolved by the manual multiclass acknowledgement.
+
+Before enabling durable source effects, obtain original-app evidence for
+two successive level-ups of the same class (before/after records, resulting
+class level and HP), or the authoritative aggregation implementation.
+ADB access subsequently allowed read-only observation of an Artificer 2 at
+14/14 HP, but no private export was recovered. Public `BaseStat`/`ComputedStat` documentation confirms
+separate value/modifier overrides but does not resolve the `set` aggregation
+case. Public search and the available official tool schema supplied no
+authoritative repeated-execution contract.
+No guessed effect state, schema migration or partial source-confirm execution
+has been enabled. The separate guided manual assistant described above does
+not resolve the override-engine question.
+
+The later user direction is to reuse imported creation/progression definitions,
+not add independent D&D multiclass or advancement tables. No replacement RPG
+tables were added. The pinned 5e
+`system/system.rpg.json` defines
+`progression_systems.experience_levelling_system.level_up_view` and
+`on_level_up_confirm`. Its view has an existing/new-class choice and a validation
+message rejecting a class already present. This does not establish an
+ability-score prerequisite check: none was found in that view.
+
+The confirm effect is a sequential program using `setStat`, `addToStat`,
+`when`, `forEach`, nested class-resource destinations, dice and interactive
+`showPopUp`/`showResource` continuations. In particular, selecting the same
+class updates its `class_level`; multiclassing appends a wrapper to `classes`.
+HP uses source `hit_point_mode` and `hit_die_average`/`hit_die_max`/`roll`.
+The source has proficiency/ASI popup callbacks, so silently dropping these
+effects would not execute the original progression correctly.
+
+Contracts read on 2026-11-16:
+[CharacterCreationPage](https://docs.rpg-companion.app/System/CharacterCreationPage),
+[ProgressionSystem](https://docs.rpg-companion.app/System/ProgressionSystem),
+[ExperienceLevellingSystem](https://docs.rpg-companion.app/System/ExperienceLevellingSystem),
+[setStat](https://docs.rpg-companion.app/Effects/setStat),
+[addToStat](https://docs.rpg-companion.app/Effects/addToStat),
+[sequence](https://docs.rpg-companion.app/Effects/sequence).
+Creation saves only after the complete page flow; `pre_edit` runs once,
+open/close hooks run on each visit, and `post_edit` runs on final Save.
+Stat effects distinguish value overrides from modifier overrides; they cannot
+be represented faithfully by overwriting base values. The current transient
+presentation-event controller does not implement that persistent state or
+reversal. Imported creation, creation at an arbitrary level and level up remain
+unimplemented pending this runtime/persistence extension, not claimed complete
+by the first-level health helper.
+
+#### First-level health helper
+
+New D&D characters with one selected class default to the explicitly labeled
+first-level HP option. Disabling it restores manual fields; missing class
+selection retains the existing incomplete/manual workflow rather than guessing
+a die. Existing-character configuration never reinitializes HP. The atomic
+creation command applies final scores and private class assignments first,
+then sets current HP equal to the maximum. It never dispatches lifecycle
+effects, rolls dice, changes originals or automatically applies special
+race/background/feat bonuses.
+
+Official [2014 character creation](https://www.dndbeyond.com/sources/dnd/basic-rules-2014/step-by-step-characters)
+and [2024 character creation](https://www.dndbeyond.com/sources/dnd/br-2024/creating-a-character)
+were read on 2026-11-16: at level one, use the highest result of the class Hit
+Die plus the Constitution modifier. Source checkout
+`8788e3b18099e4a1b3510f02869d97f1488586b4`, in
+`systems/5e/system/character_stats.rpgs:26-52`, instead defines
+`max_hp = base_hp + classes_hp_mods` and clamps the aggregate class bonus at
+zero. `system/resources/class_details/stats.rpgs` defines `hit_die_max` from
+`class.actual_hit_die`; `system/resources/class/stats.rpgs` supplies
+`actual_hp_modifiers` (normally `["constitution"]`).
+The helper requires exactly one level-one wrapper, an ordinary d6/d8/d10/d12,
+that modifier list, and the normal Constitution formula. It derives
+`base_hp = (die maximum + Constitution modifier) - classes_hp_mods` and verifies
+the source's resulting `max_hp` equals the expected total before committing.
+This preserves negative Constitution instead of silently dropping it or
+changing immutable source formulas. Fighter with CON 14: base 10/current 12;
+CON 8: base 9/current 9 in the observed 5e import. Thus base HP is not always
+the raw die size. Unsupported/custom rules abort the complete creation and
+leave manual entry available.
+
+`tests/initial-health.test.ts` checks CON 3/8/10/14/20 against real 5e
+Fighter/Wizard/Barbarian/Cleric and 2024 Wizard/Barbarian/Cleric. The known
+2024 Fighter fractional-equipment-weight rejection is not relaxed to test HP.
+It also checks higher-level rejection, unchanged existing characters and
+rollback without orphan graphs. Desktop/mobile real-browser tests cover
+positive/negative Constitution, cancellation, manual/automatic switching and
+offline reload. This is initialization only, not later leveling or automatic
+reconciliation when Constitution changes.
+
+The local D&D helper is gated to `5e` and `5e2024` with all six declared integer
+ability bases. It is not a general creation interpreter. Pinned source checkout
+`8788e3b18099e4a1b3510f02869d97f1488586b4` declares point buy in
+`systems/5e/system/character_creation_flow/01_item_1.rpgs`, bounds 8–15,
+and `remaining_point_buy_points` in `system/character_stats.rpgs`: budget 27,
+costs 0/1/2/3/4/5/7/9. The official
+[character-creation rules](https://www.dndbeyond.com/sources/dnd/br-2024/creating-a-character)
+were read on 2026-11-16 and independently establish that table, the standard
+array 15/14/13/12/10/8, and six 4d6 rolls keeping the highest three dice.
+Dice/array helpers are explicit local conveniences, not source lifecycle
+effects or inferred race/background bonuses. Assignment uses slot identities,
+so duplicate totals cannot reuse one result. Apply and Save are separate.
+Tests check every cost, overspend, tied minimum discard, unique assignment,
+mode changes, cancellation and actual browser saves.
+
+The unchanged official 5e package contains `roll_stat` and `show_information`.
+Exact pinned source paths are
+`systems/5e/system/mechanics/{roll_stat,show_information}.rpgs`, backed by
+`systems/_stdlib/effects.rpgs` (`rollStatFromEvent`,
+`showCharacterInformationPopUp`) and `sheet_sections.rpgs` (`rollStatRow`).
+The serialized event is `{name:"rollStat",payload:{stat:"strength_modifier",
+statName:"Strength"}}`: payload entries are literal JSON, not formulas.
+The handler reads them through `$event`; the source decides normal/min/max
+dice and the modifier. STR 16 and a deterministic d20 of 10 yield 13.
+Normal, min and max event dice have independent numeric tests; an unsupported
+later expression fails before any random draw.
+Read contracts: [showPopUp](https://docs.rpg-companion.app/Effects/showPopUp),
+[roll](https://docs.rpg-companion.app/Effects/roll),
+[rollable](https://docs.rpg-companion.app/Stat/Formulas/rollable), and
+[setStat](https://docs.rpg-companion.app/Effects/setStat).
+
+Only one static unconditional character handler is accepted, producing a
+read-only popup or explicit rollable list. Unknown fields, callbacks,
+sequences, dynamic/ambiguous subscriptions and persistent effects fail closed.
+`setStat` uses overrides upstream, so it is not misrepresented as a base-value
+patch. No general stacking/reversal, lifecycle or resource/combat dispatch is
+claimed. Each command reads a fresh readonly snapshot, prevents overlapping
+clicks and never executes during rendering. Results are transient, not history.
+Static import warnings remain conservative for the broader unsupported
+event/mechanic surface. Tests: `tests/ability-setup.test.tsx`,
+`tests/character-events.test.tsx`, `tests/e2e/sheet-interactions.spec.ts`.
+
+### Scoped character and stat-detail increment
+
+The later guided-setup increment lowers 5e/2024 diagnostics from 479 to 339
+and PF2e from 687 to 506. Complete-array comparison removes 87/48 previously
+uninterpreted detail/color fields and 58/138 character references respectively,
+while adding five newly inspected nested monster-stat path warnings in each
+system. Counts are not full compatibility claims: `$character` is supplied by
+the character sheet and its resource views, not unassigned archives or every
+combat context. `$character.$edit_mode` is not implemented as a resource stat.
+General events remain unsupported, except the later character-only presentation
+subset: INFORMATION and source stat rolls.
+
+The official 5e `$.character_sheet_sections[4].view.content[2]` and `[5]`
+declare speed and hit-dice details. Details use safe formula colors, source
+titles, default read-only mode, and an atomic form only when explicitly editable.
+A declared tap event takes precedence. Nested paths such as `monster.speed`
+remain unsupported; calculated speed fields are never treated as writable bases.
+`Manage hit dice` saves the declared `current_d10_hit_dice` base field.
+Contracts: [stat view](https://docs.rpg-companion.app/Views/stat),
+[resource](https://docs.rpg-companion.app/System/Resource), and
+[creation page](https://docs.rpg-companion.app/System/CharacterCreationPage).
+
+Browser regressions use the unchanged official 5e system and Fighter, Human,
+Soldier catalogs from source revision
+`8788e3b18099e4a1b3510f02869d97f1488586b4`, under
+`systems/5e/resource_instances/`. Explicit STR 16, DEX 16, CON 14, base HP 10,
+current HP 12 and a level-one class independently yield maximum HP 12, AC 13,
+STR save 5 and CON save 4. No race bonus, current-HP synchronization or creation
+event is simulated. Tests cover incomplete-state errors, configuration cancel,
+atomic save, private feat selection and offline reopening in
+`tests/e2e/sheet-interactions.spec.ts`; unit contracts are in
+`tests/character-setup.test.ts` and `tests/resource-context.test.tsx`.
+
+| Published system | System SHA-256 | Expanded bytes | Indexed resources | Errors / warnings, before → now |
+| --- | --- | ---: | ---: | ---: |
+| 5e 0.9.1 | `5de5642ad7281d7a99566a518d916e43c24f0c2046c4c40b8042e5074ac3ea3b` | 2,316,110 | 3,383 | 6 / 473 → 0 / 339 |
+| 5e2024 0.9.1 | `ce0ff5a339a0412b5c5c971680c5d009c2a7e04bd9cb65b9cafd8670966c9ad6` | 2,281,156 | 2,243 | 6 / 473 → 0 / 339 |
+| PF2e 0.3.0 | `a0f6f3d56e432e1f60625b06e374c21af8237ec01f3ef93024ed45c321b3e679` | 5,880,704 | 3,456 | 14 / 673 → 0 / 506 |
+
+`prepareImport` decodes and structurally parses all three packages within existing
+limits. Before the approved policy below, semantic diagnostics blocked
+installation. Every error was a `sortBy` formula without `order`. Examples are
+`$.character_stats[171].components` in both 5e systems and
+`$.character_stats[413].components` in PF2e. The live
+[sortBy documentation](https://docs.rpg-companion.app/Stat/Formulas/sortBy)
+and downloaded tool schema require `order`; neither establishes a default.
+
+The user explicitly approved **ascending order with a visible warning** when
+`order` is omitted. This is an intentional PolySheet compatibility policy,
+not a verified upstream default. The evaluator applies it without inserting
+`order` into the definition or changing original text, gzip bytes, hashes or pins.
+Explicit `asc`/`desc` keep their behavior. Explicit null, empty strings, booleans,
+numbers, objects and arrays remain errors, without string coercion.
+
+Each omission remains a path-specific warning. A separate notice appears in
+the import preview and compatibility page even when its diagnostic falls beyond
+the displayed first 12/100 entries. All other diagnostics remain. The three
+packages can now be installed as partial systems, not as complete game engines.
+Regressions pin the package digests above and verify idempotent installation,
+exact bytes and backup restoration. The unchanged 5e expression at
+`$.character_stats[236].components` (`race_traits`) sorts
+`race.current_level_traits` by `$sortByValue.min_level`; levels `[4,1,1]`
+produce `[1,1,4]` with the two level-one entries in original order.
+
+The official bulk resource files are also not interchangeable with system
+packages. HEAD responses reported 10,836,494 bytes for 5e and 10,382,321 for
+PF2e, both exceeding the existing 8 MiB per-response limit. A resource integration
+must use verified bounded retrieval rather than raise that limit.
+
+Browser CORS, resource payload interchange and correspondence to the pinned
+source commit remain unverified. No resources were installed. Full character
+creation, progression and effect execution remain unsupported.
 
 ## Format boundaries
 
@@ -231,7 +770,7 @@ provides unchanged examples at decoded JSON paths:
 
 | Path | Contract and independently expected result |
 | --- | --- |
-| `character_stats[33].components`, `[171].components` | `sortBy`: stable, nonmutating ordering; explicit asc/desc; homogeneous string or finite numeric selector results; `$sortByValue` or custom lexical key. Numeric `[3,1,2,1]` sorts to `[1,1,2,3]`. Text uses ordinal comparison, not browser locale. |
+| `character_stats[33].components`, `[171].components` | `sortBy`: stable, nonmutating ordering; explicit asc/desc, or the approved ascending-with-warning policy for omission described above; homogeneous string or finite numeric selector results; `$sortByValue` or custom lexical key. Numeric `[3,1,2,1]` sorts to `[1,1,2,3]`. Text uses ordinal comparison, not browser locale. |
 | `character_stats[36].components` | `isNull`: null only; zero, false and empty string are not null. |
 | `character_stats[144].components` | `contains`: case-sensitive substring or strict list membership, including internal resource-reference identity; no text/number coercion. |
 | `character_stats[148].components`, `[208].components` | `findFirst`: optional strict-boolean filter, default `$findFirstValue`, first matching item. No match returns null, consistent with the original nullable equipped-armor use; the public prose does not explicitly specify the no-match result. |
@@ -349,7 +888,7 @@ All paths below refer to the historical `systems/5e/system.rpg.json` unless note
 | `character_stats[201].components.clauses[0].components.components.components[0]` and analogous fields | `{value: -8, value_type: "string"}` | Type error, not interpreted |
 | `resources[2].stats[4].components.components.components[0].components.components[0].components.components[1].clauses[0].components` and following clauses | `{value: 2.5, value_type: "integer"}` | Type error; never silently rounded |
 | `Views/text`, `Views/composite`, `Views/checkbox` live pages | Only common fields are shown; SystemCreation snippets and real files show additional fields | Only cross-checked fields are used; unsupported options remain diagnosed |
-| Mechanic `event_names` | Table says List; prose/examples use comma-separated strings; RPGScript also documents resource scoping | All mechanics deferred; no guessed event dispatch |
+| Mechanic `event_names` | Table says List; prose/examples use comma-separated strings; RPGScript also documents resource scoping | One static exact-name character handler (string or string array); no guessed comma splitting, dynamic/resource subscriptions or handler order |
 | `divide.rounding_method = closest` | Enum lists value, no tie behavior supplied | Not supported; explicit diagnostic |
 | README vs `LICENSE.md` | NC-SA vs NC and inconsistent tool-license statements | No external content/tool distribution; seek clarification before redistribution |
 
@@ -384,8 +923,8 @@ exact path is specified.
 | [text](https://docs.rpg-companion.app/Views/text) | `character_sheet_sections[5].view.header[1]`, `resources[39].display_view.subviews[0]` | Plain text/scalar editing, scoped validation, signs/clamp/colors and pinned local resource-ID display; no HTML/Markdown | renderer + view-session + browser |
 | [list](https://docs.rpg-companion.app/Views/list), [composite](https://docs.rpg-companion.app/Views/composite), [checkbox](https://docs.rpg-companion.app/Views/checkbox) | `resources[39].display_view` (list), `character_search_item_view` (composite), `character_sheet_sections[2].view.header[3].pop_up_view.content[0]` (checkbox) | Source order/layout/padding, scalar checkbox drafts and original popup Save/Cancel; unsupported options remain diagnosed | renderer + view-session + original browser acceptance |
 | Interactive/resource views | Original notes, condition popup/chips, avatar and section icons | Registered subset above and in VIEWS.md; unknown types/events still have visible fallbacks, not invented actions | renderer + view-session + original browser acceptance |
-| [collapsible](https://docs.rpg-companion.app/Views/collapsible), [viewPager](https://docs.rpg-companion.app/Views/viewPager), [ticker](https://docs.rpg-companion.app/Views/ticker), [button](https://docs.rpg-companion.app/Views/button), [select](https://docs.rpg-companion.app/Views/select), [menuButton](https://docs.rpg-companion.app/Views/menuButton), [resource](https://docs.rpg-companion.app/Views/resource), [resourceArray](https://docs.rpg-companion.app/Views/resourceArray) | `character_sheet_sections[9].view.content[0]`, `resources[3].edit_view`, `character_sheet_sections[4].view.header[1]`, `resources[1].display_view.subviews[7].subviews[0]`, `character_creation_flow[0].view.subviews[4].subviews[1]`, `character_sheet_sections[0].view.bottom_right_stack[0]`, `character_creation_flow[0].view.subviews[2].subviews[0].pop_up_view`, `character_creation_flow[0].view.subviews[3]` | Tested subset: accordion/pager state, bounded ticker edits, enumeration and local-resource options, resource display/edit/list and array create/remove. Button and menu events, `create_if_empty`, filter maps and `diffText` stay unsupported and diagnosed | `source-views.test.tsx` + renderer + view-session |
-| [Resource](https://docs.rpg-companion.app/System/Resource) | `resources[39]` | Definitions, typed manual base editing and safe display view; notebook links distinct from typed references; no general effects or RPG resource export/import | persistence + capabilities + E2E |
+| [collapsible](https://docs.rpg-companion.app/Views/collapsible), [viewPager](https://docs.rpg-companion.app/Views/viewPager), [ticker](https://docs.rpg-companion.app/Views/ticker), [button](https://docs.rpg-companion.app/Views/button), [select](https://docs.rpg-companion.app/Views/select), [menuButton](https://docs.rpg-companion.app/Views/menuButton), [resource](https://docs.rpg-companion.app/Views/resource), [resourceArray](https://docs.rpg-companion.app/Views/resourceArray) | `character_sheet_sections[9].view.content[0]`, `resources[3].edit_view`, `character_sheet_sections[4].view.header[1]`, `resources[1].display_view.subviews[7].subviews[0]`, `character_creation_flow[0].view.subviews[4].subviews[1]`, `character_sheet_sections[0].view.bottom_right_stack[0]`, `character_creation_flow[0].view.subviews[2].subviews[0].pop_up_view`, `character_creation_flow[0].view.subviews[3]` | Tested subset: accordion/pager state, bounded ticker edits, enumeration and local-resource options, resource display/edit/list and array create/remove. Button and menu events, `create_if_empty`, resource-valued filters and `diffText` stay unsupported and diagnosed | `source-views.test.tsx` + renderer + view-session |
+| [Resource](https://docs.rpg-companion.app/System/Resource) | `resources[39]` | Definitions, typed manual editing and safe display; notebook links distinct from typed references. Separate strict JSON class/race/background/ancestry/heritage templates support exact original export and private assignment, not general resource interchange or effects | persistence + capabilities + catalog + E2E |
 | [CharacterCreationPage](https://docs.rpg-companion.app/System/CharacterCreationPage) | `character_creation_flow[0..3]`; current `systems/5e/system/character_creation_flow/01_item_1.rpgs` | Not supported; explicit separate manual creator | import diagnostics + browser manual-creation assertion |
 | [Mechanic](https://docs.rpg-companion.app/Mechanic/), [Effect](https://docs.rpg-companion.app/Effects/Effect) | `mechanics[]`; stat-view `on_tap_event` | General dispatch/stacking/reversal unsupported. Only explicit combat instance `on_create` synchronous sequence and one `setStat/set` per direct target execute atomically | import + renderer + combat tests |
 | [RPGDice](https://docs.rpg-companion.app/System/RPGDice), [Rollable](https://docs.rpg-companion.app/System/Rollable) | Historical root has no `dice`; supplied Archer `5e/system.rpg` decoded JSON `dice[0..5]` defines d4/d6/d8/d10/d12/d20 | Partial: imported face definitions, `xdy +/- n` manual roller and history; no Rollable object/effect dispatch or 3D | engine dice tests, Archer integration + E2E; historical absence warning |
@@ -513,8 +1052,9 @@ still reports an unexecuted event, not a completed rest.
 The original serialized `bottom_right_button_event=null` no longer creates a
 runtime unsupported-field note. Null-valued optional view fields are absent for
 that runtime note only; stored source and conservative import diagnostics remain
-unchanged. The non-null `bottom_left_button_event` (`show_information`) remains
-visibly unsupported. On mobile, the right-corner menu previously extended beyond
+unchanged. The later explicit presentation increment executes the non-null
+`bottom_left_button_event` (`show_information`) as a read-only popup. On mobile,
+the right-corner menu previously extended beyond
 the viewport and could not be selected by pointer. It now aligns its right edge
 with its trigger. An always-on original MIT browser regression checks bounds and
 pointer selection on desktop/mobile, independently of the external fixture.

@@ -1,450 +1,229 @@
 # Executed verification
 
-This is a development verification record, not a compatibility certification.
+[Documentation index](README.md) · [How to run checks](DEVELOPMENT.md) ·
+[Historical records](VERIFICATION_HISTORY.md) · [12:37 checkpoint](VERIFICATION_2026-11-16_1237.md)
 
-## Enumeration/string formulas and split-authoring diagnostics
+## Current increment, 2026-11-16
 
-Executed on 2026-11-14 on Linux against the delivered application code.
+Character actions and manual inventory:
 
-- Reproduced the reported `https://github.com/blastervla/rpg-companion-app-systems`
-  selection failure. Its `systems/5e/system/system.rpg.json` (41,628 bytes,
-  version 0.9.1) is an unassembled authoring root: `character_stats`,
-  `character_sheet_sections`, `character_creation_flow`,
-  `character_search_item_view`, `mechanics`, `resources` and `enumerated_types`
-  live in sibling files/folders. The importer now names that condition and tells
-  the user to use a compiled monolithic system; it never merges `.rpgs` sources.
-  A partially populated document still receives field-level schema errors.
-- Implemented the documented `enumeratedName`, `enumeratedAbbreviation`,
-  `toNum`, `toSignedString` and `replace` formulas. Enumeration labels resolve
-  `enumerated_types` including inherited entries, with one bounded cache per
-  evaluator; unknown types/entries and missing abbreviations fail explicitly.
-  `toNum` accepts only plain decimal text (≤64 characters); `replace` is literal,
-  all-occurrence and bounded to 1 MiB; `toSignedString` prefixes non-negative
-  numbers. `split` was left unimplemented because its documented plain separator
-  conflicts with the pinned regular-expression usage, and `eventName` still needs
-  an event scope.
-- Supplied 0.6.0 fixture after the increment: **0 errors, 1,601 warnings**
-  (previously 1,683), with 3 unsupported `eventName` formulas and 129 unresolved
-  formula references. No warning was suppressed to obtain this count.
-- `npm run check`: strict TypeScript passed, **146 passed, 11 skipped** across
-  13 files. Skips are absent historical external fixtures. New independent
-  regressions cover inherited enumeration entries, absent types/entries/
-  abbreviations/environments, decimal acceptance and rejection, signed output,
-  literal `$&` replacement, the reported 10,577-entry tree and the authoring root.
-- `npm run build`: passed; main JS 627.36 kB (189.02 kB gzip), CSS 37.59 kB,
-  11 precache entries (684.50 KiB). Existing Zod annotation and >500 kB chunk
-  warnings remain. `npm audit --omit=dev`: zero known runtime vulnerabilities.
-- Production Playwright on port 4183, `/PolySheet/`: **30 passed, 10 skipped**,
-  matching the current baseline, including the supplied-system import case.
+- `npm run check`: TypeScript passed; 255 tests passed, one skipped, 30 files,
+  14.49 s. Source actions use unchanged official and Archer inputs, with explicit
+  resource graphs for Archer's missing type declarations.
+- `npm run build`: passed, 1,749 modules; main JS 716.27 kB (gzip 213.46 kB),
+  CSS 51.24 kB; 15 precache entries, 887.15 KiB.
+- `npm audit --omit=dev`: zero runtime vulnerabilities.
+- Focused production desktop/mobile: two passed, exit 0, 49.1 s. Covers actual
+  skill tap/long press, proficiency Save/Cancel, currency adjustment, inventory
+  drafts and final character persistence, offline reopening and advancement.
+- Initial regression attempts exposed incomplete test setup and Archer's absent
+  resource-type declarations; fixed the fixture, not the imported source.
+  Full unit validation then found the five newly implemented currency-title
+  warnings in each package snapshot; counts now match 333 / 332 / 491.
+  The first browser attempt was interrupted; the next used the wrong expected
+  currency label (`Copper` instead of original `CP`). The corrected run passed.
+- Desktop/mobile captures inspected inline. No agents or detector reruns.
+  Existing Zod annotation and >500 kB chunk warnings remain. One unit fixture
+  skip is the missing exact historical reported-system input.
 
-## Reported GitHub tree-size limit follow-up
+- Full production desktop/mobile, port 4183, `/PolySheet/`:
+  runner reported **78 passed, 2 skipped, 5.3 min**, with no failed cases.
+  The background harness reported an unavailable exit code; this is the runner
+  result, not a claimed captured exit 0. Both skips need the missing exact
+  historical reported-system fixture.
+- Final root-path asset/worker/font/navigation regressions: **4 passed,
+  exit 0, 13.4 s**, desktop/mobile. The existing port-4173 preview was untouched.
+- Documentation: 21 staged Markdown files, 129 local links/anchors valid.
+  Staged diff checks pass outside the three unchanged upstream OFL license
+  lines with trailing spaces; those exact license texts are preserved.
+- Inline staged security review and secret-pattern check found no actionable
+  findings. The local report is `.reference/security-findings.json`.
+  This is not an independent audit or penetration-test certification.
 
-Executed on 2026-11-14 on Linux against the delivered application code.
+### Previous advancement checkpoint
 
-- Reproduced the report with `https://github.com/blastervla/rpg-companion-app-systems`:
-  its recursive tree is complete (`truncated: false`, matching root tree SHA)
-  but holds 10,577 entries, so the former 10,000-entry ceiling rejected the
-  repository before listing its three `system.rpg.json` candidates.
-- The discovery bound is now an exported `MAX_TREE_ENTRIES` of 20,000, sized to
-  the existing 8 MiB streamed-response ceiling. Truncated or larger trees still
-  fail explicitly; candidate, path, size and commit checks are unchanged.
-- A read-only check of the public API confirmed 10,577 entries, 10,330 regular
-  blobs, no unsafe paths or invalid sizes, and exactly three candidates
-  (`systems/5e`, `systems/5e2024`, `systems/pf2e`), each about 41 kB. No clone,
-  archive download or installation was performed.
-- `npm run check`: strict TypeScript passed, **140 passed, 11 skipped** across
-  13 files. The new regression reproduces the reported 10,577-entry tree and
-  expects the three sorted nested candidates; the declared tree and candidate
-  boundaries are exercised at 20,000 entries and 100 candidates.
-- `npm run build`: passed; existing Zod annotation and >500 kB chunk warnings
-  remain. `npm audit --omit=dev`: zero known runtime vulnerabilities.
-- Production Playwright on port 4183 with `PLAYWRIGHT_BASE_PATH=/PolySheet/`:
-  **30 passed, 10 skipped**, matching the current baseline; skips are absent
-  historical external fixtures and the optional live provider case. The limit
-  itself is covered by contract fixtures and the existing controlled GitHub
-  browser flows, which were rerun unchanged.
+Guided source-derived advancement:
 
-## Pre-push root-hosting check
-
-Executed on 2026-11-14 on Linux without application-code changes.
-
-- `PLAYWRIGHT_PORT=4183 PLAYWRIGHT_BASE_PATH=/ npm run test:e2e -- --max-failures=1 --grep "production assets"`:
-  **2 passed**, desktop/mobile. Verified root asset URLs, manifest, service-worker
-  scope and offline reload. The existing production build was used.
-- The full application checks and subdirectory browser suite remain recorded
-  below; they were not repeated for this commit-only request.
-
-## Reported AC, race and avatar menu follow-up
-
-Executed on 2026-11-13 on Linux against the delivered application code.
-
-- `npm run check`: TypeScript passed; **139 passed, 11 skipped** across
-  13 files. Skips are absent historical external fixtures. The exact local
-  reported upload was present and exercised.
-- `npm run build`: passed; main JS 624.43 kB (188.20 kB gzip), CSS 37.59 kB,
-  11 precache entries (681.64 KiB). Existing Zod annotation and >500 kB chunk
-  warnings remain.
-- `npm audit --omit=dev`: zero known runtime dependency vulnerabilities.
-- Production Playwright, port 4183, `/PolySheet/`: **30 passed, 10 skipped**
-  across desktop/mobile. Skips are absent historical fixtures and the optional
-  live provider case. No port-4173 preview was stopped.
-- Reproduced original empty-class AC and null-race description errors. Actual
-  manual controls create and assign class, class-details and race records;
-  Dexterity 14 gives AC 12 and the source-derived description. HP 14, AC,
-  description and exact compressed source bytes survive offline/backup restore.
-- Current original menu and `$edit_mode` rendering were already functional;
-  their reported unsupported/missing-stat messages were not reproduced.
-  Imported lifecycle and information events remain unexecuted and visible.
-- A red renderer regression reproduced a false runtime warning for a null
-  avatar event. Non-null unsupported event warnings remain after the fix.
-  Import diagnostics and immutable source content are unchanged.
-- An initial browser selector matched two menus and was scoped to the avatar.
-  The next run exposed a real mobile menu overflow/pointer failure. Right-edge
-  alignment fixed it; both the exact-source case and an always-on MIT
-  viewport/pointer regression passed in the complete final browser run.
-- Root hosting, live providers, deployment and general event/creation support
-  were not verified. No game-rule fallback, migration or dependency was added.
-
-## Reported HP recovery increment
-
-Executed on 2026-11-13 on Linux against the delivered application code.
-
-- `npm run check`: strict TypeScript passed, **138 tests passed, 11 skipped**
-  across 13 files. The skips are pre-existing absent real-source fixtures;
-  the user-provided HP fixture was present and its regression ran.
-- `npm run build`: passed; main JS 624.42 kB (188.22 kB gzip), CSS 37.52 kB,
-  11 precache entries (681.56 KiB). Existing Zod annotation and >500 kB chunk
-  warnings remain. No dependencies, database schema or stored imports changed.
-- `npm audit --omit=dev`: zero known runtime dependency vulnerabilities.
-- Production Playwright on isolated port 4183, `/PolySheet/`: **28 passed,
-  10 skipped**, desktop/mobile. The skips are absent historical Archer/derpsy
-  and external-subset fixtures or their optional live source case.
-- The exact reported upload reproduced the empty-class failure. Completing
-  `Class` and `Class details` through actual manual resource controls and
-  assigning the character's typed `Classes` field produced maximum HP 14 for
-  independently entered level 2, Constitution 14 and base HP 10. Both browser
-  profiles retained that result offline and after backup replacement; the backup
-  retained exact original compressed bytes.
-- Always-on regressions cover strict `notNull` behavior, invalid/missing nested
-  formulas, lambda cleanup, local child-render error isolation and retry,
-  discarded source drafts, Cancel, failed-reference rollback, retained failed
-  drafts, busy state and unrelated concurrent field/archive-name preservation.
-- The original class source form has duplicate `class_edit_base_ac` IDs.
-  It remains invalid rather than being rewritten. The manual editor explicitly
-  distinguishes typed data validation from source-form rule validation.
-- Initial red tests confirmed the missing manual control and unsupported
-  `notNull`; an intermediate type check and a test database reopening failure
-  were corrected. Initial browser attempts used an unsuitable label selector
-  and immediate checkbox-state check; final acceptance uses accessible roles
-  and waits for the persisted assignment. The complete final suite above passed.
-- No port-4173 preview was stopped. Root-path acceptance, live providers,
-  deployment and general creation/archetype/leveling compatibility were not
-  verified for this increment.
-
-## Previous contributor guide and diagnosis-only investigation
-
-Checked locally on 2026-11-13 on Linux.
-
-- Root `AGENTS.md`: 367 words; required title and linked paths checked.
-  The previous detailed instructions were retained in
-  `docs/AGENT_INSTRUCTIONS.md`, including existing uncommitted project renames.
-- An assertion harness loaded the actual import, initial-value and evaluator
-  modules through Vite and read the user-provided `system.rpg` without changing
-  it. The upload hash and exact formula paths are recorded in
-  [compatibility](COMPATIBILITY.md#reported-empty-class-hp-failure).
-- Original defaults independently checked: `classes=[]`, `level=0`, `base_hp=1`.
-  Both reads of `max_hp` reproduced
-  `max_hp: classes_hp_mods: max richiede una lista non vuota`.
-  Repeated direct reads of `classes_hp_mods` also failed as expected; the
-  complete input snapshot remained unchanged.
-- Full static diagnostics: 0 errors, 1,683 warnings. The public `max`
-  documentation was read and explicitly requires a nonempty numeric list.
-  No arbitrary fallback, source mutation or compatibility claim was added.
-- The first harness run also emitted a dependency-scanner error for the
-  app's virtual PWA module, despite completing the assertions. The final run
-  disabled unrelated dependency discovery and passed without that error.
-- No application code changed. Application suites, production build, runtime
-  audit and browser tests were not rerun. Populated-class behavior, browser UI,
-  live source providers and deployment were not verified.
-
-## Current source-view increment
-
-Historical run on Windows, Node.js 24.13.1, npm 9.2.0.
-
-- `npm run check`: passed strict TypeScript and 144 tests in twelve files;
-  11 skips are local-only real-source fixtures absent from a clean checkout.
-  The new `tests/source-views.test.tsx` covers enumerated `select` options with
-  inherited entries and allowlists, `collapsible`/`viewPager` paging, `ticker`
-  bounds and direct edits, `$edit_mode` visibility, `button`/`menuButton` events
-  staying disabled and visible, and `resourceArray` display mode.
-- `npm run build`: passed; main JS 622.54 kB, 187.63 kB gzip; CSS 37.49 kB;
-  11 precache entries, 679.70 KiB. Existing Zod annotation and >500 kB chunk
-  warnings remain. No dependencies or database schema changed.
-- `npm audit --omit=dev`: zero known runtime dependency vulnerabilities.
-- Production Playwright on port 4183 with `PLAYWRIGHT_BASE_PATH=/PolySheet/`:
-  **26 passed, 10 skipped**, matching the previous baseline; the skips are the
-  external fixtures that are not present locally.
-- Pinned `system.rpg` diagnostics after the increment: **0 errors, 1,683
-  warnings** (previously 1,875), with 0 unsupported view instances, 85
-  unsupported formula nodes, 129 unresolved references and explicit reports for
-  the 19 source button events, `resource.create_if_empty` and `diffText`.
-  This is not a claim of full runtime compatibility.
-
-## Previous GitHub retrieval increment
-
-- `npm run check`: passed strict TypeScript and 137 tests in eleven files,
-  no skips. Eleven GitHub groups verify URL normalization, default/explicit
-  references, commit pinning, selection, byte/tree/candidate bounds at their
-  declared limits, unsafe/incomplete metadata, public-API failures, exact
-  originals and immutable character pins through backup restoration.
-- `npm run build`: passed; main JS 601.03 kB, 181.99 kB gzip; CSS 34.41 kB;
-  11 precache entries, 655.69 KiB. Existing Zod annotation and >500 kB chunk
-  warnings remain. No dependencies or database schema changed.
-- `npm audit --omit=dev`: zero known runtime dependency vulnerabilities.
-- Final production Playwright on port 4183: **36/36 passed at `/PolySheet/`
-  and 36/36 at `/`**, no skips. The two suites and the live check below took
-  168.4 seconds for all three sequential commands.
-  Controlled GitHub/Raw responses exercise the real clone-URL UI, reference
-  encoding, file selection, invalid-content rejection, cancellation before
-  installation, confirmation, exact export, offline reopening, rate limits,
-  missing repositories and authoring-only trees. Existing acceptance passed.
-- Separate intentional live public GitHub check: **2/2 passed**, desktop/mobile,
-  9.8 seconds reported by Playwright, no intercepts. The real API resolved
-  derpsy commit `00f55b2c3023c59f5857297dc933a7505c9b6aa4`, listed the tree,
-  downloaded `5e/system.rpg`, and displayed version `0.6.0` with 317 stats.
-  This establishes the observed public API/Raw availability and browser CORS,
-  not continued availability or full RPG runtime compatibility.
-- Pre-commit review reproduced a reserved view-ID validation failure:
-  `__proto__` lost its error in a normal object dictionary. A null-prototype
-  dictionary now retains validation for that ID, `constructor` and `toString`.
-  The new regression verifies blocked Save. All final checks above ran after
-  this correction. The focused security review records no remaining confirmed
-  findings in the reviewed changes; it is not a penetration test.
-- The existing preview on port 4173 was retained. Hosted deployment was not
-  verified. Private repositories, non-GitHub Git hosts, arbitrary cloning,
-  split-source compilation and resource archives remain unsupported.
-
-See [GitHub contract and usage](GITHUB_IMPORT.md).
-
-## Previous scoped-view increment
-
-- `npm run check`: passed strict TypeScript and 125 tests in ten files, no skips.
-  Eleven scoped-view regressions cover immediate draft validation, failed saves,
-  nested Save/reopen/Cancel with combat overrides, exact-pin resource lookup,
-  concurrent appends, invalid multi-field rollback, foreign additions, linked-PC
-  combat writes and immutable backup originals. Both pinned original systems'
-  six point-buy inputs and source cost calculations are exercised.
-- `npm run build`: passed after the final application change; main JS 594.43 kB,
-  179.75 kB gzip; CSS 34.37 kB; 11 precache entries, 649.21 KiB.
-  Existing Zod annotation and >500 kB chunk warnings remain.
-- Final production Playwright on isolated port 4183: **34/34 passed at
-  `/PolySheet/` and 34/34 at `/`**, desktop/mobile, no skips; 147.8 seconds for
-  the two sequential commands. The existing user preview on 4173 was retained.
-  Tests use original Archer/derpsy popups, condition Save/Cancel, the six source
-  point-buy inputs, validated note creation, local resource ordering/unlinking,
-  offline reopening, exact source exports and backup restoration.
-- `npm audit --omit=dev`: zero known runtime dependency vulnerabilities.
-  No dependencies or database schema changed.
-- Earlier intermediate browser assertions/builds are not the final evidence.
-  Nested popup reopening was corrected to prefer staged preview values over
-  original combat overrides; final unit/build/browser checks ran afterwards.
-- Full diagnostics for the attached derpsy `5e` `0.6.0` original were inspected,
-  not just the first 100 displayed entries: 1,875 warnings and no static errors.
-  This is not full runtime compatibility. Empty `classes` reproduces a null
-  saving-throw proficiency and a strict boolean-condition error; null `race`
-  reproduces required `race.current_level_traits` lookup failure. Neither was
-  disguised with invented defaults.
-
-General events, official creation/progression, nested resource contexts and
-additional views/formulas remain unsupported. The manual source-input groups
-are explicitly not an official character-creation workflow. See
-[view contracts and limits](VIEWS.md).
-
-Live public-provider checks and hosted deployment were not rerun for this
-increment. URL tests used controlled responses. No commit, push or remote
-settings change was performed.
-
-## Previous collection-only increment
-
-- `npm run check`: passed TypeScript and 114 tests in nine files, no skips.
-  Seven new grouped regressions include both pinned original source variants,
-  populated armor selection by actual local instance ID, strict input failures,
-  lexical bindings, bounded flattening and required missing-race errors.
-- `npm run build`: passed; main JS 562.21 kB, 171.07 kB gzip; 11 precache
-  entries, 616.54 KiB. Existing Zod annotation and >500 kB chunk warnings remain.
-- `npm audit --omit=dev`: zero known runtime dependency vulnerabilities.
-- Production Playwright with port 4183 and `/PolySheet/`: 32/32 passed,
-  no skips, 67.5 seconds including the command. Desktop and mobile exercise
-  all six new handlers through real imported views and a saved text input;
-  expected `1,3|2|no|si` becomes `1,3|2|si|si`, and survives offline reopening.
-  Existing source export, backup/restore and combat acceptance also passed.
-- Initial new integration assertions incorrectly assumed that manual defaults
-  with a null race produced empty derived collections. They failed on required
-  original paths. The tests now explicitly require those failures; the evaluator
-  was not weakened or supplied invented defaults.
-- One intermediate TypeScript test assertion failed; replaced it with an actual
-  array guard. All final checks above ran after the final application change.
-
-At this earlier checkpoint, the requested views and `$view` edit sessions were
-not yet implemented. The current scoped-view results above supersede that
-limitation. Root-path browser and live provider checks were not rerun at this
-earlier checkpoint. No dependencies, database schema or original source records
-changed.
-
-## Previous combat and deployment baseline
-
-The following results predate the collection increment above.
-
-| Check | Executed result |
+| Executed check | Result |
 | --- | --- |
-| `node scripts/inspect-archer.mjs` | Passed; pinned gzip-JSON system extracted locally |
-| `node scripts/package-fixtures.mjs` | Passed; both pinned original `.rpg` blobs exported locally |
-| `npm run test:external` | Passed; two required historical-source integration tests |
-| `npm run check` | Passed strict TypeScript and all 107 tests in eight files; external tests ran, none skipped |
-| `npm run build` | Passed; production PWA, 11 precache entries, 613.40 KiB total precache |
-| `PLAYWRIGHT_PORT=4183 PLAYWRIGHT_BASE_PATH=/PolySheet/ npm run test:e2e -- --max-failures=1` | Passed all 30 tests under a Pages-style subdirectory, no skips, 53.5 seconds |
-| `PLAYWRIGHT_PORT=4183 PLAYWRIGHT_BASE_PATH=/ LIVE_RPG_IMPORT=1 npm run test:e2e -- --max-failures=1` | Passed all 30 tests at the origin root, no skips, 54.8 seconds; includes two actual public Raw imports |
-| `PLAYWRIGHT_PORT=4183 LIVE_RPG_IMPORT=1 npm run test:e2e -- --grep 'direct raw .rpg'` | Passed two additional unmocked public Raw import checks, desktop/mobile, 9.0 seconds |
-| Workflow YAML and configuration checks | Parsed YAML and verified triggers, job dependencies, privileges, action SHA pins, artifacts; three valid and eight invalid path/port cases passed |
-| `npm audit --omit=dev` | Rechecked after combat integration: zero known runtime dependency vulnerabilities |
-| Targeted pre-commit security review | Reviewed 27 security-relevant modules/configurations; no remaining confirmed application finding; threat model and report retained |
-| `npm audit --json` | Six build-tool dependency advisories: four moderate, two low, zero high/critical |
+| `npm run check` | TypeScript passed; 248 tests passed, 1 skipped, 29 files; 18.00 s |
+| Expanded real-source progression regression | 2 passed; repeated advancement, subclass requirement, private multiclass, stale/duplicate rejection, rollback, average/max/seeded rolls, level-20 target and level-21 refusal |
+| Final `npm run build` | Passed; 1,746 modules; main JS 707.62 kB, gzip 210.99 kB; CSS 51.24 kB; 15 precache entries, 878.70 KiB |
+| `npm audit --omit=dev` | 0 vulnerabilities |
+| Full production Playwright before the final checkbox/empty-input refinement | Reported 78 passed, 2 skipped, 4.8 min; background harness did not retain an exit code, so this is the runner report rather than a claimed captured exit 0 |
+| Final production focused desktop/mobile after rebuilding | 2 passed, exit 0, 36.0 s; Save/Cancel, acknowledgement, single-class advance, multiclass manual check, preview/private graph and reload persistence |
 
-The inline environment assignments in the table describe the run; Windows
-PowerShell uses `$env:NAME = 'value'` as shown in the README. Port 4183 isolates
-acceptance runs from the user's active preview on 4173; no existing server or
-user database was stopped or cleared. The full build-chain audit is from the
-earlier dependency review; these features add no dependencies.
+The final focused run adds Wizard to the real setup catalog inputs and exercises
+Fighter → Fighter/Wizard through the actual controls. Desktop/mobile captures
+were inspected; the existing check-field style fixed the initial tight labels.
+No independent agents or detector reruns were used. The one unit/two browser
+skips still concern the absent exact historical reported-system fixture.
+Existing Zod annotation and >500 kB chunk warnings remain.
 
-## Browser coverage
+This is a permanent manual base-edit assistant using source formulas, not
+execution of the full imported confirm/effect program. Current HP is unchanged;
+other source choices remain a visible checklist. No database/backup schema,
+source-original bytes, digest or immutable pin was changed. No physical-device,
+Firefox/Safari or full assistive-technology validation was performed.
 
-Playwright ran production `dist/` in Chromium at desktop 1440 × 1000 and Pixel 7
-mobile emulation. Each profile covered:
+## Previous comparison/filter increment, 2026-11-16
 
-1. Real file input, including retained UTF-8 BOM, import preview/confirmation,
-   manual character creation, source fields, saved edits and derived values.
-2. Worker activation, offline reload, character reopening, resource creation and
-   notebook link, dice history, downloaded backup, confirmed deletion and restore.
-   The restored backup retained values, resources, links, and rolls.
-3. Malformed file rejection, unknown component fallback, and no imported code
-   execution.
-4. Locally intercepted HTTP 404, network/CORS failure, and permitted HTTPS JSON
-   response. These are controlled browser fixtures, not public-provider tests.
-5. Three manually created characters, persisted dark/light theme, keyboard focus,
-   responsive layout, and no horizontal overflow on the tested screen.
-6. The real historical ability slice and the entire extracted Archer `0.9.1`
-   JSON document: visible partial support, source score `8 → 15`, modifier
-   `-1 → 2`, save, offline reload, reopen.
-7. The exact reported GitHub repository URL: identify an HTML/repository page
-   before any download instead of labelling it an invalid URL/CORS failure.
-8. Original Archer `0.9.1` and derpsy `0.6.0` `.rpg` files: real file input,
-   partial-support warning, ability edit, offline reopen, exact original-byte
-   export, backup v3 and restore, then byte-identical export again.
-9. Direct Raw `.rpg` URL with the actual pinned bytes as a controlled HTTP
-   response, malformed/unknown packages, and gzip distribution indexes.
-10. Native browser decompression at the worst supported byte boundary:
-    8,388,609 expanded bytes rejected without installation; exactly 8,388,608
-    bytes accepted and installed. Both profiles passed.
-11. Original MIT-licensed Sentieri gzip import, edit, offline reopen,
-    byte-identical export and backup/restore, without third-party fixture files.
-12. Production root/subdirectory pathname, manifest start/scope, worker
-    script/scope and offline navigation. Both complete browser suites passed.
-13. Typed scalar lists, same-version resource references, local PNG input,
-    rejection of a truncated raster before saving, two combatants, manual
-    initiative, turn/round advancement, offline reopening and backup v3 restore.
-    HP initialization and saved turn state are retained rather than rerolled.
+Nullable-resource comparisons and source selection filters, with a clearer
+resource picker and primary character-configuration action:
 
-Separately, `LIVE_RPG_IMPORT=1` disabled request interception for the
-[pinned derpsy Raw system file](https://raw.githubusercontent.com/derpsyhome/3rd-party-books-for-5e/00f55b2c3023c59f5857297dc933a7505c9b6aa4/5e/system.rpg).
-Both browser profiles downloaded and imported it over real HTTPS, then exported
-bytes matching the pinned Git blob exactly. This verifies that endpoint's
-browser access at the time of testing, not every server's CORS policy.
+| Executed check | Result |
+| --- | --- |
+| `npm run check`, final code | TypeScript passed; 246 Vitest tests passed, 1 skipped, 28 files; 11.27 s |
+| `npm run build`, final code | Passed; 1,743 modules; main JS 693.17 kB, gzip 207.22 kB; CSS 51.24 kB; 15 precache entries, 864.59 KiB |
+| Focused production guided setup, before final header adjustment | 2 passed, 29.4 s, desktop/mobile; actual spell prefilters, removal, cancel/reset, clone/append and offline reopening |
+| `npm audit --omit=dev` | 0 runtime vulnerabilities |
+| Full production Playwright, final code, port 4183, `/PolySheet/`, `--max-failures=1` | 78 passed, 2 skipped, 4.8 min; exit 0; includes offline, backup restore and original-byte preservation |
+| Documentation and diff checks | 21 Markdown documents, 128 local links/anchors valid; `git diff --check` passed with existing LF/CRLF notices |
 
-Desktop/mobile character-list screenshots were inspected. Screenshots and
-failure traces are generated under gitignored `test-results/`; they do not ship.
-Initial acceptance runs failed on navigation selectors and duplicate labels.
-They also exposed off-canvas mobile navigation remaining keyboard-accessible.
-The selectors were corrected and closed mobile navigation now uses CSS
-visibility to leave the keyboard/accessibility tree. The final run passed.
-The new GitHub-URL regression first reproduced the user's exact misleading
-network/CORS text on the old build. The corrected run identifies the page
-without requesting it. An initial acceptance launch found port 4173 occupied;
-the harness now supports an isolated `PLAYWRIGHT_PORT`, leaving that app open.
+Fresh desktop/mobile spell-filter and configured-sheet captures were inspected.
+The picker shows the source class prefilter separately from search and selectable
+results. Configuration is the primary header action; deletion stays available
+with confirmation, and compatibility guidance remains visible. This is a scoped
+usability improvement, not a completed whole-sheet redesign or a new performance
+benchmark. The existing Zod annotation and large-chunk build warnings remain.
 
-The compatibility increment initially failed on an outdated backup-version test,
-an optional-test skip API, native dice-resource setup and new browser selectors.
-Tests now use the original `dice_roll` base fields, not a substituted calculated
-formula. The offline helper waits for the asynchronous save transaction before
-reload; checkbox assertions wait for the committed controlled value. Scalar-list
-inputs remount when a removed item changes their value. Final runs above used the
-hardened initializer and all passed.
+The initial nullable-reference regressions failed with the reported scalar-only
+errors, then passed after the shared fix. The real unchanged 5e graph now
+returns one Human Unarmed Strike and empty attuned lists. A first full unit run
+failed three obsolete warning-count assertions; after checking every affected
+source filter, those expectations changed to 338 / 337 / 496. Unsupported
+filter definitions/types still receive diagnostics and runtime errors.
+The exact older `reported-system.rpg` fixture remains absent (one unit skip);
+it was not replaced and described as the same upload.
 
-## Unit and integration coverage
+## Previous health checkpoint, 2026-11-16
 
-- Bounded formula evaluation, order, rounding, conditions, dependencies, cycles,
-  caches, unsupported handlers, numeric errors, and no dynamic code.
-- Cryptographic dice bounds and malformed expressions.
-- Source schema/type validation, exact-source identities, unknown fields,
-  UTF-8 preservation/rejection, prototype keys, byte/depth/node limits.
-- Immutable versions, concurrent field edits, exact-version resource links,
-  migration v1 → v2, reopening IndexedDB, bounded history.
-- Backup validation, hashing, cross-record links, atomic replacement and rejection
-  without modifying the live database.
-- Source-driven rendering/editing, escaped HTML, visible unsupported events,
-  null optional conditions, disabled checkbox, invalid numeric draft rejection.
-- Pinned historical source errors rejected without coercion; unchanged selected
-  source objects; six ability defaults and source note conditional behavior.
-- Supplied Archer serialization/counts/dice and the persisted ability path.
-- Gzip checksum/truncation errors, unknown envelopes, invalid UTF-8, source-byte
-  identities, distinct gzip encodings of identical JSON, exact original bytes,
-  unsupported native decompression, size-bounded/canonical Base64.
-- Compressed/raw input and expanded size caps, including exact 8 MiB acceptance
-  and one-byte-over rejection; oversized Content-Length and actual response body.
-- Backups v2 and legacy v1 restore; reject v1 with binary fields, source/hash/JSON
-  tampering, and invalid packages without modifying the live archive.
-- Both pinned real gzip systems, unchanged source counts, and the real strength
-  modifier; URL validation, GitHub pages, HTML, HTTP, network, timeout and decode
-  error distinctions.
-- Documented string/date/null/list/scoping examples, optional paths, nested lambda
-  frames, dynamic stat names, cache bypass, safe resource paths, and no render-time
-  randomness. Real source `created_at_display` matches the fixed expected date.
-- Both original combat definitions: native dice-resource expression, one-time
-  monster HP initialization, XP pool 50, source resolution on HP zero, healing,
-  reopening and backup restore without rewriting source originals.
-- Initiative ties, per-round/per-combat behavior, degradation passes, threshold
-  rejection, atomic initializer failures, linked-PC concurrent field preservation,
-  and rejection of malformed references/overrides/active state during restore.
-- Unsupported initializer options, dynamic destinations, calculated aggregation,
-  repeated destinations and implicit/concurrent sequences fail without partial
-  persistence. Initializer resource references use the same integrity checks.
-- Photo structural validation at the documented 1 MiB ceiling in a fresh Node
-  process, over-limit rejection, canonical encoding and dimension bounds.
+Windows, PowerShell 5.1, Node.js 24.13.1, npm 9.2.0.
+This extends the existing dirty working tree with responsive source forms,
+paged Monster selection, scoped character context, stat details/colors and guided
+creation/configuration, beginner D&D score generation and the first character
+presentation events (INFORMATION and source stat rolls), followed by optional
+automatic first-level D&D HP initialization. No dependency, schema or import limit
+changed. Exact source bytes, digests and pins remain immutable.
 
-## Remaining warnings and unchecked cases
+| Executed check | Result |
+| --- | --- |
+| `npm run check`, final production code | TypeScript passed; 240 Vitest tests passed, 1 skipped, 25 files; 10.91 s |
+| `npm run build`, with initial health | Passed; 1,741 modules; main JS 689.40 kB, gzip 206.14 kB; CSS 50.24 kB; 15 precache entries, 859.93 KiB |
+| Production Playwright, port 4183, `/PolySheet/`, `--max-failures=1` | 78 passed, 2 skipped, 4.7 min; exit 0, final production build |
+| Focused real 5e setup, first-level HP, generation and events | 6 passed, 45.6 s, desktop/mobile; final production code, before adding extra manual-toggle/capture assertions |
+| Final guided setup with manual-to-automatic switching and dedicated health captures | 2 passed, 25.7 s, desktop/mobile; exit 0 |
+| `npm audit --omit=dev`, same increment | 0 runtime dependency vulnerabilities |
+| Fresh source-dialog geometry/save | Passed desktop and mobile; phone dialog 380 px inside 412 px viewport, no horizontal overflow; footer stable and actual Save succeeds |
 
-Build warnings remain for dependency `@__PURE__` comment annotations and the
-559.58 kB minified main JavaScript chunk (170.43 kB gzip). No warning threshold
-was raised to hide these messages.
+Build warnings remain: two upstream Zod annotation warnings and the existing
+minified-chunk warning above 500 kB. No threshold was relaxed.
 
-The six audit entries belong to the development/build chain:
-`vite-plugin-pwa`, `workbox-build`, `glob`, `minimatch`,
-`@rollup/plugin-node-resolve`, and `deepmerge`. Runtime audit is clean.
-Available upstream versions were checked; no unverified forced dependency
-override or suggested major downgrade was applied. Recheck before releasing,
-and build only trusted application source.
+The immediately preceding beginner/event checkpoint passed 238 unit tests
+(one skip) and 78 browser tests (two skips, 4.8 min), with main JS 686.12 kB
+and 856.73 KiB precache. Those are historical, not health-increment results.
 
-Not certified: Safari/Firefox, actual iOS/Android installation, assistive
-technology or complete WCAG compliance, storage eviction/quota exhaustion,
-two-version service-worker update rollout, static-host HTTPS/subpath deployment,
-other third-party hosts' CORS policies, and sustained large-library performance.
-The app has not been published to an external host. The Actions/Pages workflow
-was inspected and its application commands exercised locally, not executed on
-a GitHub-hosted Ubuntu runner. `npm ci` and browser/Linux dependency installation
-were not rerun locally because the existing development installation was used.
-Enable Pages and run the workflow on GitHub to verify hosted deployment.
+## Behavior exercised
 
-External tests skip explicitly on a fresh checkout until their local-only inputs
-are prepared. No third-party fixtures or compiled packages are distributed.
-There is no full-system, generic compiled-package, creation-flow, general effect-engine,
-or resource-pack compatibility claim. Only the independently verified gzip-JSON
-system variant is supported, not the advertised book/class/race archives.
+- First-level HP tests use actual 5e Fighter/Wizard/Barbarian/Cleric and 2024
+  Wizard/Barbarian/Cleric with CON 3/8/10/14/20. They independently expect class
+  die maximum plus the modifier, verify the resulting original `max_hp`,
+  reject higher-level initialization, protect existing characters and roll
+  back failed creation without orphan graphs. The unchanged 2024 Fighter
+  fractional-weight blocker is not bypassed. Desktop/mobile creation checks
+  Fighter CON 14 => 12 HP and CON 8 => 9 HP, Cancel and offline reload.
+
+- All four score methods run through the actual setup controls. Tests cover
+  every point-buy cost, 27-point exhaustion/overspend, six unique assignments,
+  min/max dice, tied-lowest discard, explicit Apply, method switches and Cancel.
+  Standard-array values persist after character Save and reopening.
+- The unchanged official 5e INFORMATION popup and source strength roll are
+  exercised on desktop/mobile. A read-only popup offers no editing controls;
+  closing popup/roll leaves the complete character/resource snapshot unchanged.
+  Overlapping command tests consume one draw, rendering/rerendering consumes
+  none, and an explicitly repeated command consumes one additional draw.
+
+- Incomplete official 5e starts with the actual empty-class HP/AC errors.
+  Guided configuration assigns private Fighter/Human/Soldier graphs and explicit
+  initial values. Independently expected maximum HP 12, AC 13, STR save 5 and
+  CON save 4 survive offline reopening. Cancel preserves the database snapshot.
+- New character creation, configuration rollback, unrelated-value preservation,
+  private feat copying, hit-dice detail Save and nested draft ownership have
+  regression coverage. Read-only details do not leak `$view` or writable state.
+- Generic Monster pickers search all names and show 50 choices per page.
+  Repeated open/close, search, atomic Save/Cancel and offline data run at the
+  10,000-resource ceiling. HP changes preserve source calculations.
+- Long Archer/derpsy forms and guided setup keep actions outside a real div
+  scrollport around the disabled fieldset. Browser assertions check scrolling,
+  footer stability and clickable submit actions, not screenshots alone.
+- Existing exact export, catalog integrity, backups, protected removal, combat,
+  photos, import boundaries and local/offline flows ran in the complete suite.
+
+## Earlier interaction performance checkpoint
+
+These measurements precede the beginner/event extension. That extension has
+not been freshly benchmarked; the figures below are historical, not its final
+performance proof.
+
+Fresh Chromium process, production build, unchanged official 5e package;
+0/1,000/9,998 Monster records plus two class records. Each case measures three
+HP updates and three picker openings through real controls, including two
+animation frames and persisted-save confirmation. Mobile uses Pixel 7 emulation
+and 4× CPU throttling. These are local measurements, not physical-device claims.
+
+At 9,998 Monsters:
+
+| Interaction | Earlier baseline | Delivered build |
+| --- | ---: | ---: |
+| Desktop HP update, worst of three | 450 ms | 221 ms |
+| Desktop Monster opening, worst of three | 4,971 ms | 66 ms |
+| Mobile/throttled HP update, worst of three | 2,229 ms | 1,117 ms |
+| Mobile/throttled Monster opening, worst of three | 26,077 ms | 160 ms |
+
+The earlier performance-only build reached 346 ms HP on throttled mobile.
+The delivered context/detail functionality is slower; that earlier number is
+not the final result. Across all delivered mobile cases the worst HP time is
+1,117 ms. Picker buttons remain bounded at 53 including navigation/close.
+Local evidence: `.reference/monster-performance-baseline-hp.json` and
+`.reference/monster-performance-final.json`. The benchmark completed all six
+cases and wrote its result; the background harness did not retain its exit code.
+
+## Visual evidence and limits
+
+Fresh desktop/mobile setup and configured-sheet captures are local-only in
+`.reference/ui-review/`; source-dialog captures were regenerated after the final
+scrollport fix. Imported content and unsupported-event notices remain visible.
+The existing fonts and charcoal/brass identity are retained. The earlier
+12:37 visual review is historical, not proof of these new screens. Review is
+inline, not an independent agent review; no new agents were started.
+
+One unit case and two browser cases skip because the exact historical
+`.reference/reported-system.rpg` is absent. The unchanged official 5e package
+was exercised, but is not claimed as the missing upload.
+
+General events beyond the explicit read-only popup/roll subset, full official
+creation/progression, automatic special bonuses and general HP effects remain
+unsupported beyond explicit first-level initialization for new characters.
+Roll results are transient, not added to persistent history. Static import
+diagnostics remain conservative for the broader event/mechanic surface.
+Character ownership is scoped to sheet/resource
+callers; unassigned archives have no invented owner. Nested stat paths and
+`$character.$edit_mode` are not implemented. Diagnostic totals of 339/339/506
+do not establish full-system compatibility.
+
+No new root-path or live-provider run was needed for this increment, which
+does not change routing or deployment behavior. Previous results remain in
+history. Safari/Firefox, physical phones, assistive technology/full WCAG,
+quota eviction and two-version worker rollout were not checked.
+No commit, push or deployment was performed. With the user's repository-move
+instruction, local `origin` now points to
+[PolySheet](https://github.com/camiu01/PolySheet/).
+Port 4173 and user browser data were not reset.
+
+## Documentation and diff checks
+
+20 root/docs Markdown documents: 128 local links/anchors and 85 `npm run`
+references passed validation; fenced code blocks are balanced. `git diff --check`
+passed, with existing LF/CRLF conversion notices only. No Markdown linter was
+installed. The scoped inline visual review is retained locally at
+`.reference/ui-review/review.md`; no independent review is claimed.

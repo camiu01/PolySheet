@@ -21,8 +21,10 @@ export async function importFromUrl(url: string) {
 }
 
 /** Read at most 8 MiB in 15 seconds, without cookies, referrers or remote HTML. */
-export async function downloadBytes(address: URL, githubApi = false) {
+export async function downloadBytes(address: URL, githubApi = false, maxBytes = MAX_SYSTEM_BYTES) {
   if (address.protocol !== 'https:' || address.username || address.password) throw new Error(it.invalidUrl);
+  const limit = Math.min(MAX_SYSTEM_BYTES, maxBytes);
+  if (!Number.isSafeInteger(limit) || limit < 1) throw new Error(it.catalogRemoteLimit);
   const signal = AbortSignal.timeout(15000);
   let bytes: Uint8Array<ArrayBuffer>;
   try {
@@ -37,13 +39,13 @@ export async function downloadBytes(address: URL, githubApi = false) {
       if (githubApi && response.status === 409) throw new Error(it.repositoryEmpty);
       if (!response.ok) throw new Error(`HTTP ${response.status}: il server non ha restituito il file.`);
       if (/text\/html|application\/xhtml\+xml/i.test(response.headers.get('content-type') ?? '')) throw new Error(it.remoteHtml);
-      if (Number(response.headers.get('content-length')) > MAX_SYSTEM_BYTES) throw new Error('File remoto troppo grande: massimo 8 MB.');
+      if (Number(response.headers.get('content-length')) > limit) throw new Error(`File remoto troppo grande: massimo ${limit / 1024 / 1024} MB.`);
     } catch (error) {
       try { await response.body?.cancel(); } catch { /* Preserve the response diagnostic. */ }
       throw error;
     }
     if (!response.body) throw new Error('Risposta vuota.');
-    bytes = await readBounded(response.body);
+    bytes = await readBounded(response.body, limit);
   } catch (error) {
     if (signal.aborted || (error instanceof Error && ['TimeoutError', 'AbortError'].includes(error.name))) throw new Error(it.downloadTimeout);
     if (error instanceof TypeError) throw new Error(it.downloadBlocked);

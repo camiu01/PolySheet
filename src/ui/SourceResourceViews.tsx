@@ -36,6 +36,7 @@ function ResourceBody({ node: v, definition, record, context, onError }: {
 		systemKey: record.systemKey, stats: definition.stats, values: record.values,
 		resources: context.resources, resourceDefinitions: context.resourceDefinitions,
 		enumerations: context.enumerations, createdAt: record.createdAt,
+		character: context.character,
 		onChange: writable ? (statId, value) => {
 			void commitResourceView(record.id, { [statId]: value }).catch(cause => onError?.(cause));
 		} : undefined
@@ -90,6 +91,7 @@ function ArrayCreateModal({ definition, context, onCreated, onBusyChange, onClos
 		<SourceForm input={definition.edit_view} onBusyChange={onBusyChange} onDone={onClose} context={{
 			systemKey: context.systemKey, stats: definition.stats, values: initialValues(definition.stats),
 			resources: context.resources, resourceDefinitions: context.resourceDefinitions, enumerations: context.enumerations,
+			character: context.character,
 			onCommit: async (patch, additions = []) => {
 				if (!context.systemKey) throw new Error(it.formReadOnly);
 				const values = initialValues(definition.stats);
@@ -164,6 +166,7 @@ export function SourceResourceArray({ node: v, context: ctx }: { node: View; con
 			{editing && definition.edit_view ? <SourceForm input={definition.edit_view} context={{
 				systemKey: selected.systemKey, stats: definition.stats, values: selected.values,
 				resources: ctx.resources, resourceDefinitions: ctx.resourceDefinitions, enumerations: ctx.enumerations,
+				character: ctx.character,
 				onCommit: (patch, additions) => commitResourceView(selected.id, patch, additions)
 			}} onBusyChange={setBusy} onDone={() => { setSelected(null); setEditing(false); }} />
 				: <><ResourceBody node={{ ...v, view_type: 'display' }} definition={definition} record={selected} context={ctx} />
@@ -179,7 +182,7 @@ export function SourceResourceArray({ node: v, context: ctx }: { node: View; con
 function evaluateItem(ctx: RenderContext, definition: ResourceDefinition, record: ResourceInstance, value: unknown) {
 	return createEvaluator(definition.stats, record.values, undefined, {
 		resources: ctx.resources, resourceDefinitions: ctx.resourceDefinitions, createdAt: record.createdAt,
-		enumerations: ctx.enumerations
+		enumerations: ctx.enumerations, character: ctx.character
 	}).evaluate(value);
 }
 

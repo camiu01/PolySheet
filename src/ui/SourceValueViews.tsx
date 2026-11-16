@@ -10,6 +10,8 @@ import type { View } from '../domain/model';
 import { boundedNumber, inputValue, resourceReferenceId, saveInput, sourceIcons, textValue, viewColor } from './view-support';
 import { it } from './it';
 import type { RenderContext } from './renderer';
+import { Modal } from './shared';
+import { NumericAdjustment } from './NumericAdjustment';
 
 /** Read a finite number from an evaluated formula or fail visibly. */
 function numberValue(value: unknown, label: string): number {
@@ -68,7 +70,9 @@ export function SourceTicker({ node: v, context: ctx, evaluate }: {
 	const label = v.label == null ? '' : textValue(evaluate(v.label));
 	const shown = typeof value === 'number' ? `${v.always_show_sign === true && value >= 0 ? '+' : ''}${value}` : '—';
 	const [editing, setEditing] = useState(false);
+	const [adjusting, setAdjusting] = useState(false);
 	const [error, setError] = useState('');
+	const adjustment = v.edit_bottom_sheet_title != null && amount === 1 && allowed == null && !!ctx.onCommit;
 
 	function commit(next: number) {
 		if ((minimum !== undefined && next < minimum) || (maximum !== undefined && next > maximum)
@@ -97,7 +101,7 @@ export function SourceTicker({ node: v, context: ctx, evaluate }: {
 		aria-label={`${it.tickerDecrease} ${stat.name}`} onClick={() => step(-1)}>{look === 'upDown' ? '▾' : '−'}</button>;
 	const increment = <button type="button" className="ticker-button" disabled={!editable}
 		aria-label={`${it.tickerIncrease} ${stat.name}`} onClick={() => step(1)}>{look === 'upDown' ? '▴' : '+'}</button>;
-	const valueElement = editing
+	const valueElement = editing && !adjustment
 		? <TickerEditor label={v.edit_bottom_sheet_title != null ? textValue(evaluate(v.edit_bottom_sheet_title)) : `${it.tickerEdit} ${stat.name}`}
 			value={value} integer={stat.value_type === 'integer'} minimum={minimum} maximum={maximum}
 			onCommit={text => { const ok = commitText(text); if (ok) setEditing(false); return ok; }}
@@ -120,6 +124,10 @@ export function SourceTicker({ node: v, context: ctx, evaluate }: {
 			{location === 'sideToSide' && increment}
 		</div>
 		{error && <small role="alert" className="error-text">{error}</small>}
+		{editing && adjustment && typeof value === 'number' && <Modal title={textValue(evaluate(v.edit_bottom_sheet_title))} onClose={() => !adjusting && setEditing(false)}>
+			<NumericAdjustment stat={stat} value={value} context={ctx} minimum={minimum} maximum={maximum}
+				onBusyChange={setAdjusting} onDone={() => setEditing(false)} />
+		</Modal>}
 		{ctx.onChange && !ctx.drafts && v.should_auto_save !== true && <small className="unsupported-note">{it.explicitSave}</small>}
 	</div>;
 }
@@ -146,7 +154,7 @@ function resourceLabel(record: { name: string; values: Record<string, unknown>; 
 	if (!id) return record.name;
 	const value = createEvaluator(definition.stats, record.values, undefined, {
 		resources: ctx.resources, resourceDefinitions: ctx.resourceDefinitions, createdAt: record.createdAt,
-		enumerations: ctx.enumerations
+		enumerations: ctx.enumerations, character: ctx.character
 	}).get(id);
 	return textValue(value) || record.name;
 }
@@ -161,16 +169,16 @@ function selectOptions(v: View, ctx: RenderContext, evaluate: (value: unknown) =
 		return refs.flatMap(ref => {
 			const id = resourceReferenceId(ref);
 			const record = id ? ctx.resources?.find(r => r.id === id && (!ctx.systemKey || r.systemKey === ctx.systemKey)) : undefined;
-			if (!id || !record) throw new Error(it.missingResource);
+			if (!id || !record || record.catalogSource) throw new Error(it.missingResource);
 			const definition = definitions.find(d => d.id === record.definitionId);
 			if (!definition) throw new Error(it.noResourceType);
 			if (allowed && !allowed.includes(record.id)) return [];
 			const saved = typeof v.resource_saved_stat === 'string'
 				? textValue(createEvaluator(definition.stats, record.values, undefined, {
 					resources: ctx.resources, resourceDefinitions: definitions, createdAt: record.createdAt,
-					enumerations: ctx.enumerations
+					enumerations: ctx.enumerations, character: ctx.character
 				}).get(v.resource_saved_stat))
-				: record.id;
+				: record.sourceId ?? record.id;
 			return [{ id: record.id, label: resourceLabel(record, definition, v.options_display_stat, ctx), value: saved }];
 		});
 	}
@@ -178,7 +186,7 @@ function selectOptions(v: View, ctx: RenderContext, evaluate: (value: unknown) =
 	const definition = definitions.find(d => d.id === v.options);
 	if (definition) {
 		return (ctx.resources ?? [])
-			.filter(record => record.definitionId === definition.id && (!ctx.systemKey || record.systemKey === ctx.systemKey))
+			.filter(record => !record.catalogSource && record.definitionId === definition.id && (!ctx.systemKey || record.systemKey === ctx.systemKey))
 			.filter(record => !allowed || allowed.includes(record.id))
 			.map(record => ({ id: record.id, label: resourceLabel(record, definition, v.options_display_stat, ctx), value: record.id }));
 	}

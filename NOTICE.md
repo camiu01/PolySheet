@@ -1,15 +1,22 @@
 # Content provenance and third-party notices
 
-## Distributed original material
+## Distributed material
 
 | Material | Author | Source | License |
 | --- | --- | --- | --- |
 | PolySheet application and documentation | PolySheet contributors | This repository | MIT, `LICENSE.md` |
 | Sentieri example | PolySheet contributors | `src/demo.ts` | MIT |
-| App icon and mountain/monogram artwork | PolySheet contributors | `public/icon.svg`, `scripts/icons.mjs`, UI/CSS | MIT |
+| App icon and monogram artwork | PolySheet contributors | `public/icon.svg`, `scripts/icons.mjs`, UI/CSS | MIT |
+| EB Garamond | EB Garamond Project Authors | [Google Fonts source](https://github.com/google/fonts/tree/main/ofl/ebgaramond), served locally in `public/fonts/` | SIL OFL 1.1, `public/fonts/ebgaramond-OFL.txt` |
+| Plus Jakarta Sans | Plus Jakarta Sans Project Authors | [Google Fonts source](https://github.com/google/fonts/tree/main/ofl/plusjakartasans), served locally in `public/fonts/` | SIL OFL 1.1, `public/fonts/plusjakartasans-OFL.txt` |
+| Space Mono | Space Mono Project Authors | [Google Fonts source](https://github.com/google/fonts/tree/main/ofl/spacemono), served locally in `public/fonts/` | SIL OFL 1.1, `public/fonts/spacemono-OFL.txt` |
 
-No photos, external game rules, copyrighted game descriptions, or remote fonts
-are bundled. Lucide icons are provided through `lucide-react`; retain its ISC
+No photos, external game rules or copyrighted game descriptions are bundled.
+The user-supplied Stitch archive guides the interface style; its sample characters,
+images, remote scripts and fictional metrics are not distributed. The four Latin
+WOFF2 files were downloaded from Google's font CDN and are served and precached
+locally, without runtime requests to Google. Full font licenses ship beside them.
+Lucide icons are provided through `lucide-react`; retain its ISC
 license and the licenses of other installed dependencies when redistributing.
 `package-lock.json` pins dependency provenance. This application's license
 does not replace those dependencies' licenses.
@@ -48,7 +55,7 @@ README additionally calls scripts/tools MIT without a corresponding full MIT
 grant in `LICENSE.md`.
 
 PolySheet does **not** decide that one statement supersedes another. No external
-creative content or tool code is distributed. Before redistributing any local
+game content or tool code from those repositories is distributed. Before redistributing any local
 fixture, subset, game text, tool, or image, resolve the applicable license and
 any underlying third-party rights with the rights holder. In particular, do not
 include these fixtures in a commercial distribution under PolySheet's MIT

@@ -4,6 +4,7 @@ import { matchesType, type ResourceInstance } from '../domain/model';
 import { draftCalculations, initialDrafts, inputStat, sessionViews, validationMessages } from '../engine/view-session';
 import { RenderView, type RenderContext } from './renderer';
 import { it } from './it';
+import { RuntimeResource } from '../engine/formulas';
 
 /** Stage one form, validate all source messages and submit one atomic patch. */
 export function SourceForm({ input, context, onDone, onBusyChange, saveText = it.save, cancelText = it.cancel, showSave = true, showCancel = true }: {
@@ -24,7 +25,10 @@ export function SourceForm({ input, context, onDone, onBusyChange, saveText = it
   try {
     const nodes = sessionViews(input);
     const environment = { ...context, resources: [...(context.resources ?? []), ...additions],
-      variables: { ...context.variables, $view: drafts, $edit_mode: true } };
+      variables: { ...context.variables, $view: drafts, $edit_mode: true },
+      character: context.character?.stats === context.stats
+        ? new RuntimeResource(context.character.key, context.stats, { ...sourceValues, ...changes }, context.createdAt)
+        : context.character };
     const errors = validationMessages(input, context.stats, context.values, drafts, environment);
     function update(id: string, value: unknown) {
       latestChanges.current = { ...latestChanges.current, [id]: value };
@@ -39,7 +43,7 @@ export function SourceForm({ input, context, onDone, onBusyChange, saveText = it
         setAdditions(previous => [...previous, ...created]);
       } : undefined
     };
-    return <form onSubmit={event => {
+    return <form className="source-form" onSubmit={event => {
       event.preventDefault(); event.stopPropagation();
       if (lock.current || Object.keys(errors).length || event.currentTarget.querySelector('[aria-invalid="true"],[data-view-error]')) return;
       lock.current = true; setBusy(true); onBusyChange?.(true); setError('');
@@ -55,11 +59,11 @@ export function SourceForm({ input, context, onDone, onBusyChange, saveText = it
         finally { lock.current = false; setBusy(false); onBusyChange?.(false); }
       })();
     }}>
-      <fieldset disabled={busy} className="source-form-fields"><RenderView input={input} context={formContext} />
+      <div className="source-form-fields"><fieldset disabled={busy} className="source-form-controls"><RenderView input={input} context={formContext} />
         <div className="base-grid">{draftCalculations(context.stats, drafts).map(s =>
           <RenderView key={s.id} input={{ id: `polysheet-derived-${s.id}`, type: 'stat', stat: s.id }} context={{ ...formContext, onChange: undefined, onInput: undefined }} />
         )}</div>
-      </fieldset>
+      </fieldset></div>
       {error && <p role="alert" className="error-text">{error}</p>}
       <div className="modal-actions">
         {showCancel && <button type="button" className="button secondary" disabled={busy} onClick={onDone}>{cancelText}</button>}

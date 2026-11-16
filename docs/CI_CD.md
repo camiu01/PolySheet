@@ -83,7 +83,8 @@ Other always-on cases cover malformed packages, URL errors, resource links,
 dice, persistence, keyboard/mobile layout and size limits.
 The deployment-path test checks the actual pathname, manifest start/scope,
 service-worker script/scope and offline reload. Local source-preparation and
-the separately opted-in live Raw check remain documented in the README.
+the separately opted-in live Raw check are documented in
+[development and testing](DEVELOPMENT.md#external-fixtures).
 
 To reproduce the Pages subdirectory checks without stopping an existing preview:
 
@@ -99,6 +100,18 @@ npm run test:e2e
 end with `/`. Dot-only segments and shell metacharacters are rejected. Set it
 back to `/` to test root hosting. No second build is needed for a different
 subdirectory: production URLs and the PWA manifest are relative.
+
+## Static host requirements
+
+Deploy only `dist/` on an HTTPS static host. The relative Vite base supports
+subdirectories. In-memory screen navigation needs no server-side route rewrites.
+
+Where the host allows them, set `X-Content-Type-Options: nosniff`,
+`Referrer-Policy: no-referrer`, a restrictive Content Security Policy, and
+`Cache-Control: no-cache` for `index.html`, `sw.js` and the manifest.
+Allow HTTPS `connect-src` only if URL imports are desired. Do not cache an old
+worker script indefinitely. These are recommendations, not headers verified on
+the public demo.
 
 ## Data, updates and recovery
 

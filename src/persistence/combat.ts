@@ -14,16 +14,18 @@ export type CombatCommand =
 
 /** Create an empty encounter pinned to the selected immutable system version. */
 export async function createCombat(systemKey: string, name: string, database = db) {
-  const system = await database.systems.get(systemKey);
-  if (!system?.definition.combat_system || !name.trim() || name.length > 100) throw new Error('Nome o sistema incontro non valido.');
-  const now = new Date().toISOString();
-  const combat: Combat = {
-    id: crypto.randomUUID(), systemKey, name: name.trim(),
-    difficulty: system.definition.combat_system.difficulty_levels?.[0]?.id ?? null,
-    status: 'preparing', round: 0, pass: 1, turn: 0, revision: 0,
-    combatants: [], createdAt: now, updatedAt: now
-  };
-  await database.combats.add(combat); return combat;
+  return database.transaction('rw', database.systems, database.combats, async () => {
+    const system = await database.systems.get(systemKey);
+    if (!system?.definition.combat_system || !name.trim() || name.length > 100) throw new Error('Nome o sistema incontro non valido.');
+    const now = new Date().toISOString();
+    const combat: Combat = {
+      id: crypto.randomUUID(), systemKey, name: name.trim(),
+      difficulty: system.definition.combat_system.difficulty_levels?.[0]?.id ?? null,
+      status: 'preparing', round: 0, pass: 1, turn: 0, revision: 0,
+      combatants: [], createdAt: now, updatedAt: now
+    };
+    await database.combats.add(combat); return combat;
+  });
 }
 /** Re-read all affected records and commit the entire command or none of it. */
 export async function commandCombat(id: string, command: CombatCommand, database = db, random?: (faces: number) => number) {
@@ -48,7 +50,7 @@ export async function commandCombat(id: string, command: CombatCommand, database
         fighter.characterId = command.sourceId;
       } else if (type.template_resource_id) {
         const source = resources.find(r => r.id === command.sourceId && r.definitionId === type.template_resource_id);
-        if (!source) throw new Error('Risorsa di partenza non compatibile.');
+        if (!source || source.catalogSource) throw new Error('Risorsa di partenza non compatibile.');
         if (type.instance_resource_id) fighter.templateId = source.id; else fighter.resourceId = source.id;
       } else if (!type.instance_resource_id) throw new Error('Il combattente non definisce una sorgente né un’istanza.');
       if (type.instance_resource_id) {

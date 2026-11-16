@@ -21,7 +21,7 @@ export function combatContext(system: StoredSystem, combat: Combat, characters: 
   function resource(id: string) {
     const record = resources.find(r => r.id === id && r.systemKey === system.key);
     const d = definitions.find(d => d.id === record?.definitionId);
-    if (!record || !d) throw new Error(`Risorsa del combattente mancante: ${id}`);
+    if (!record || record.catalogSource || !d) throw new Error(`Risorsa del combattente mancante: ${id}`);
     return new RuntimeResource(`resource:${id}`, d.stats, record.values, record.createdAt);
   }
   for (const fighter of combat.combatants) {

@@ -1,0 +1,394 @@
+{
+  "schemaVersion": 2,
+  "title": "Design system: PolySheet",
+  "extensions": {
+    "colorMeta": {
+      "bg": {
+        "displayName": "bg",
+        "tonalRamp": [
+          "oklch(15.00% 0.00772 248.23)",
+          "oklch(26.43% 0.00772 248.23)",
+          "oklch(37.86% 0.00772 248.23)",
+          "oklch(49.29% 0.00772 248.23)",
+          "oklch(60.71% 0.00772 248.23)",
+          "oklch(72.14% 0.00772 248.23)",
+          "oklch(83.57% 0.00772 248.23)",
+          "oklch(95.00% 0.00772 248.23)"
+        ]
+      },
+      "surface": {
+        "displayName": "surface",
+        "tonalRamp": [
+          "oklch(15.00% 0.00902 255.61)",
+          "oklch(26.43% 0.00902 255.61)",
+          "oklch(37.86% 0.00902 255.61)",
+          "oklch(49.29% 0.00902 255.61)",
+          "oklch(60.71% 0.00902 255.61)",
+          "oklch(72.14% 0.00902 255.61)",
+          "oklch(83.57% 0.00902 255.61)",
+          "oklch(95.00% 0.00902 255.61)"
+        ]
+      },
+      "surface-soft": {
+        "displayName": "surface soft",
+        "tonalRamp": [
+          "oklch(15.00% 0.00885 255.59)",
+          "oklch(26.43% 0.00885 255.59)",
+          "oklch(37.86% 0.00885 255.59)",
+          "oklch(49.29% 0.00885 255.59)",
+          "oklch(60.71% 0.00885 255.59)",
+          "oklch(72.14% 0.00885 255.59)",
+          "oklch(83.57% 0.00885 255.59)",
+          "oklch(95.00% 0.00885 255.59)"
+        ]
+      },
+      "sidebar": {
+        "displayName": "sidebar",
+        "tonalRamp": [
+          "oklch(15.00% 0.00979 255.66)",
+          "oklch(26.43% 0.00979 255.66)",
+          "oklch(37.86% 0.00979 255.66)",
+          "oklch(49.29% 0.00979 255.66)",
+          "oklch(60.71% 0.00979 255.66)",
+          "oklch(72.14% 0.00979 255.66)",
+          "oklch(83.57% 0.00979 255.66)",
+          "oklch(95.00% 0.00979 255.66)"
+        ]
+      },
+      "ink": {
+        "displayName": "ink",
+        "tonalRamp": [
+          "oklch(15.00% 0.00818 278.63)",
+          "oklch(26.43% 0.00818 278.63)",
+          "oklch(37.86% 0.00818 278.63)",
+          "oklch(49.29% 0.00818 278.63)",
+          "oklch(60.71% 0.00818 278.63)",
+          "oklch(72.14% 0.00818 278.63)",
+          "oklch(83.57% 0.00818 278.63)",
+          "oklch(95.00% 0.00818 278.63)"
+        ]
+      },
+      "muted": {
+        "displayName": "muted",
+        "tonalRamp": [
+          "oklch(15.00% 0.01564 80.69)",
+          "oklch(26.43% 0.01564 80.69)",
+          "oklch(37.86% 0.01564 80.69)",
+          "oklch(49.29% 0.01564 80.69)",
+          "oklch(60.71% 0.01564 80.69)",
+          "oklch(72.14% 0.01564 80.69)",
+          "oklch(83.57% 0.01564 80.69)",
+          "oklch(95.00% 0.01564 80.69)"
+        ]
+      },
+      "line": {
+        "displayName": "line",
+        "tonalRamp": [
+          "oklch(15.00% 0.00820 255.55)",
+          "oklch(26.43% 0.00820 255.55)",
+          "oklch(37.86% 0.00820 255.55)",
+          "oklch(49.29% 0.00820 255.55)",
+          "oklch(60.71% 0.00820 255.55)",
+          "oklch(72.14% 0.00820 255.55)",
+          "oklch(83.57% 0.00820 255.55)",
+          "oklch(95.00% 0.00820 255.55)"
+        ]
+      },
+      "accent": {
+        "displayName": "accent",
+        "tonalRamp": [
+          "oklch(15.00% 0.08841 81.97)",
+          "oklch(26.43% 0.08841 81.97)",
+          "oklch(37.86% 0.08841 81.97)",
+          "oklch(49.29% 0.08841 81.97)",
+          "oklch(60.71% 0.08841 81.97)",
+          "oklch(72.14% 0.08841 81.97)",
+          "oklch(83.57% 0.08841 81.97)",
+          "oklch(95.00% 0.08841 81.97)"
+        ]
+      },
+      "accent-soft": {
+        "displayName": "accent soft",
+        "tonalRamp": [
+          "oklch(15.00% 0.01746 82.23)",
+          "oklch(26.43% 0.01746 82.23)",
+          "oklch(37.86% 0.01746 82.23)",
+          "oklch(49.29% 0.01746 82.23)",
+          "oklch(60.71% 0.01746 82.23)",
+          "oklch(72.14% 0.01746 82.23)",
+          "oklch(83.57% 0.01746 82.23)",
+          "oklch(95.00% 0.01746 82.23)"
+        ]
+      },
+      "on-accent": {
+        "displayName": "on accent",
+        "tonalRamp": [
+          "oklch(15.00% 0.04613 82.45)",
+          "oklch(26.43% 0.04613 82.45)",
+          "oklch(37.86% 0.04613 82.45)",
+          "oklch(49.29% 0.04613 82.45)",
+          "oklch(60.71% 0.04613 82.45)",
+          "oklch(72.14% 0.04613 82.45)",
+          "oklch(83.57% 0.04613 82.45)",
+          "oklch(95.00% 0.04613 82.45)"
+        ]
+      },
+      "success": {
+        "displayName": "success",
+        "tonalRamp": [
+          "oklch(15.00% 0.06048 159.95)",
+          "oklch(26.43% 0.06048 159.95)",
+          "oklch(37.86% 0.06048 159.95)",
+          "oklch(49.29% 0.06048 159.95)",
+          "oklch(60.71% 0.06048 159.95)",
+          "oklch(72.14% 0.06048 159.95)",
+          "oklch(83.57% 0.06048 159.95)",
+          "oklch(95.00% 0.06048 159.95)"
+        ]
+      },
+      "info": {
+        "displayName": "info",
+        "tonalRamp": [
+          "oklch(15.00% 0.05342 235.31)",
+          "oklch(26.43% 0.05342 235.31)",
+          "oklch(37.86% 0.05342 235.31)",
+          "oklch(49.29% 0.05342 235.31)",
+          "oklch(60.71% 0.05342 235.31)",
+          "oklch(72.14% 0.05342 235.31)",
+          "oklch(83.57% 0.05342 235.31)",
+          "oklch(95.00% 0.05342 235.31)"
+        ]
+      },
+      "danger": {
+        "displayName": "danger",
+        "tonalRamp": [
+          "oklch(15.00% 0.08908 26.76)",
+          "oklch(26.43% 0.08908 26.76)",
+          "oklch(37.86% 0.08908 26.76)",
+          "oklch(49.29% 0.08908 26.76)",
+          "oklch(60.71% 0.08908 26.76)",
+          "oklch(72.14% 0.08908 26.76)",
+          "oklch(83.57% 0.08908 26.76)",
+          "oklch(95.00% 0.08908 26.76)"
+        ]
+      },
+      "light-bg": {
+        "displayName": "light bg",
+        "tonalRamp": [
+          "oklch(15.00% 0.00824 91.48)",
+          "oklch(26.43% 0.00824 91.48)",
+          "oklch(37.86% 0.00824 91.48)",
+          "oklch(49.29% 0.00824 91.48)",
+          "oklch(60.71% 0.00824 91.48)",
+          "oklch(72.14% 0.00824 91.48)",
+          "oklch(83.57% 0.00824 91.48)",
+          "oklch(95.00% 0.00824 91.48)"
+        ]
+      },
+      "light-surface": {
+        "displayName": "light surface",
+        "tonalRamp": [
+          "oklch(15.00% 0.00409 91.45)",
+          "oklch(26.43% 0.00409 91.45)",
+          "oklch(37.86% 0.00409 91.45)",
+          "oklch(49.29% 0.00409 91.45)",
+          "oklch(60.71% 0.00409 91.45)",
+          "oklch(72.14% 0.00409 91.45)",
+          "oklch(83.57% 0.00409 91.45)",
+          "oklch(95.00% 0.00409 91.45)"
+        ]
+      },
+      "light-surface-soft": {
+        "displayName": "light surface soft",
+        "tonalRamp": [
+          "oklch(15.00% 0.01442 84.58)",
+          "oklch(26.43% 0.01442 84.58)",
+          "oklch(37.86% 0.01442 84.58)",
+          "oklch(49.29% 0.01442 84.58)",
+          "oklch(60.71% 0.01442 84.58)",
+          "oklch(72.14% 0.01442 84.58)",
+          "oklch(83.57% 0.01442 84.58)",
+          "oklch(95.00% 0.01442 84.58)"
+        ]
+      },
+      "light-ink": {
+        "displayName": "light ink",
+        "tonalRamp": [
+          "oklch(15.00% 0.00724 248.12)",
+          "oklch(26.43% 0.00724 248.12)",
+          "oklch(37.86% 0.00724 248.12)",
+          "oklch(49.29% 0.00724 248.12)",
+          "oklch(60.71% 0.00724 248.12)",
+          "oklch(72.14% 0.00724 248.12)",
+          "oklch(83.57% 0.00724 248.12)",
+          "oklch(95.00% 0.00724 248.12)"
+        ]
+      },
+      "light-muted": {
+        "displayName": "light muted",
+        "tonalRamp": [
+          "oklch(15.00% 0.01395 79.73)",
+          "oklch(26.43% 0.01395 79.73)",
+          "oklch(37.86% 0.01395 79.73)",
+          "oklch(49.29% 0.01395 79.73)",
+          "oklch(60.71% 0.01395 79.73)",
+          "oklch(72.14% 0.01395 79.73)",
+          "oklch(83.57% 0.01395 79.73)",
+          "oklch(95.00% 0.01395 79.73)"
+        ]
+      },
+      "light-line": {
+        "displayName": "light line",
+        "tonalRamp": [
+          "oklch(15.00% 0.02181 85.95)",
+          "oklch(26.43% 0.02181 85.95)",
+          "oklch(37.86% 0.02181 85.95)",
+          "oklch(49.29% 0.02181 85.95)",
+          "oklch(60.71% 0.02181 85.95)",
+          "oklch(72.14% 0.02181 85.95)",
+          "oklch(83.57% 0.02181 85.95)",
+          "oklch(95.00% 0.02181 85.95)"
+        ]
+      },
+      "light-accent": {
+        "displayName": "light accent",
+        "tonalRamp": [
+          "oklch(15.00% 0.07623 82.01)",
+          "oklch(26.43% 0.07623 82.01)",
+          "oklch(37.86% 0.07623 82.01)",
+          "oklch(49.29% 0.07623 82.01)",
+          "oklch(60.71% 0.07623 82.01)",
+          "oklch(72.14% 0.07623 82.01)",
+          "oklch(83.57% 0.07623 82.01)",
+          "oklch(95.00% 0.07623 82.01)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Editorial heading",
+        "purpose": "Page and character headings."
+      },
+      "numbers": {
+        "displayName": "Mechanical data",
+        "purpose": "Tabular results, source identifiers and compact controls."
+      }
+    },
+    "shadows": [
+      {
+        "name": "dialog",
+        "value": "0 4px 24px #0007",
+        "purpose": "Centered native dialogs only; resting cards stay flat."
+      }
+    ],
+    "motion": [
+      {
+        "name": "navigation",
+        "value": "background .16s ease-out, color .16s ease-out",
+        "purpose": "Navigation state changes; disabled under reduced motion."
+      },
+      {
+        "name": "drawer",
+        "value": "transform .2s",
+        "purpose": "Phone navigation; disabled under reduced motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "phone",
+        "value": "760px"
+      },
+      {
+        "name": "compact-sidebar",
+        "value": "1100px"
+      },
+      {
+        "name": "stacked-sheet",
+        "value": "1200px"
+      },
+      {
+        "name": "wide",
+        "value": "1500px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Explicit import, save or dice action.",
+      "html": "<button class=\"ds-primary\">Conferma importazione</button>",
+      "css": ".ds-primary{min-height:44px;padding:10px 17px;border:1px solid var(--accent,#e4c284);border-radius:4px;background:var(--accent,#e4c284);color:var(--on-accent,#261900);font:600 11px var(--numbers,monospace);letter-spacing:.025em;cursor:pointer;transition:background .15s,transform .15s}.ds-primary:hover:not(:disabled){filter:brightness(1.08)}.ds-primary:focus-visible{outline:2px solid var(--accent,#e4c284);outline-offset:4px}.ds-primary:active{transform:translateY(1px)}.ds-primary:disabled{opacity:.5;cursor:not-allowed}@media(prefers-reduced-motion:reduce){.ds-primary{transition:none}}"
+    },
+    {
+      "name": "Secondary button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Secondary navigation and cancellation.",
+      "html": "<button class=\"ds-secondary\">Annulla</button>",
+      "css": ".ds-secondary{min-height:44px;padding:10px 17px;border:1px solid var(--line,#323539);border-radius:4px;background:var(--surface,#191c20);color:var(--ink,#e1e2e8);font:600 11px var(--numbers,monospace);cursor:pointer}.ds-secondary:hover:not(:disabled){border-color:var(--accent,#e4c284);background:var(--surface-soft,#1d2024)}.ds-secondary:focus-visible{outline:2px solid var(--accent,#e4c284);outline-offset:4px}.ds-secondary:active{transform:translateY(1px)}.ds-secondary:disabled{opacity:.5;cursor:not-allowed}"
+    },
+    {
+      "name": "Destructive button",
+      "kind": "button",
+      "description": "Explicit confirmed local removal.",
+      "html": "<button class=\"ds-danger\">Rimuovi sistema</button>",
+      "css": ".ds-danger{min-height:44px;padding:10px 17px;border:1px solid var(--danger,#ffb4ab);border-radius:4px;background:transparent;color:var(--danger,#ffb4ab);font:600 11px var(--numbers,monospace);cursor:pointer}.ds-danger:hover:not(:disabled){background:var(--surface-soft,#1d2024)}.ds-danger:focus-visible{outline:2px solid var(--accent,#e4c284);outline-offset:4px}.ds-danger:active{transform:translateY(1px)}.ds-danger:disabled{opacity:.5;cursor:not-allowed}"
+    },
+    {
+      "name": "Text field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Named input on the lowest surface.",
+      "html": "<label class=\"ds-field\">Nome del personaggio<input class=\"ds-input\" placeholder=\"Nome del personaggio\"></label>",
+      "css": ".ds-field{display:flex;flex-direction:column;gap:8px;color:var(--ink,#e1e2e8);font:500 13px 'Plus Jakarta Sans',sans-serif}.ds-input{min-height:44px;padding:10px 12px;border:1px solid var(--line,#323539);border-radius:4px;background:var(--input,#0b0e12);color:var(--ink,#e1e2e8);font:inherit;caret-color:var(--accent,#e4c284)}.ds-input::placeholder{color:var(--muted,#b5afa5);opacity:1}.ds-input:hover{border-color:var(--muted,#b5afa5)}.ds-input:focus-visible{outline:1px solid var(--accent,#e4c284);border-color:var(--accent,#e4c284);outline-offset:2px}.ds-input:disabled{opacity:.5}"
+    },
+    {
+      "name": "Active navigation",
+      "kind": "nav",
+      "description": "Brass keyline and neutral selected surface.",
+      "html": "<button class=\"ds-nav\" aria-current=\"page\"><svg width=\"19\" height=\"19\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><path d=\"M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z\"/></svg>Libreria sistemi</button>",
+      "css": ".ds-nav{display:flex;align-items:center;gap:13px;min-height:46px;width:100%;padding:0 13px;border:0;border-radius:0;text-align:left;background:var(--surface-soft,#1d2024);color:var(--accent,#e4c284);box-shadow:inset 2px 0 var(--accent,#e4c284);font:650 13px 'Plus Jakarta Sans',sans-serif;cursor:pointer}.ds-nav:hover{background:var(--accent-soft,#2d281f)}.ds-nav:focus-visible{outline:2px solid var(--accent,#e4c284);outline-offset:4px}.ds-nav:active{background:var(--surface,#191c20)}"
+    },
+    {
+      "name": "Compatibility badge",
+      "kind": "chip",
+      "description": "A status label, not an interactive filter or claim of full game support.",
+      "html": "<span class=\"ds-badge\">Compatibilità parziale</span>",
+      "css": ".ds-badge{display:inline-flex;padding:5px 7px;border-radius:2px;background:var(--warning-bg,#28231a);color:var(--warning,#e4c284);font:400 9px/1.3 var(--numbers,monospace);letter-spacing:.015em}"
+    },
+    {
+      "name": "Character entry",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "A real character name and its pinned source, with no invented game statistics.",
+      "html": "<button class=\"ds-card\"><span class=\"ds-name\">Mira di Rocca</span><span class=\"ds-source\">Sentieri · v1.0.0</span><span class=\"ds-open\">Apri scheda <svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><path d=\"M7 17 17 7M7 7h10v10\"/></svg></span></button>",
+      "css": ".ds-card{display:flex;flex-direction:column;gap:12px;min-width:220px;padding:18px;border:1px solid var(--line,#323539);border-radius:4px;background:var(--surface,#191c20);color:var(--ink,#e1e2e8);text-align:left;cursor:pointer;transition:background .16s ease-out}.ds-name{font:400 26px 'EB Garamond',Georgia,serif}.ds-source{color:var(--info,#a5cce4);font:12px 'Plus Jakarta Sans',sans-serif}.ds-open{font:11px 'Plus Jakarta Sans',sans-serif}.ds-card:hover{background:var(--surface-soft,#1d2024)}.ds-card:focus-visible{outline:2px solid var(--accent,#e4c284);outline-offset:4px}.ds-card:active{background:var(--input,#0b0e12)}@media(prefers-reduced-motion:reduce){.ds-card{transition:none}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Contemporary Grimoire",
+    "overview": "Use the user's supplied charcoal/brass archive, with literary headings and precise controls. Preserve PolySheet's real local tasks and imported source content. Dark is the default; an existing saved light preference stays light.\n\nThe reference supplies the visual direction, not fictional sync, accounts, storage quotas, game statistics or capabilities. Keep those out. The later user request overrides phone bottom sheets: every dialog stays centered.",
+    "keyCharacteristics": [
+      "Charcoal surfaces and thin keylines.",
+      "Garamond headings, Jakarta body, monospaced data and compact controls.",
+      "Brass actions, sage success and sapphire metadata.",
+      "Real character entries, without stock portraits or fabricated rules."
+    ],
+    "rules": [],
+    "dos": [
+      "Do preserve Italian controls and unchanged imported labels.",
+      "Do keep diagnostics visible and distinguish manual assignment from automation.",
+      "Do use the supplied fonts, charcoal surfaces and brass actions in both layouts.",
+      "Do keep dialogs centered on phones as well as desktop."
+    ],
+    "donts": [
+      "Don't add fake sync, profiles, quotas, game statistics or version claims.",
+      "Don't fetch fonts, portraits or game imagery at runtime.",
+      "Don't hide unsupported source rules to imply complete compatibility.",
+      "Don't replace source calculations with decorative values."
+    ]
+  },
+  "generatedAt": "2026-11-16T11:39:48.154Z"
+}

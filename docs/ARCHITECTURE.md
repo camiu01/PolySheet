@@ -2,6 +2,55 @@
 
 ## Layers and ownership
 
+`src/engine/progression.ts` derives guided manual class/HP increments from the
+imported progression branches. `src/persistence/progression.ts` prepares new
+class graphs outside its write transaction and atomically validates/commits
+latest-owner class levels, subclass and base HP. It is not an override/effect
+interpreter. `CharacterProgression` keeps all inputs local until confirmation,
+requires acknowledgement of remaining choices and never heals current HP.
+
+`src/engine/ability-setup.ts` implements the explicit D&D generation helper;
+`src/ui/InitialValues.tsx` keeps proposals separate from the setup draft until
+Apply. Point-buy costs, unique result slots and bounded cryptographic rolls
+are independent of imported creation lifecycle effects. Other systems retain
+typed manual fields.
+`src/engine/character-events.ts` preflights bounded static character handlers,
+first-true branches and single-target forwarding to popup/dice results.
+Editable popups accept one direct base-string enum selection.
+`src/persistence/character-events.ts` revalidates its target and option against
+the latest owner transaction. No persistent overrides, lifecycle dispatch or
+implicit resource/combat/draft event forwarding is implemented.
+
+`CharacterInventory` reuses source forms for explicitly typed inventory arrays.
+Setup holds new instances locally until its atomic character transaction.
+
+Guided manual setup lives in `src/ui/CharacterCreator.tsx` and derives initial
+numeric fields through `src/engine/character-setup.ts`. `configureCharacter`
+prepares immutable catalog snapshots before one transaction creates or patches
+the owner and assigns private graphs. It does not execute creation events.
+For a new D&D character with one selected class, an explicit setup option calls
+`src/engine/initial-health.ts` within that same transaction, after assignments
+and final scores. It initializes current HP to first-level maximum and derives
+a compatible base without double-counting source class modifiers. Existing
+characters, missing class selections and manual mode never trigger it.
+`src/ui/SourceStat.tsx` owns safe stat colors and scoped detail dialogs.
+`src/persistence/diagnostics.ts` refreshes only derived diagnostics on startup,
+rechecking the original/digest and previous diagnostics before writing.
+It does not migrate definitions, values or exact import pins.
+
+Formula evaluators retain per-evaluation caches and lazily index a captured
+resource snapshot on first reference resolution. There is no global cache.
+The character sheet supplies an explicit owning character to resource views;
+an unassigned archive does not acquire a synthetic owner. Generic local pickers
+render 50 matching records per page, with search over the full candidate list.
+`src/engine/resource-filters.ts` evaluates declared prefilter formulas in the
+parent scope and matches typed local candidate values. Its UI wrapper exposes
+removable proposals without persisting filter state or changing assignment
+transactions. Nullable resource predicates are handled centrally by the formula
+interpreter, without resource deep equality.
+Source forms and guided setup place their disabled fieldset inside a div
+scrollport, leaving footer actions outside the scrolling content.
+
 | Location | Responsibility |
 | --- | --- |
 | `src/domain/model.ts` | Passthrough source schemas and explicitly separate internal records |
@@ -9,7 +58,11 @@
 | `src/importing/package.ts` | Bounded native gzip-JSON decoding and exact binary-source retention |
 | `src/importing/url.ts` | Direct HTTPS downloads, URL/HTML/HTTP/timeout/network diagnostics |
 | `src/importing/github.ts` | Public GitHub metadata discovery, explicit file choice and commit-pinned download |
+| `src/importing/repository.ts`, `src/importing/catalog.ts` | Source metadata discovery and strict, bounded catalog templates; no compiler or proxy |
+| `src/importing/catalog-url.ts` | Direct JSON, commit-pinned GitHub file/folder and confined web-index catalog previews |
+| `src/persistence/catalog.ts` | Atomic compact templates, private character graphs and explicit manual assignment |
 | `src/engine/formulas.ts` | React-independent formula registry and bounded evaluator |
+| `src/engine/character-origins.ts` | Declared race/subrace contract and upstream-identity choices |
 | `src/engine/dice.ts` | Bounded manual dice expression and unbiased random faces |
 | `src/persistence/db.ts` | Dexie schema, migrations, immutable imports and transactional writes |
 | `src/persistence/backup.ts` | Backup v3, legacy v1/v2 restore, integrity/relation checks, atomic restore |
@@ -61,14 +114,33 @@ local notebook records without triggering effects. Typed resource base fields
 use an explicitly internal `{resourceId: string}` reference, not a claimed upstream
 instance format. Nested/optional paths resolve local records and declared resource
 definitions under a shared evaluation budget. Lambda bindings retain outer scopes.
-Local resource instances also expose their internal ID through `.id` unless a
-source stat declares that name. Collection formulas use this identity for
+Local resource instances expose retained upstream `sourceId` through `.id` when
+available, otherwise their local ID, unless a source stat declares that name.
+Collection formulas use this identity for
 resource membership and original `findFirst` predicates. Stable sorting never
 mutates a persisted base array; flat mapping retains the same collection limits.
+Catalog assignment also supports declared background references. Subrace choices
+come only from an assigned race's typed children and persist the retained upstream
+scalar identity. Dependent catalog-panel changes are atomic; stale writes fail
+against the latest race. No creation events or effects run.
+Complete resource-array snapshots can carry validated `remove_ids` history,
+never commands to delete existing graphs. Startup refreshes obsolete catalog
+blockers against unchanged originals; concurrent writes recheck the latest
+record before updating only derived diagnostic metadata.
 Only explicit combat commands receive combat variables and a roll capability;
 rendering never rolls. `$view` exists only in an explicit form session and
 contains actual input values keyed by source view IDs. General parent/event
 scopes remain unsupported.
+
+## Interface and local assets
+
+The UI uses one charcoal/brass token system with a light variant. The default
+preference is dark; existing saved preferences are not migrated. Fonts in
+`public/fonts/` ship with OFL licenses and join the same-origin PWA precache.
+There are no remote font requests. Desktop navigation remains persistent;
+phones add a bottom shortcut bar while retaining the complete drawer.
+Dialogs stay centered on both. Saving has a screen-reader status, without the
+removed decorative profile, workspace switcher or top-right online/local badges.
 
 ## Mutation flow
 
@@ -141,6 +213,9 @@ snapshot retries the view; no source values are fabricated to make it render.
 | Local photo | 1 MiB PNG/JPEG; dimensions 1–4,096 per axis; remote URLs never requested |
 | URL import | HTTPS, no credentials, omitted cookies/referrer; 15 s timeout; streamed size bound |
 | GitHub discovery | 8 MiB per response; 20,000 tree entries, 100 candidates; complete tree required; no clone |
+| Repository catalogs | 1,000 files, 24 MiB total source bytes, four simultaneous reads; each file still at most 8 MiB |
+| Resource links | Same remote batch/file caps; web index bytes included, sequential unknown-size reads and no recursive indexes |
+| Local catalog batch | 100 files, 8 MiB total |
 | Input text | Generally 10,000 characters; source `max_length` can tighten supported text inputs |
 
 These are application safety limits, not claims about upstream format limits.
@@ -158,6 +233,22 @@ explicit `down`, `up`, or `none`; `closest` tie behavior is not guessed.
 The compatibility matrix states this restriction.
 
 ## Database and backup
+
+Catalog templates use optional metadata on the existing resource records, without
+a schema reset. A template stores one exact original/digest, no mutable base
+graph, and any assignment-blocking diagnostic. Assignment materializes a private,
+bounded graph with remapped local references and retained upstream IDs.
+Templates cannot be edited or used directly as mutable references/combat sources.
+Backup validation rehashes/reparses originals, checks template identity/shape and
+recomputes diagnostics. Bundle installation also checks the projected backup
+inside the transaction; failure rolls back both system and templates.
+
+System removal deletes only the selected immutable import and its resources and
+rolls. Any current character or encounter pin blocks the whole operation. Removal
+and character/encounter/roll creation share system-table transactions, preventing
+stale forms or concurrent tabs from creating orphan records. Preferences and
+other import keys are never removed. The UI requires explicit confirmation and
+recommends exporting a backup first.
 
 Dexie schema version 1 defines systems, characters, resources, rolls and
 preferences. Version 2 fills missing `revision` and `resourceIds` on existing
@@ -204,7 +295,8 @@ before replacement; it never reruns initialization. Legacy v1/v2 backups restore
 with an empty encounter table. Base editors use transaction-safe field patches;
 the “saving” indicator remains active until the transaction commits.
 
-GitHub repository, `tree` and `blob` pages are rejected before download, rather
+Public GitHub repository roots support commit-pinned discovery and explicit file
+selection. GitHub `tree` and `blob` pages are rejected before download, rather
 than mislabelled as CORS failures. Direct Raw links remain allowed. HTTP status,
 HTML responses, network/CORS failures, timeouts, invalid UTF-8 and malformed
 payloads have separate diagnostics. No repository is crawled or merged.

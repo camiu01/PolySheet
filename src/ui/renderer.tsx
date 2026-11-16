@@ -8,18 +8,24 @@ import { formula, object, view, type Stat, type View } from '../domain/model';
 import { unsupportedViewOptions, viewFields } from '../importing/system';
 import { it } from './it';
 import { PhotoInput } from './PhotoInput';
-import { inputValue, saveInput, sourceColor, sourceIcons, textValue } from './view-support';
+import { inputValue, saveInput, sourceColor, sourceIcons, textValue, viewColor } from './view-support';
 import { SourcePopup, SourceResourceSelect, SourceResourceSection, DeferredResourceSelect } from './SourceViews';
 import { SourceCollapsible, SourceViewPager } from './SourceLayoutViews';
 import { SourceButton, SourceMenuButton, SourceSelect, SourceTicker } from './SourceValueViews';
 import { SourceResourceArray, SourceResourceView } from './SourceResourceViews';
 import type { ValuePatch } from '../persistence/views';
 import type { ResourceInstance } from '../domain/model';
+import { SourceStat } from './SourceStat';
+import { canSourceEvent, SourceEventButton } from './CharacterEvents';
 
 export { textValue, sourceColor };
 
 
 export interface RenderContext extends EvaluationEnvironment {
+  /** Explicit character-only presentation commands; absent from resources/combat and draft sessions. */
+  canEvent?: (event: unknown) => boolean;
+  onEvent?: (event: unknown) => void;
+  eventBusy?: boolean;
   stats: Stat[];
   values: Record<string, unknown>;
   onChange?: (id: string, value: unknown) => void;
@@ -83,7 +89,7 @@ function resourceText(v: View, ctx: RenderContext) {
     const r = ctx.resources?.find(r => r.id === id && r.definitionId === d.id && (!ctx.systemKey || r.systemKey === ctx.systemKey));
     if (!r) throw new Error(it.missingResource);
     const display = typeof v.resource_display_stat === 'string' ? v.resource_display_stat : d.display_name;
-    return display ? textValue(createEvaluator(d.stats, r.values, undefined, { resources: ctx.resources, resourceDefinitions: ctx.resourceDefinitions, createdAt: r.createdAt, enumerations: ctx.enumerations }).get(display)) : r.name;
+    return display ? textValue(createEvaluator(d.stats, r.values, undefined, { resources: ctx.resources, resourceDefinitions: ctx.resourceDefinitions, createdAt: r.createdAt, enumerations: ctx.enumerations, character: ctx.character }).get(display)) : r.name;
   }).join(', ');
 }
 const sourceIconEntries = Object.entries(sourceIcons);
@@ -95,11 +101,11 @@ function align(value: unknown): 'flex-start' | 'center' | 'flex-end' {
 }
 /** Extensible view registry. Unknown types produce a marker, not an invented UI. */
 export const rendererRegistry = new Map<string, Renderer>([
-  ['icon', v => {
+  ['icon', (v, _ctx, e) => {
     const entry = sourceIconEntries.find(([name]) => name === v.name);
     if (!entry) throw new Error(`${it.unsupported}: ${String(v.name)}`);
     const Icon = entry[1];
-    return <Icon aria-hidden="true" size={v.size === 'small' ? 18 : v.size === 'large' ? 32 : 24} color={sourceColor(v.color)} />;
+    return <Icon aria-hidden="true" size={v.size === 'small' ? 18 : v.size === 'large' ? 32 : 24} color={viewColor(v.color, e)} />;
   }],
   ['collapsible', (v, ctx, e) => <SourceCollapsible node={v} context={ctx} evaluate={e} />],
   ['viewPager', (v, ctx, e) => <SourceViewPager node={v} context={ctx} evaluate={e} />],
@@ -112,17 +118,18 @@ export const rendererRegistry = new Map<string, Renderer>([
   ['avatarSection', (v, ctx, e) => <section className="source-avatar-section">
     <div className="source-avatar-center">{children(v.center_content, ctx)}</div>
     <div className="source-avatar-stacks"><div>{children(v.bottom_left_stack ?? [], ctx)}</div><div>{children(v.bottom_right_stack ?? [], ctx)}</div></div>
-    {['left', 'right'].map(side => v[`bottom_${side}_button_title`] != null && <p key={side} className="unsupported-note">{textValue(e(v[`bottom_${side}_button_title`]))} · {it.unsupportedEvent}</p>)}
+    {['left', 'right'].map(side => v[`bottom_${side}_button_title`] != null && <SourceEventButton key={side}
+      context={ctx} event={v[`bottom_${side}_button_event`]} label={textValue(e(v[`bottom_${side}_button_title`]))} />)}
   </section>],
   ['popUpButton', (v, ctx) => <SourcePopup node={v} context={ctx} />],
   ['selectResources', (v, ctx) => !ctx.drafts && v.should_save_on_selection !== true ? <DeferredResourceSelect node={v} context={ctx} /> : <SourceResourceSelect node={v} context={ctx} />],
   ['resourceSection', (v, ctx) => <SourceResourceSection node={v} context={ctx} />],
-  ['chip', (v, ctx, e) => <span className={`source-chip ${v.style === 'compact' ? 'source-chip-compact' : ''}`} style={{ backgroundColor: sourceColor(v.background_color), borderColor: sourceColor(v.border_color) }}>{resourceText(v, ctx) ?? (v.text ? textValue(e(v.text)) : '')}</span>],
+  ['chip', (v, ctx, e) => <span className={`source-chip ${v.style === 'compact' ? 'source-chip-compact' : ''}`} style={{ backgroundColor: viewColor(v.background_color, e), borderColor: viewColor(v.border_color, e) }}>{resourceText(v, ctx) ?? (v.text ? textValue(e(v.text)) : '')}</span>],
   ['listItem', (v, _ctx, e) => <div className="source-list-item">
-    <div><strong style={{ color: sourceColor(v.title_color && e(v.title_color)) }}>{v.title ? textValue(e(v.title)) : ''}</strong>
-      <span style={{ color: sourceColor(v.first_line_extra_color && e(v.first_line_extra_color)) }}>{v.first_line_extra ? textValue(e(v.first_line_extra)) : ''}</span></div>
-    <div><p style={{ color: sourceColor(v.subtitle_color && e(v.subtitle_color)) }}>{v.subtitle ? textValue(e(v.subtitle)) : ''}</p>
-      <span style={{ color: sourceColor(v.second_line_extra_color && e(v.second_line_extra_color)) }}>{v.second_line_extra ? textValue(e(v.second_line_extra)) : ''}</span></div>
+    <div><strong style={{ color: viewColor(v.title_color, e) }}>{v.title ? textValue(e(v.title)) : ''}</strong>
+      <span style={{ color: viewColor(v.first_line_extra_color, e) }}>{v.first_line_extra ? textValue(e(v.first_line_extra)) : ''}</span></div>
+    <div><p style={{ color: viewColor(v.subtitle_color, e) }}>{v.subtitle ? textValue(e(v.subtitle)) : ''}</p>
+      <span style={{ color: viewColor(v.second_line_extra_color, e) }}>{v.second_line_extra ? textValue(e(v.second_line_extra)) : ''}</span></div>
   </div>],
   ['text', (v, ctx, e) => {
     if (typeof v.edit_stat === 'string') {
@@ -137,33 +144,11 @@ export const rendererRegistry = new Map<string, Renderer>([
         onSave={value => saveInput(v, ctx, stat.id, value)} />;
     }
     const value = resourceText(v, ctx) ?? (v.text ? e(v.text) : '');
-    return <p className={`view-text view-text-${String(v.style ?? 'text')}`} style={{ fontWeight: v.bold === true ? 700 : undefined, color: sourceColor(v.color),
+    return <p className={`view-text view-text-${String(v.style ?? 'text')}`} style={{ fontWeight: v.bold === true ? 700 : undefined, color: viewColor(v.color, e),
       ...(typeof v.max_lines === 'number' && v.max_lines > 0 ? { display: '-webkit-box', WebkitLineClamp: Math.min(100, Math.floor(v.max_lines)), WebkitBoxOrient: 'vertical', overflow: 'hidden' } : {})
     }}>{typeof value === 'number' && v.signed === true && value >= 0 ? `+${value}` : textValue(value)}</p>;
   }],
-  ['stat', (v, ctx, e) => {
-    const stat = ctx.stats.find(s => s.id === v.stat);
-    if (!stat) throw new Error(`Statistica mancante: ${String(v.stat)}`);
-    const evaluator = createEvaluator(ctx.stats, ctx.values, undefined, ctx);
-    const value = evaluator.get(stat.id);
-    const editId = typeof v.edit_stat === 'string' ? v.edit_stat : stat.id;
-    const edit = ctx.stats.find(s => s.id === editId && s.type === 'base' && ['integer', 'decimal', 'string', 'bool'].includes(s.value_type));
-    const name = v.override_label ? textValue(e(v.override_label)) : stat.name;
-    const shown = typeof value === 'number' && v.always_show_sign === true && value >= 0 ? `+${value}` : textValue(value);
-    return <div className={`stat-block ${v.style === 'list' ? 'stat-list' : ''}`}>
-      <span className="stat-label">{name}</span>
-      <output data-testid={`stat-${stat.id}`} className="stat-value">{shown || '—'}</output>
-      {stat.type === 'calculated' && <small className="calculated">{it.calculated}</small>}
-      {ctx.onChange && edit && <ScalarInput key={ctx.drafts ? v.id : `${edit.id}:${String(ctx.values[edit.id])}`} stat={edit}
-        value={inputValue(v, ctx, edit)}
-        label={`${it.edit} ${edit.name}`}
-        step={typeof v.change_amount === 'number' ? v.change_amount : undefined}
-        min={typeof v.min_value_allowed === 'number' ? v.min_value_allowed : undefined}
-        max={typeof v.max_value_allowed === 'number' ? v.max_value_allowed : undefined}
-        onDraft={ctx.onInput ? value => saveInput(v, ctx, edit.id, value) : undefined}
-        onSave={value => saveInput(v, ctx, edit.id, value)} />}
-    </div>;
-  }],
+  ['stat', (v, ctx, e) => <SourceStat node={v} context={ctx} evaluate={e} />],
   ['avatar', (v, ctx, e) => {
     if (typeof v.name_stat !== 'string') throw new Error('avatar richiede name_stat');
     const name = textValue(e({ type: 'stat', stat: v.name_stat }));
@@ -224,7 +209,11 @@ function ViewContent({ input, context }: ViewProps) {
     const v = view(input);
     const options = unsupportedViewOptions(v);
     if (options.length) throw new Error(`${it.unsupported}: ${options.join(', ')}`);
-    const e = createEvaluator(environment.stats, environment.values, undefined, environment).evaluate;
+    let evaluator: ReturnType<typeof createEvaluator> | undefined;
+    const e = (value: unknown) => {
+      evaluator ??= createEvaluator(environment.stats, environment.values, undefined, environment);
+      return evaluator.evaluate(value);
+    };
     if (v.is_visible != null) {
       const visible = e(formula(v.is_visible));
       if (typeof visible !== 'boolean') throw new Error('is_visible deve restituire bool');
@@ -234,7 +223,11 @@ function ViewContent({ input, context }: ViewProps) {
     if (!handler) return <div className="unsupported"><strong>{it.unsupported}: {v.type}</strong><small>{v.id}</small></div>;
     if (v.validation_message != null && !context.drafts && context.onChange)
       return <DeferredResourceSelect node={v} context={environment} />;
-    const ignored = Object.keys(v).filter(k => v[k] != null && !['id', 'type', 'is_visible', 'validation_message', 'margin_left', 'margin_right', 'margin_top', 'margin_bottom', ...viewFields[v.type]].includes(k));
+    const eventKeys = v.type === 'stat' ? ['on_tap_event', 'on_long_tap_event']
+      : v.type === 'avatarSection' ? ['bottom_left_button_event', 'bottom_right_button_event'] : [];
+    const ignored = Object.keys(v).filter(k => v[k] != null
+      && !(eventKeys.includes(k) && canSourceEvent(environment, v[k]))
+      && !['id', 'type', 'is_visible', 'validation_message', 'margin_left', 'margin_right', 'margin_top', 'margin_bottom', ...viewFields[v.type]].includes(k));
     const style: CSSProperties = {
       marginLeft: size(v.margin_left), marginRight: size(v.margin_right),
       marginTop: size(v.margin_top), marginBottom: size(v.margin_bottom)

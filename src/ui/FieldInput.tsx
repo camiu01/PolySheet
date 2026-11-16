@@ -12,7 +12,7 @@ export function FieldInput({ stat, value, resources = [], onSave }: {
   if (['string', 'integer', 'decimal', 'bool'].includes(stat.value_type))
     return <ScalarInput key={`${stat.id}:${String(current)}`} stat={stat} value={current} onSave={onSave} />;
   if (stat.value_type === 'photo') return <PhotoInput label={stat.name} value={current} onSave={onSave} />;
-  const eligible = resources.filter(r => !stat.resource_type || r.definitionId === stat.resource_type);
+  const eligible = resources.filter(r => !r.catalogSource && (!stat.resource_type || r.definitionId === stat.resource_type));
   if (stat.value_type === 'resource') return <label className="field"><span>{stat.name}</span>
     <select value={isResourceReference(current) ? current.resourceId : ''} onChange={e => onSave(e.target.value ? { resourceId: e.target.value } : null)}>
       <option value="">{it.choose}</option>

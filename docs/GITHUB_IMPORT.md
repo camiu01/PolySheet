@@ -3,91 +3,146 @@
 ## Use
 
 1. Open **Libreria sistemi → Da URL**.
-2. Enter a public GitHub repository root, for example
-   [derpsyhome/3rd-party-books-for-5e](https://github.com/derpsyhome/3rd-party-books-for-5e),
-   optionally ending in `.git`.
-3. Optionally enter a branch or commit. An empty field uses the default branch.
-4. Choose **Carica anteprima**, select the discovered file, then choose
-   **Carica file selezionato**.
-5. Review compatibility and provenance. Only **Conferma importazione** writes
-   the immutable system to IndexedDB. Closing the preview installs nothing.
+2. Enter a public GitHub repository root, optionally ending in `.git`.
+3. Optionally enter a branch, tag or commit. An empty field uses the default branch.
+4. Choose **Carica anteprima**. Ordinary distribution repositories show a file
+   selector; source repositories with the supported layout show their systems.
+5. Review the prepared system, catalogs and diagnostics. Only
+   **Conferma importazione** writes to IndexedDB. Cancelling installs nothing.
+
+For an ordinary repository, select `system.rpg`, `system.rpg.json` or
+`system.json`, then choose **Carica file selezionato**. For example,
+[derpsyhome/3rd-party-books-for-5e](https://github.com/derpsyhome/3rd-party-books-for-5e)
+contains a compiled system, not supported book archives.
 
 HTTPS roots, `git@github.com:owner/repo.git`, `ssh://git@github.com/owner/repo.git`
 and `git://github.com/owner/repo.git` normalize to the same public HTTPS reader.
-These forms do not invoke Git, SSH or a clone operation. Other Git hosts,
-private repositories and authenticated URLs are not supported.
+These forms never invoke Git or SSH. Other Git hosts, private repositories and
+authenticated URLs are unsupported. In the system library, GitHub `blob`/`tree`
+pages are rejected; use a root URL plus the reference field. The separate
+[resource-link importer](VIEWS.md#resource-links) accepts file/folder page links.
+Direct HTTPS JSON/gzip-JSON system imports remain available.
 
-Existing direct HTTPS JSON/gzip-JSON imports remain available. GitHub
-`blob`/`tree` page URLs are rejected with instructions to use a root URL plus
-the reference field. For unconventional filenames, use the direct Raw URL.
+## Source repositories and automatic catalogs
+
+For [blastervla/rpg-companion-app-systems](https://github.com/blastervla/rpg-companion-app-systems):
+
+1. Paste the repository URL and choose **Carica anteprima**. The pinned metadata
+   identifies **5e**, **5.5e** (source ID `5e2024`) and **Pathfinder 2e (Remaster)**.
+   Names and versions come from the repository, not a fixed system list.
+2. Choose a system. If its exact ID/version is already installed, select the
+   local import to reuse; the selector shows its source digest.
+3. Otherwise, choose **Scegli sistema .rpg o JSON** and select the compiled
+   original once. The optional **Scarica sistema originale** link opens the known
+   publisher's download normally; save it, then choose that local file.
+   PolySheet does not fetch the CORS-blocked CDN or use a proxy.
+4. Choose **Carica sistema e cataloghi**. PolySheet reads all discovered class,
+   race/species, background, ancestry and heritage JSON files for that system at the pinned
+   GitHub commit. No files are installed during this download.
+5. Review totals and nonassignable entries, then confirm once. The system and
+   catalog originals install atomically. Later imports can reuse the stored
+   compiled system without selecting its file again.
+
+The repository's metadata is not a compiled system. Source composition and
+RPGScript compilation remain unsupported. The selected local system must have
+the same source ID/version and no blocking diagnostics. This match is not proof
+of complete compiler or gameplay parity.
+
+The same source/catalog convention works in other public repositories:
+`systems/<id>/system/system.rpg.json` plus matching
+`systems/<id>/resource_instances/` JSON files. Download-host shortcuts are
+provided only for the inspected publisher, never guessed from remote scripts.
+
+Only the four root resource types above are included. Nested content within
+those templates is retained, but separate spell/item/background libraries and
+`resources.rpg.gzip` archives are not imported by this workflow.
+See [catalog use and manual assignment](VIEWS.md#catalogs-and-character-assignment).
 
 ## Contract and provenance
 
-The implementation uses documented public read endpoints:
+Public endpoints:
 
 - [List commits](https://docs.github.com/en/rest/commits/commits#list-commits):
-  `GET /repos/{owner}/{repo}/commits?per_page=1`, with optional `sha`.
-  The response's first `sha` identifies the selected immutable commit;
-  `commit.tree.sha` identifies its root tree.
+  `GET /repos/{owner}/{repo}/commits?per_page=1`, optionally with `sha`.
+  The result identifies an immutable commit and its root tree.
 - [Get a tree](https://docs.github.com/en/rest/git/trees#get-a-tree):
   `GET /repos/{owner}/{repo}/git/trees/{tree_sha}?recursive=1`.
-  Only complete trees and regular blobs are considered.
-- Download only the selected file from
+  Only complete trees and regular blobs qualify.
+- Read selected files from
   `https://raw.githubusercontent.com/{owner}/{repo}/{commit}/{path}`.
-  Response-supplied download URLs are never followed as discovery instructions.
+  Response-supplied URLs never choose the download host.
 
-The candidate names are `system.rpg`, `system.rpg.json` and `system.json`,
-case-insensitive, anywhere in the tree. Symlinks, submodules, distribution
-indexes and resource archives are not candidates. A name does not prove that a
-file contains a valid system: the normal byte/decompression/UTF-8/schema and
-compatibility checks still run. Split authoring roots are not assembled.
+Conventional system filenames are case-insensitive. Symlinks, submodules,
+distribution indexes and archives are not system candidates. Source catalogs
+are separately recognized by their supported directory and filename prefixes;
+their declared resource type is checked before installation.
 
-The commit is resolved before the tree and file are read, so a moving branch
-cannot silently switch the selected source. Stored provenance is the
-commit-pinned Raw URL without input query strings or fragments. Import identity
-still hashes exact uploaded/downloaded bytes. Export, backups and character
-version pins use existing immutable-source behavior.
+A moving branch cannot switch the resolved commit mid-import. Catalog provenance
+retains its commit-pinned Raw URL, exact UTF-8 original and SHA-256 digest.
+The local compiled system retains its own exact-upload identity. Reusing a system
+never migrates existing characters or overwrites an immutable import.
+
+## Removing an installed system
+
+On its library card, choose **Rimuovi sistema**. The confirmation identifies the
+exact version and full digest. Confirming removes that import, all its resources
+(including catalog originals/private copies) and its roll history. Other versions
+and preferences remain unchanged.
+
+Existing characters or encounters pinned to that import block the entire
+operation; nothing is migrated or silently deleted. Remove those records
+explicitly first if intended. Creation commands recheck the installed system in
+the same transaction, so a stale form in another tab cannot create orphan pins.
+Export a complete backup in **Impostazioni** before removal. Restoring it replaces
+the complete local archive, not just the removed system.
 
 ## Bounds and failure behavior
 
-- Two metadata reads plus one download per selected file; no repository crawl,
-  archive download, automatic retry, background sync or imported code execution.
-- Each response is streamed with an 8 MiB ceiling and a 15-second timeout.
-  Existing JSON node/depth and independent gzip expansion limits also apply.
-- At most 20,000 tree entries and 100 candidates. Truncated/oversized trees,
-  invalid paths, duplicate candidate paths and inconsistent metadata fail
-  explicitly instead of presenting a partial scan as complete.
-- A candidate larger than 8 MiB blocks discovery with a visible error. Use a
-  direct URL to an eligible file when another candidate exceeds the limit.
-- An unassembled split authoring root (system identity without the required
-  collection roots) is rejected with a specific message; sibling `.rpgs` files
-  are never merged into it.
-- The selected download must match its declared size. Git LFS substitution
-  is not supported by this reader.
-- Requests omit cookies/referrers and use no token. Public API rate limits,
-  private/missing repositories, empty repositories, HTTP, timeout and
-  network/CORS failures remain visible. No proxy bypasses browser restrictions.
-- GitHub receives normal request/IP metadata and the requested public
-  repository/ref/path, never local characters, photos or backups.
+- Two public API reads. Source mode additionally reads matching system metadata,
+  then all catalog files for the selected system, four at a time. No Git clone,
+  recursive HTTP crawl, archive download, compiler, background sync or automatic retry.
+- Each response: 8 MiB and 15 seconds. Existing JSON/decompression limits remain.
+  Catalog batch: at most 1,000 files and 24 MiB total declared/verified source bytes.
+- At most 20,000 tree entries and 100 system candidates. Truncated/oversized
+  trees, duplicate/unsafe paths and inconsistent sizes fail explicitly.
+- A system/catalog candidate over 8 MiB blocks discovery. Each downloaded file
+  must match its declared size; Git LFS substitution is not supported.
+- A failed download aborts preparation. Structurally identifiable but incompatible
+  templates are retained with a visible reason and cannot be assigned; unknown
+  roots or malformed JSON fail preparation rather than disappearing.
+- Installation reparses originals and runs in one transaction. If record or
+  bounded-backup limits would be exceeded, nothing in the bundle installs.
+- Requests omit credentials/referrers and use no token. GitHub receives ordinary
+  request/IP metadata and the public repository/ref/path, never local characters,
+  photos or backups. Rate limits, missing repositories, HTTP and CORS failures
+  remain visible. No browser restriction is bypassed.
 
 ## Verification
 
-`tests/github.test.ts` provides bounded contract fixtures derived from the
-documented response shapes. Production browser tests exercise the real app
-against controlled GitHub/Raw responses, including selection, invalid content,
-preview cancellation, confirmation, original export and offline reopening.
-These fixtures use original MIT example content, not third-party game content.
+`tests/github.test.ts`, `tests/repository.test.ts` and `tests/catalog.test.ts`
+cover URL normalization, commit pinning, safe discovery, local ID/version
+matching, budgets, atomic writes, private graphs, immutable originals and backups.
+Always-on browser fixtures use original MIT content. Optional local real-source
+cases exercise all three inspected catalogs; see [fixture setup](DEVELOPMENT.md#external-fixtures).
 
-An intentional live, read-only check uses the pinned derpsy commit
-`00f55b2c3023c59f5857297dc933a7505c9b6aa4` and `5e/system.rpg`:
+An intentional live check uses real GitHub responses and a local official
+`5e2024-system.rpg` fixture, without request interception:
 
 ```powershell
 $env:PLAYWRIGHT_PORT = '4183'
 $env:PLAYWRIGHT_BASE_PATH = '/PolySheet/'
+$env:LIVE_REPOSITORY_IMPORT = '1'
+npm run test:e2e -- --grep 'live published repository'
+Remove-Item Env:LIVE_REPOSITORY_IMPORT
+```
+
+The independent compiled-file GitHub reader still has its live derpsy check:
+
+```powershell
 $env:LIVE_GITHUB_IMPORT = '1'
 npm run test:e2e -- --grep 'live public GitHub'
 Remove-Item Env:LIVE_GITHUB_IMPORT
 ```
 
 Run against a production build. See [executed results](VERIFICATION.md);
-controlled fixtures alone do not establish public availability or CORS.
+controlled fixtures do not prove public availability or browser CORS.

@@ -15,6 +15,8 @@ export class RuntimeResource {
   ) {}
 }
 export interface EvaluationEnvironment {
+  /** Explicit owning-character snapshot; absent for unassigned resource previews. */
+  character?: RuntimeResource;
   createdAt?: string;
   resources?: ResourceInstance[];
   resourceDefinitions?: ResourceDefinition[];
@@ -45,6 +47,20 @@ class MissingStat extends Error {}
 function array(value: unknown): unknown[] {
   if (!Array.isArray(value) || value.length > 10000) throw new Error('La formula richiede una lista (massimo 10.000 elementi)');
   return value;
+}
+/** Compare scalars strictly; resource presence may be tested against null, never deep-compared. */
+function comparisons(values: unknown[], equal: boolean) {
+  const scalar = (v: unknown) => v === null || ['string', 'number', 'boolean'].includes(typeof v);
+  if (!values.every(v => scalar(v) || isResourceReference(v) || v instanceof RuntimeResource))
+    throw new Error('Il confronto richiede valori scalari o risorse confrontate con null');
+  if (values.length === 1 && !scalar(values[0])) throw new Error('Confronto tra risorse non supportato');
+  const results = values.slice(1).map((value, i) => {
+    const previous = equal ? values[0] : values[i];
+    if ((!scalar(value) || !scalar(previous)) && value !== null && previous !== null)
+      throw new Error('Confronto tra risorse non supportato');
+    return equal ? value === previous : value !== previous;
+  });
+  return results.every(Boolean);
 }
 function stringParts(value: unknown): (string | number)[] {
   const parts = array(value);
@@ -165,7 +181,9 @@ export const formulaHandlers = new Map<string, Handler>([
     return null;
   }],
   ['sortBy', (n, e, _get, scope) => {
-    if (n.order !== 'asc' && n.order !== 'desc') throw new Error('Ordine sortBy non valido');
+    // Explicit PolySheet compatibility policy, not a verified upstream default.
+    const order = Object.hasOwn(n, 'order') ? n.order : 'asc';
+    if (order !== 'asc' && order !== 'desc') throw new Error('Ordine sortBy non valido');
     const key = n.sort_by_value_key ?? '$sortByValue';
     if (typeof key !== 'string' || !/^\$?[\w-]+$/.test(key)) throw new Error('Chiave sortBy non valida');
     const values = array(e(n.components)).map(value => ({ value, selected: scope.scoped(key, value, n.sort_by_selector) }));
@@ -174,7 +192,7 @@ export const formulaHandlers = new Map<string, Handler>([
       throw new Error('sortBy richiede chiavi omogenee, testi o numeri finiti');
     return values.sort((a, b) => {
       const av = a.selected as string | number, bv = b.selected as string | number;
-      return (av < bv ? -1 : av > bv ? 1 : 0) * (n.order === 'desc' ? -1 : 1);
+      return (av < bv ? -1 : av > bv ? 1 : 0) * (order === 'desc' ? -1 : 1);
     }).map(v => v.value);
   }],
   ['constant', n => {
@@ -243,8 +261,7 @@ export const formulaHandlers = new Map<string, Handler>([
   }],
   ['notEquals', (n, e) => {
     const values = array(e(n.components));
-    if (!values.every(v => v === null || ['string', 'number', 'boolean'].includes(typeof v))) throw new Error('notEquals richiede valori scalari');
-    return values.slice(1).every((v, i) => v !== values[i]);
+    return comparisons(values, false);
   }],
   ['concat', (n, e) => join(e(n.components), '')],
   ['date', (n, e) => formatSourceDate(e(n.components))],
@@ -291,8 +308,7 @@ export const formulaHandlers = new Map<string, Handler>([
   }],
   ['equals', (n, e) => {
     const values = array(e(n.components));
-    if (!values.every(v => v === null || ['string', 'number', 'boolean'].includes(typeof v))) throw new Error('equals richiede valori scalari');
-    return values.every(v => v === values[0]);
+    return comparisons(values, true);
   }],
   ['length', (n, e) => {
     const value = e(n.components);
@@ -339,11 +355,13 @@ for (const [type, compare] of [
  * @throws On unknown handlers, missing references, cycles, invalid types, or limits.
  * @remarks Resource and lambda scopes share budgets and cycle detection. No `$view`
  * state or object prototypes are exposed. Missing optional path segments return null.
+ * Resource membership is captured once; its lookup index is built only on demand.
  */
 export function createEvaluator(stats: Stat[], values: Record<string, unknown> = {}, limits = { steps: 10000, depth: 64 }, environment: EvaluationEnvironment = {}) {
   const root = new RuntimeResource('root', stats, values, environment.createdAt, environment.variables, environment.overrides);
   const scopes = new Map<string, RuntimeResource>();
-  const resources = new Map(environment.resources?.map(r => [r.id, r]));
+  const resourceRecords = environment.resources?.slice();
+  let resources: Map<string, ResourceInstance> | undefined;
   const frames: Record<string, unknown>[] = [];
   const cache = new Map<string, unknown>();
   const enumerations = new Map<string, Map<string, EnumerationEntry>>();
@@ -373,10 +391,11 @@ export function createEvaluator(stats: Stat[], values: Record<string, unknown> =
     if (value instanceof RuntimeResource) return value;
     if (!isResourceReference(value)) return undefined;
     if (scopes.has(value.resourceId)) return scopes.get(value.resourceId);
+    resources ??= new Map(resourceRecords?.map(r => [r.id, r]));
     const record = resources.get(value.resourceId);
     const definition = environment.resourceDefinitions?.find(d => d.id === record?.definitionId);
     if (!record || !definition) throw new MissingStat(`Risorsa mancante: ${value.resourceId}`);
-    const scope = new RuntimeResource(`resource:${record.id}`, definition.stats, record.values, record.createdAt, {}, {}, record.id);
+    const scope = new RuntimeResource(`resource:${record.id}`, definition.stats, record.values, record.createdAt, {}, {}, record.sourceId ?? record.id);
     scopes.set(record.id, scope);
     return scope;
   }
@@ -436,6 +455,7 @@ export function createEvaluator(stats: Stat[], values: Record<string, unknown> =
     return bounded(() => {
       if (Object.hasOwn(scope.variables, id)) return presence ? true : scope.variables[id];
       if (Object.hasOwn(environment.variables ?? {}, id)) return presence ? true : environment.variables?.[id];
+      if (id === '$character' && environment.character) return presence ? true : environment.character;
       const s = scope.stats.find(s => s.id === id);
       if (!s && id === 'id' && scope.instanceId) return presence ? true : scope.instanceId;
       if (!s && id === 'created_at' && scope.createdAt) return presence ? true : scope.createdAt;

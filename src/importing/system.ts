@@ -15,7 +15,8 @@ export const MAX_SYSTEM_BYTES = 8 * 1024 * 1024;
 /** Renderer field allowlist; unhandled fields remain in the original document. */
 export const viewFields: Record<string, string[]> = {
   text: ['text', 'edit_stat', 'style', 'label', 'hint', 'max_length', 'bold', 'max_lines', 'signed', 'color', 'resource_id', 'resource_instance_ids_stat', 'resource_display_stat'],
-  stat: ['stat', 'edit_stat', 'change_amount', 'min_value_allowed', 'max_value_allowed', 'style', 'always_show_sign', 'override_label'],
+  stat: ['stat', 'edit_stat', 'change_amount', 'min_value_allowed', 'max_value_allowed', 'style', 'always_show_sign', 'override_label',
+    'bottom_sheet_view', 'bottom_sheet_in_edit_mode', 'sheet_title', 'stat_color', 'name_color', 'edit_bottom_sheet_title'],
   section: ['header', 'content', 'show_divider', 'collapsible', 'start_collapsed', 'always_show_collapse_icon', 'content_item_min_width', 'alignment'],
   list: ['subviews', 'padding', 'padding_top', 'padding_right', 'padding_bottom', 'padding_left', 'alignment'],
   composite: ['subviews', 'alignment', 'row_only'],
@@ -23,7 +24,7 @@ export const viewFields: Record<string, string[]> = {
   avatar: ['photo_stat', 'name_stat', 'interactable', 'preview_enabled', 'size'],
   avatarSection: ['center_content', 'bottom_left_stack', 'bottom_right_stack', 'bottom_left_button_title', 'bottom_right_button_title'],
   icon: ['name', 'size', 'color'],
-  selectResources: ['stat', 'resource_id', 'view_type', 'preserve_ids', 'should_append', 'should_save_on_selection', 'create_in_place', 'inline_creation_mode', 'creation_pop_up_type'],
+  selectResources: ['stat', 'resource_id', 'view_type', 'preserve_ids', 'should_append', 'should_save_on_selection', 'create_in_place', 'inline_creation_mode', 'creation_pop_up_type', 'filters'],
   resourceSection: ['resource_stat', 'resource_set_stat', 'resource_id', 'header_view', 'read_only', 'tap_displays_resource', 'max_items_in_preview', 'reorganizable', 'content_item_min_width', 'alignment'],
   popUpButton: ['text', 'icon', 'pop_up_title', 'pop_up_view', 'display_cancel_button', 'cancel_text', 'display_save_button', 'save_text', 'should_persist_on_save', 'pop_up_type'],
   chip: ['text', 'background_color', 'border_color', 'style', 'resource_id', 'resource_instance_ids_stat', 'resource_display_stat'],
@@ -152,7 +153,7 @@ export function diagnose(system: SystemDefinition): Diagnostic[] {
         if (typeof node.stat !== 'string') report(`${path}.stat`, 'Riferimento richiesto', 'error');
         else try {
           const first = statPath(node.stat)[0];
-          const contexts = ['created_at', '$view', '$resource', '$combatants', '$combat', '$combat_difficulty', '$combatant', '$combatant_type', '$template_resource_id', '$instance_resource_id', '$edit_mode'];
+          const contexts = ['created_at', '$view', '$character', '$resource', '$combatants', '$combat', '$combat_difficulty', '$combatant', '$combatant_type', '$template_resource_id', '$instance_resource_id', '$edit_mode'];
           if (!stats.some(s => s.id === first.id) && !bindings.includes(first.id) && !contexts.includes(first.id) && !first.optional && type !== 'defined')
             report(`${path}.stat`, `Riferimento mancante o contesto non disponibile: ${node.stat}`);
         } catch (error) { report(`${path}.stat`, error instanceof Error ? error.message : String(error), 'error'); }
@@ -164,8 +165,11 @@ export function diagnose(system: SystemDefinition): Diagnostic[] {
         report(`${path}.treat_as_set`, 'Valore booleano richiesto', 'error');
       if (type === 'divide' && !['down', 'up', 'none'].includes(String(node.rounding_method)))
         report(`${path}.rounding_method`, 'Supportati solo down, up, none espliciti; closest non verificato.');
-      if (type === 'sortBy' && !['asc', 'desc'].includes(String(node.order)))
-        report(`${path}.order`, 'Ordine sortBy richiesto: asc o desc.', 'error');
+      if (type === 'sortBy') {
+        if (!Object.hasOwn(node, 'order')) report(`${path}.order`, it.sortOrderDefault);
+        else if (node.order !== 'asc' && node.order !== 'desc')
+          report(`${path}.order`, 'Ordine sortBy richiesto: asc o desc.', 'error');
+      }
       if ((type === 'enumeratedName' || type === 'enumeratedAbbreviation') &&
           (typeof node.enumerated_type !== 'string' || !node.enumerated_type))
         report(`${path}.enumerated_type`, 'Tipo di enumerazione richiesto', 'error');
@@ -211,10 +215,23 @@ export function diagnose(system: SystemDefinition): Diagnostic[] {
     if (v.type === 'popUpButton' && v.icon != null && object(v.icon).type !== 'icon')
       report(`${path}.icon`, 'popUpButton richiede una vista icon.');
     for (const field of ['text', 'label', 'hint', 'is_visible', 'validation_message', 'enabled', 'override_label', 'pop_up_title', 'save_text', 'cancel_text', 'bottom_left_button_title', 'bottom_right_button_title', 'title', 'subtitle', 'first_line_extra', 'second_line_extra', 'title_color', 'subtitle_color', 'first_line_extra_color', 'second_line_extra_color',
-      'names', 'allowed_values', 'calculated_min_value_allowed', 'calculated_max_value_allowed', 'meta_stat', 'allowed_options', 'resource_options', 'max_selection_amount', 'pop_up_button_text'])
+      'names', 'allowed_values', 'calculated_min_value_allowed', 'calculated_max_value_allowed', 'meta_stat', 'allowed_options', 'resource_options', 'max_selection_amount', 'pop_up_button_text', 'sheet_title', 'stat_color', 'name_color'])
       if (v[field] != null) checkFormula(v[field], `${path}.${field}`, stats, ['$view']);
     // `viewPager.color` is a formula; icon, text and chip colours are literal palette values.
     if (v.type === 'viewPager' && v.color != null) checkFormula(v.color, `${path}.color`, stats, ['$view']);
+    if (v.type === 'selectResources' && v.filters != null) {
+      if (typeof v.filters !== 'object' || Array.isArray(v.filters)) report(`${path}.filters`, 'Mappa di filtri richiesta', 'error');
+      else for (const [id, value] of Object.entries(object(v.filters))) {
+        checkFormula(value, `${path}.filters.${id}`, stats, ['$view']);
+        const definition = system.resources.find(r => r.id === v.resource_id);
+        const field = definition?.stats.find(s => s.id === id);
+        const type = field?.value_type === 'array' ? field.sub_value_type : field?.value_type;
+        const filters = Array.isArray(definition?.search_filters) ? definition.search_filters : [];
+        if (!field || !type || !['string', 'bool', 'integer', 'decimal'].includes(type)
+          || !filters.some(f => f && typeof f === 'object' && !Array.isArray(f) && object(f).stat === id))
+          report(`${path}.filters.${id}`, `Filtro non supportato: ${id}`);
+      }
+    }
     for (const field of ['stat', 'edit_stat', 'photo_stat', 'name_stat']) if (v[field] != null) {
       if (typeof v[field] !== 'string') report(`${path}.${field}`, 'ID statistica richiesto', 'error');
       else if (!stats.some(s => s.id === v[field])) report(`${path}.${field}`, `Riferimento non risolto: ${v[field]}`);
@@ -223,7 +240,7 @@ export function diagnose(system: SystemDefinition): Diagnostic[] {
       if (v[field] != null && !Array.isArray(v[field])) report(`${path}.${field}`, 'Lista di viste richiesta', 'error');
       if (Array.isArray(v[field])) v[field].forEach((c, i) => checkView(c, `${path}.${field}[${i}]`, stats));
     }
-    for (const field of ['pop_up_view', 'icon', 'header_view', 'left_view']) if (v[field] != null) checkView(v[field], `${path}.${field}`, stats);
+    for (const field of ['pop_up_view', 'icon', 'header_view', 'left_view', 'bottom_sheet_view']) if (v[field] != null) checkView(v[field], `${path}.${field}`, stats);
     if (['list', 'composite', 'collapsible', 'viewPager'].includes(v.type) && !Array.isArray(v.subviews)) report(`${path}.subviews`, 'Lista richiesta', 'error');
     if (v.type === 'section' && (!Array.isArray(v.header) || !Array.isArray(v.content))) report(path, 'header e content richiesti', 'error');
     if (v.type === 'viewPager') {

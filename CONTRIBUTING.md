@@ -1,5 +1,18 @@
 # Contributing
 
+## Start here
+
+See [development and testing](docs/DEVELOPMENT.md) for Node.js requirements,
+local startup, production browser checks and optional external fixtures.
+The [documentation index](docs/README.md) groups guides by audience.
+Read [architecture](docs/ARCHITECTURE.md),
+[compatibility](docs/COMPATIBILITY.md) and
+[executed verification](docs/VERIFICATION.md) before extending behavior.
+
+For documentation-only changes, check content, local links/anchors, assets,
+commands and `git diff --check`. No lint/formatter script is configured.
+Do not rerun application suites merely to attach new counts to prose changes.
+
 ## Documentation standard
 
 Write project documentation, architecture decisions, code identifiers and
