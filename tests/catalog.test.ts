@@ -13,7 +13,7 @@ import { saveResource, deleteResource } from '../src/persistence/resources';
 import { commitResourceView } from '../src/persistence/views';
 import { isResourceReference } from '../src/domain/model';
 import { createEvaluator } from '../src/engine/formulas';
-import { catalogSystem, classOriginal, raceOriginal } from './fixtures/catalog';
+import { backgroundOriginal, catalogSystem, classOriginal, raceOriginal } from './fixtures/catalog';
 import { capabilitySystem } from './fixtures/capabilities';
 import { createCombat, commandCombat } from '../src/persistence/combat';
 import { combatContext } from '../src/engine/combat';
@@ -251,4 +251,52 @@ it('cannot use an immutable compact template as a mutable combat source or forge
   expect(() => combatContext(system, forged, [], resources)).toThrow();
   const backup = JSON.parse(await exportBackup(database)); backup.combats = [forged];
   await expect(validateBackup(JSON.stringify(backup))).rejects.toThrow('Risorsa combattente mancante');
+});
+
+it('stages a private catalog graph for a draft without writing or mutating the template', async () => {
+  const { stageTemplate } = await import('../src/persistence/catalog');
+  const { database, system } = await setup();
+  const [templateId] = await installCatalogs([await prepareCatalogTemplate(raceOriginal, 'race.json', system)], database);
+  const before = await database.resources.toArray();
+  const first = await stageTemplate(templateId, database), second = await stageTemplate(templateId, database);
+  expect(await database.resources.toArray()).toEqual(before);
+  expect(first.additions[0].id).toBe(first.rootId);
+  expect(first.additions.every(r => !r.catalogSource && r.catalogGroup === first.rootId)).toBe(true);
+  expect(first.rootId).not.toBe(second.rootId);
+  expect(first.additions.map(r => r.definitionId)).toEqual(second.additions.map(r => r.definitionId));
+});
+
+it('persists a draft-staged private catalog graph atomically with the new character', async () => {
+  const { stageTemplate, configureCharacter } = await import('../src/persistence/catalog');
+  const { database, system } = await setup();
+  const [templateId] = await installCatalogs([await prepareCatalogTemplate(backgroundOriginal, 'background.json', system)], database);
+  const { rootId, additions } = await stageTemplate(templateId, database);
+  expect(additions.length).toBeGreaterThan(1);
+  const character = await configureCharacter(system, 'Copia', { background: { resourceId: rootId } }, {}, undefined, database, false, additions);
+  expect(character.values.background).toEqual({ resourceId: rootId });
+  const saved = await database.resources.bulkGet(additions.map(r => r.id));
+  expect(saved.every(r => r && !r.catalogSource && r.catalogGroup === rootId)).toBe(true);
+  expect((await database.resources.get(templateId))?.catalogSource?.original).toBe(backgroundOriginal);
+});
+
+it('still rejects a new record that forges catalog identity', async () => {
+  const { saveResource } = await import('../src/persistence/resources');
+  const { database, system } = await setup();
+  const [templateId] = await installCatalogs([await prepareCatalogTemplate(raceOriginal, 'race.json', system)], database);
+  await expect(saveResource({ id: crypto.randomUUID(), systemKey: system.key, definitionId: 'race', name: 'Falsa', values: {}, catalogGroup: templateId }, database))
+    .rejects.toThrow();
+});
+
+it('batch-adds staged records but rejects forged catalog identity, duplicates and dangling links', async () => {
+  const { addResources } = await import('../src/persistence/resources');
+  const { database, system } = await setup();
+  const [templateId] = await installCatalogs([await prepareCatalogTemplate(raceOriginal, 'race.json', system)], database);
+  const base = { systemKey: system.key, definitionId: 'race', name: 'Copia', values: {} };
+  await expect(addResources([{ ...base, id: crypto.randomUUID(), catalogGroup: templateId }], system.key, database)).rejects.toThrow();
+  await expect(addResources([{ ...base, id: templateId }], system.key, database)).rejects.toThrow();
+  await expect(addResources([{ ...base, id: crypto.randomUUID(), values: { subraces: [{ resourceId: 'missing' }] } }], system.key, database)).rejects.toThrow();
+  const root = crypto.randomUUID(), child = crypto.randomUUID();
+  await addResources([{ ...base, id: root, catalogGroup: root, values: { subraces: [{ resourceId: child }] } },
+    { ...base, id: child, catalogGroup: root, sourceId: 'up-child' }], system.key, database);
+  expect(await database.resources.count()).toBe(3);
 });

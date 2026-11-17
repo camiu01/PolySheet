@@ -30,11 +30,33 @@ export function resourceFilters(input: unknown, definition: ResourceDefinition, 
   }).filter(filter => filter.values.length > 0);
 }
 
+const catalogValues = new WeakMap<ResourceInstance, Record<string, unknown>>();
+/**
+ * Values a filter can read. Catalog roots keep values only in their exact original, so their
+ * top-level typed base values are read from it (nested resources are not materialized here).
+ */
+function filterValues(record: ResourceInstance, definition: ResourceDefinition): Record<string, unknown> {
+  if (!record.catalogSource) return record.values;
+  const cached = catalogValues.get(record);
+  if (cached) return cached;
+  const original = record.catalogSource.original;
+  const text = original.charCodeAt(0) === 0xfeff ? original.slice(1) : original;
+  const stats = object(object(JSON.parse(text)).stats ?? {});
+  const values = Object.fromEntries(definition.stats.flatMap(stat => {
+    const entry = stats[stat.id];
+    const value = entry && typeof entry === 'object' && !Array.isArray(entry) ? object(entry).value : undefined;
+    return stat.type === 'base' && stat.value_type !== 'resource' && stat.sub_value_type !== 'resource' && matchesType(value, stat.value_type, stat.sub_value_type)
+      ? [[stat.id, value]] : [];
+  }));
+  catalogValues.set(record, values);
+  return values;
+}
+
 /** Match every active field, with any selected value within an array field; no coercion. */
 export function filterResources(resources: ResourceInstance[], definition: ResourceDefinition, filters: ResourceFilter[], environment: EvaluationEnvironment) {
   if (!filters.length) return resources;
   return resources.filter(record => {
-    const engine = createEvaluator(definition.stats, record.values, undefined, { ...environment, createdAt: record.createdAt, variables: undefined, overrides: undefined });
+    const engine = createEvaluator(definition.stats, filterValues(record, definition), undefined, { ...environment, createdAt: record.createdAt, instanceId: record.sourceId ?? record.id, variables: undefined, overrides: undefined });
     return filters.every(filter => {
       const value = engine.get(filter.stat);
       return Array.isArray(value) ? value.some(v => filter.values.includes(v)) : filter.values.some(v => v === value);

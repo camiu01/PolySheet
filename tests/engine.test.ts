@@ -50,14 +50,17 @@ describe('documented formula semantics', () => {
   it('and does not short-circuit evaluation', () => {
     expect(() => createEvaluator([]).evaluate({ type: 'and', components: list(constant(false), ref('missing')) })).toThrow('mancante');
   });
-  it('supports isEmpty only for text and arrays', () => {
+  it('supports isEmpty for text, arrays and absent (null) values', () => {
     expect(createEvaluator([]).evaluate({ type: 'isEmpty', components: constant('', 'string') })).toBe(true);
     expect(createEvaluator([]).evaluate({ type: 'isEmpty', components: list(constant(1)) })).toBe(false);
-    expect(() => createEvaluator([]).evaluate({ type: 'isEmpty', components: constant(null) })).toThrow();
+    // Official PF2e talisman formulas call isEmpty on absent optional lists.
+    expect(createEvaluator([]).evaluate({ type: 'isEmpty', components: constant(null) })).toBe(true);
+    expect(() => createEvaluator([]).evaluate({ type: 'isEmpty', components: constant(3) })).toThrow();
   });
   it('bounds deep trees and total execution steps', () => {
     let tree: unknown = constant(1);
-    for (let i = 0; i < 70; i++) tree = { type: 'add', components: list(tree) };
+    // Default depth bound is 256 (official PF2e chains exceed 64); a 300-level tree must still fail.
+    for (let i = 0; i < 300; i++) tree = { type: 'add', components: list(tree) };
     expect(() => createEvaluator([]).evaluate(tree)).toThrow('Limite');
     expect(() => createEvaluator([], {}, { steps: 3, depth: 64 }).evaluate(list(constant(1), constant(2), constant(3)))).toThrow('Limite');
   });

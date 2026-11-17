@@ -3,6 +3,105 @@
 [Documentation index](README.md) · [How to run checks](DEVELOPMENT.md) ·
 [Historical records](VERIFICATION_HISTORY.md) · [12:37 checkpoint](VERIFICATION_2026-11-16_1237.md)
 
+## Creation flow usability pass, 2026-11-17
+
+- Design skills `impeccable` (pbakaus/impeccable @ d41d986) and
+  `ui-ux-pro-max` (nextlevelbuilder/ui-ux-pro-max-skill @ e59ff37) installed in
+  the untracked `.claude/skills/`. Scripts reviewed: localhost-only; the
+  impeccable launcher (downloads a binary) was not run, PRODUCT.md and
+  DESIGN.md were read directly as its fallback prescribes.
+- Wizard: wide dialog, numbered stepper (compact on phones), shorter help,
+  manual setup moved beside the game selector, single real game preselected,
+  source validation shown only after the first "Avanti" with a summary and
+  scroll to the first problem (nested draft forms also block), resource
+  pickers rendered as choice fields instead of monospace buttons.
+- Browser checked at desktop and 375 px. `npm run check`: 320 passed, one skipped.
+
+## PF2e creation flow, 2026-11-17
+
+- Browser on a clean origin (`127.0.0.1:5183`): official PF2e 0.3.0 `.rpg` plus
+  141 local catalog roots (8 ancestries, 50 heritages, 9 classes, 74
+  backgrounds). Created "Kyra", Dromaar Fighter 1, through all 5 pages.
+- Fixed: `allow_adds_and_removes: false` blocked `auto_add_first`; draft
+  character lacked `$is_new` (class selector hidden); catalog roots ignored by
+  source prefilters (heritages by ancestry); stat formulas saw caller lambda
+  variables and were never cached inside `map`/`filter` (exponential cost); the
+  picker offered another character's private class root (shared 595 children);
+  `checkbox` `switcher`; `isEmpty(null)`; staged calculated arrays shown as
+  read-only. Hook `fireEvent` is deferred to the saved character.
+- Evaluation bounds raised: 100,000 steps and depth 256 (PF2e feat/archetype
+  chains), with lexical stat scoping so caching is valid. Backup JSON is now
+  compact.
+- Open: feats compendium, `daily_preparations` dispatch (dynamic event names),
+  `ic_action` icon, `should_auto_save`/`always_in_edit_mode`, 32 MiB backup bound.
+- Diagnostics: 5e 142, 5e2024 142, PF2e 246. `npm run check`: 319 passed, one
+  skipped, 39 files.
+
+## Complete 5e creation flow, 2026-11-17
+
+- Nested draft-only resources are editable inside a draft: inline items render
+  an auto-applied nested form (`role="group"`, not a nested `<form>`), popups
+  re-stage an updated copy. Staged additions replace by id (`mergeStaged`).
+- Page hooks run on the draft through `src/engine/creation-hooks.ts`; nothing
+  is persisted before the final page. New formulas: `split` (bounded regex
+  separator) and `copyResource` (only inside explicit commands).
+- Fixed while driving the official 5e flow in the browser: duplicate static
+  view ids on page 2, calculated `resourceArray` stats read as stored values,
+  runtime resource scopes not recognised as references, mixed sibling types in
+  one array, calculated `edit_stat` text targets, missing `$character` in hooks,
+  `saveResource` rejecting staged private catalog copies, and an O(n²) save of
+  ~1,000 staged records (about 60 s, now about 1 s via `addResources`).
+- Browser (dev server, 5e 0.9.1 + 208 catalog roots): created "Aelar" (High
+  Elf Wizard 1, 5/5 HP average, Sage, INT/WIS saves, Arcana/History/Insight/
+  Perception, 10 gp, starting gear) and "Brann" (Human Fighter 1, 12/12 HP max,
+  Soldier); both sheets render with zero view errors.
+- Official diagnostics: 5e 144, 5e2024 144, PF2e 249 (`split`).
+- `npm run check`: 313 passed, one skipped, 39 files; build OK. Not run: Playwright.
+  PF2e creation pages were not exercised in the browser. `npm audit --omit=dev`: 0 vulnerabilities.
+
+## Resource identity and creation flow pages, 2026-11-17
+
+- Root resource scopes now expose `id` (upstream `sourceId`, else local id),
+  as nested scopes already did. The checker accepts `id` in resource scopes,
+  evaluates `resourceArray.pop_up_button_text` against the item resource and
+  accepts `$is_new` inside creation pages. `$parent` is not implemented: no
+  local upstream documentation defines it, and guarded formulas fall back.
+- Official diagnostics: 5e 184 → 144, 5e2024 183 → 144, PF2e 357 → 253
+  (pinned in `tests/package.test.ts`).
+- `character_creation_flow` pages run as one draft wizard (`CreationFlow`).
+  Page hooks are listed per page and not executed. Fixed: `auto_add_first`
+  instances were referenced without being staged ("Risorsa mancante"); draft
+  forms no longer render non-scalar derived calculations as text; draft
+  `selectResources` offers catalog roots via a private staged copy.
+- Regressions: `tests/creation-flow.test.tsx` (5), `tests/catalog.test.ts`
+  staging, `tests/resource-context.test.tsx` and `tests/import.test.ts`
+  identity checks. The `auto_add_first` regression failed before the fix.
+- Browser (dev server, 5e 0.9.1 with 208 GitHub catalog roots): flow page 1
+  renders; name, race (101 catalog races) and auto-added class work; Next stays
+  blocked because nested `class_details` editing inside a draft is unsupported.
+- `$view` is now local to the scope that owns the form: nested resources no
+  longer inherit the parent draft, so the 5e classes validation
+  `$class?.$view?.class_details_edit_class_select.name` yields null instead of
+  "Statistica mancante nel percorso". Regression in `resource-context.test.tsx`
+  (failed before the fix); confirmed gone in the browser.
+- `npm run check`: 300 passed, one skipped, 38 files; `npm run build` OK
+  (16 precache entries, 982.75 KiB). `npm audit` and Playwright not run.
+
+## Calculated stat bounds, 2026-11-17
+
+- `stat` views now enforce `calculated_min_value_allowed` and
+  `calculated_max_value_allowed` through the helper shared with `ticker`;
+  a literal bound wins and a non-numeric result fails visibly. Regression in
+  `tests/renderer.test.tsx`.
+- `npm run check`: TypeScript and 291 tests passed, one skipped, 37 files.
+  `npm run build` succeeded (16 precache entries). Playwright and
+  `npm audit --omit=dev` were not run for this UI-only increment.
+- Official 5e / 5e2024 / PF2e diagnostics unchanged at 184 / 183 / 357: their
+  calculated bounds are on tickers. Largest remaining groups: unresolved
+  resource-context references (`id`, `display_description`, `$parent.level`,
+  `$is_new`; 75 `id` in PF2e alone), `on_tap_event`, `markdown`,
+  `create_if_empty`, `search_filters` / `sort_options`.
+
 ## Session delivery: scoped previews and source onboarding, 2026-11-17
 
 - Reproduced the unchanged Archer race popup's missing

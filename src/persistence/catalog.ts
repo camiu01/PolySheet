@@ -111,6 +111,46 @@ export async function prepareAssignment(resourceId: string, database: typeof db)
     ? await prepareCatalog(template.catalogSource.original, template.catalogSource.source, system) : undefined;
   return { template, system, materialized };
 }
+/**
+ * Copy one template graph into fresh private instances, remapping internal references.
+ * @returns The new root id and every copied instance; shared/cyclic children are copied once.
+ */
+export function privateGraph(system: StoredSystem, sourceRoot: string, existing: ResourceInstance[]) {
+  const byId = new Map(existing.map(r => [r.id, r])), ids = new Map<string, string>();
+  const queue = [sourceRoot], queued = new Set(queue), additions: ResourceInstance[] = [];
+  for (let i = 0; i < queue.length; i++) {
+    const id = queue[i];
+    if (ids.has(id)) continue;
+    const source = byId.get(id), definition = system.definition.resources.find(d => d.id === source?.definitionId);
+    if (!source || !definition || ids.size >= 10000) throw new Error(it.missingResource);
+    checkReferences(definition.stats, source.values, existing, system.key);
+    ids.set(id, crypto.randomUUID());
+    for (const stat of definition.stats) for (const child of referencedIds(stat, source.values[stat.id])) {
+      if (!queued.has(child)) { queued.add(child); queue.push(child); }
+    }
+  }
+  const rootId = ids.get(sourceRoot)!;
+  for (const [id, localId] of ids) {
+    const source = byId.get(id)!, definition = system.definition.resources.find(d => d.id === source.definitionId)!;
+    const values = jsonValue(source.values) as ResourceInstance['values'];
+    for (const stat of definition.stats) {
+      const value = values[stat.id];
+      if (stat.value_type === 'resource' && isResourceReference(value)) values[stat.id] = { resourceId: ids.get(value.resourceId)! };
+      else if (stat.value_type === 'array' && stat.sub_value_type === 'resource' && Array.isArray(value))
+        values[stat.id] = value.map(v => isResourceReference(v) ? { resourceId: ids.get(v.resourceId)! } : v);
+    }
+    additions.push({ id: localId, systemKey: system.key, definitionId: source.definitionId, name: source.name,
+      values, createdAt: new Date().toISOString(), catalogGroup: rootId,
+      ...(source.sourceId ? { sourceId: source.sourceId } : {}) });
+  }
+  return { rootId, additions };
+}
+/** Stage a catalog or local template as a private graph for a draft; nothing is written. */
+export async function stageTemplate(resourceId: string, database = db) {
+  const { system, materialized } = await prepareAssignment(resourceId, database);
+  const existing = materialized?.resources ?? await database.resources.where('systemKey').equals(system.key).toArray();
+  return privateGraph(system, materialized?.rootId ?? resourceId, existing);
+}
 /** Assign only a locally prepared, unchanged graph inside the owner's transaction. */
 export async function assignPrepared(characterId: string, fieldId: string, prepared: Awaited<ReturnType<typeof prepareAssignment>>, database: typeof db) {
   const { template, system, materialized } = prepared;
@@ -124,34 +164,7 @@ export async function assignPrepared(characterId: string, fieldId: string, prepa
     const field = isClass ? fields.classes : fields.singular.find(s => s.id === fieldId && s.resource_type === template.definitionId);
     if (!field || (isClass && template.definitionId !== 'class')) throw new Error(it.missingResource);
     const existing = materialized?.resources ?? await database.resources.where('systemKey').equals(system.key).toArray();
-    const sourceRoot = materialized?.rootId ?? resourceId;
-    const byId = new Map(existing.map(r => [r.id, r])), ids = new Map<string, string>();
-    const queue = [sourceRoot], queued = new Set(queue), additions: ResourceInstance[] = [];
-    for (let i = 0; i < queue.length; i++) {
-      const id = queue[i];
-      if (ids.has(id)) continue;
-      const source = byId.get(id), definition = system.definition.resources.find(d => d.id === source?.definitionId);
-      if (!source || !definition || ids.size >= 10000) throw new Error(it.missingResource);
-      checkReferences(definition.stats, source.values, existing, system.key);
-      ids.set(id, crypto.randomUUID());
-      for (const stat of definition.stats) for (const child of referencedIds(stat, source.values[stat.id])) {
-        if (!queued.has(child)) { queued.add(child); queue.push(child); }
-      }
-    }
-    const rootId = ids.get(sourceRoot)!;
-    for (const [id, localId] of ids) {
-      const source = byId.get(id)!, definition = system.definition.resources.find(d => d.id === source.definitionId)!;
-      const values = jsonValue(source.values) as ResourceInstance['values'];
-      for (const stat of definition.stats) {
-        const value = values[stat.id];
-        if (stat.value_type === 'resource' && isResourceReference(value)) values[stat.id] = { resourceId: ids.get(value.resourceId)! };
-        else if (stat.value_type === 'array' && stat.sub_value_type === 'resource' && Array.isArray(value))
-          values[stat.id] = value.map(v => isResourceReference(v) ? { resourceId: ids.get(v.resourceId)! } : v);
-      }
-      additions.push({ id: localId, systemKey: system.key, definitionId: source.definitionId, name: source.name,
-        values, createdAt: new Date().toISOString(), catalogGroup: rootId,
-        ...(source.sourceId ? { sourceId: source.sourceId } : {}) });
-    }
+    const { rootId, additions } = privateGraph(system, materialized?.rootId ?? resourceId, existing);
     let value: unknown = { resourceId: rootId };
     if (isClass) {
       const definition = system.definition.resources.find(d => d.id === field.resource_type)!;

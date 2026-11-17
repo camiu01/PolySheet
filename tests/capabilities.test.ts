@@ -87,9 +87,12 @@ describe('documented formulas', () => {
     expect(createEvaluator([], {}, undefined, { variables: { $actor: new RuntimeResource('a', [base('score', 'integer', 8)], {}) } }).get('$actor.score')).toBe(8);
     expect(() => createEvaluator([], {}, { steps: 5, depth: 3 }).evaluate({ type: 'map', components: list(constant(1), constant(2), constant(3)), mapper: stat('$mapValue') })).toThrow('Limite');
   });
-  it('does not cache contextual calculated results across iterations', () => {
-    const e = createEvaluator([{ id: 'bound', name: 'Bound', type: 'calculated', value_type: 'integer', components: stat('$mapValue') }]);
-    expect(e.evaluate({ type: 'map', components: list(constant(2), constant(8)), mapper: stat('bound') })).toEqual([2, 8]);
+  it('scopes stat formulas lexically, so caller lambda values never leak in and stats stay cacheable', () => {
+    // No official 5e/PF2e stat formula reads an unbound lambda variable; the importer reports such paths as missing.
+    const e = createEvaluator([{ id: 'bound', name: 'Bound', type: 'calculated', value_type: 'integer', components: stat('$mapValue') },
+      { id: 'base', name: 'Base', type: 'calculated', value_type: 'integer', components: constant(5) }]);
+    expect(() => e.evaluate({ type: 'map', components: list(constant(2), constant(8)), mapper: stat('bound') })).toThrow('$mapValue');
+    expect(e.evaluate({ type: 'map', components: list(constant(2), constant(8)), mapper: { type: 'add', components: list(stat('$mapValue'), stat('base')) } })).toEqual([7, 13]);
   });
   it('bypasses caches explicitly and never rolls during read-only rendering', () => {
     let count = 0;

@@ -66,7 +66,8 @@ export async function exportBackup(database = db) {
     characters: await database.characters.toArray(),
     resources: await database.resources.toArray(), rolls: await database.rolls.toArray(),
     preferences: await database.preferences.toArray(), combats: await database.combats.toArray()
-  }, null, 2));
+  // Compact output: indentation roughly doubled size and hit the 32 MiB restore bound.
+  }));
   // Do not produce a backup that this version cannot read back.
   schema.parse(boundedJson(text, 32 * 1024 * 1024));
   return text;

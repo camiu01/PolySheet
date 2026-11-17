@@ -117,3 +117,32 @@ it('updates the owning character through a nested character draft instead of exp
   expect(screen.getByText('9')).toBeInTheDocument();
   expect(committed.attack).toBe(5);
 });
+
+it('exposes the upstream resource identity as `id` in root scopes and in resourceArray button labels', () => {
+  const ids = base('selected_ids', 'array', ['feat-a'], 'string');
+  const selected = { id: 'selected', name: 'Selected', type: 'calculated', value_type: 'bool',
+    components: { type: 'contains', haystack: stat('selected_ids'), needle: stat('id') } } as const;
+  expect(createEvaluator([ids, selected], {}, undefined, { instanceId: 'feat-a' }).get('selected')).toBe(true);
+  expect(createEvaluator([ids, selected], {}, undefined, { instanceId: 'feat-b' }).get('selected')).toBe(false);
+  expect(() => createEvaluator([ids, selected], {}).get('selected')).toThrow('Statistica mancante: id');
+});
+
+it('keeps `$view` local: a nested resource does not inherit its parent form drafts', () => {
+  const detail = { id: 'detail', name: 'Detail', stats: [base('label', 'string', 'x')] } as ResourceDefinition;
+  const record = { id: 'd1', systemKey: 'sys', definitionId: 'detail', name: 'D', values: {} };
+  const evaluator = createEvaluator([base('details', 'array', [{ resourceId: 'd1' }], 'resource')], {}, undefined, {
+    resources: [record], resourceDefinitions: [detail], variables: { $view: { parent_input: 'P' } } });
+  expect(evaluator.evaluate(stat('$view.parent_input'))).toBe('P');
+  const nested = { type: 'map', components: stat('details'), map_value_key: '$item', mapper: stat('$item?.$view?.child_select.name') };
+  expect(evaluator.evaluate(nested)).toEqual([null]);
+});
+
+it('does not offer the root of another character private graph', () => {
+  const root = { id: 'private-class', catalogGroup: 'private-class', systemKey: 'sys', definitionId: 'feat', name: 'Fighter copy', values: {} };
+  render(<SourceResourceSelect node={{ id: 'pick', type: 'selectResources', resource_id: 'feat', stat: 'feats' }} context={{
+    stats: [{ ...base('feats', 'array', [], 'resource'), resource_type: 'feat' }], values: {}, drafts: {},
+    systemKey: 'sys', resources: [root], resourceDefinitions: [{ id: 'feat', name: 'Feat', core: true, stats: [base('name', 'string', '')] }],
+    onCommit: vi.fn() }} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Aggiungi risorsa · Feat' }));
+  expect(screen.queryByRole('button', { name: 'Fighter copy' })).toBeNull();
+});

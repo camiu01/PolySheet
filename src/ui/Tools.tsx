@@ -45,7 +45,7 @@ export function Resources({ systems, system, characters, run }: SystemPageProps 
       return <article key={r.id} className="resource-card"><div className="card-title-row"><span className="eyebrow">{d?.name}</span><button className="icon-button danger-text" aria-label={`${it.delete} ${r.name}`} onClick={() => setDeleting(r)}><Trash2 size={17} /></button></div>
         <h2>{r.name}</h2>{r.catalogSource ? <><p className="muted">{it.catalogEntry}</p>
           {r.catalogIssue && <Warning>{it.catalogUnavailable}: {r.catalogIssue}</Warning>}</> : d?.display_view ? <RenderView input={d.display_view} context={{
-          systemKey: system.key, stats: d.stats, values: r.values, createdAt: r.createdAt, resources, resourceDefinitions: defs,
+          systemKey: system.key, stats: d.stats, values: r.values, createdAt: r.createdAt, instanceId: r.sourceId ?? r.id, resources, resourceDefinitions: defs,
           enumerations: system.definition.enumerated_types
         }} /> : <p className="muted">{it.noResourceView}</p>}
         {r.catalogSource ? <button className="link-button" onClick={() => download(r.catalogSource!.original, `${r.definitionId}.rpg.json`)}>{it.exportCatalog}</button>

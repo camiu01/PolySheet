@@ -241,8 +241,8 @@ with create/remove, `pop_up_type`, `left_view`, `hide_line`, `auto_add_first`;
   run its event.
 - [x] Implement `viewPager`, `ticker`, `collapsible` and `button`. `diffText`
   and button event dispatch remain unimplemented.
-- [ ] Implement dynamic stat bounds on `stat` views: `calculated_min_value_allowed`
-  and `calculated_max_value_allowed` (ticker bounds are implemented).
+- [x] Implement dynamic stat bounds on `stat` views: `calculated_min_value_allowed`
+  and `calculated_max_value_allowed`, sharing the ticker resolution (literal wins).
 - [ ] Implement stat interactions: `on_tap_event` and `on_long_tap_event`.
 - [ ] Implement stat sheets: `bottom_sheet_view`, `bottom_sheet_in_edit_mode`,
   `sheet_title` and `edit_bottom_sheet_title`.
@@ -274,7 +274,33 @@ with create/remove, `pop_up_type`, `left_view`, `hide_line`, `auto_add_first`;
 
 ### 5. Official character creation and progression
 
-- [ ] Execute original creation pages, navigation, conditions and validations.
+- [x] Execute original creation pages, navigation and validations as one draft
+  (`CreationFlow`): `$is_new` is true, Back discards the current page, Cancel
+  writes nothing, the final page saves atomically. Manual setup stays available.
+- [x] Offer catalog roots in draft `selectResources`, staging a private graph copy
+  until Save (5e race selection in the creation flow).
+- [x] Stage the `auto_add_first` instance with its draft (5e classes editor).
+- [x] Edit nested draft-only resources inside a draft (inline auto-applied
+  forms or popups re-stage an updated copy; 5e `class_details` class select).
+- [x] Run page hooks on the draft (`setStat`, `addToStat` incl. list append,
+  `sequence`, `when`, `forEach`, `meta_stat`, nested staged targets,
+  `copyResource`, explicit `roll`, `$updated_stats`). `pre_edit` and other
+  effects (`fireEvent` in PF2e) are skipped and shown.
+- [x] Browser: full 5e creation (High Elf Wizard, Human Fighter) saves in ~1 s.
+- [x] Verify PF2e creation pages end to end with the official 0.3.0 `.rpg` and
+  141 local catalog roots (Human Dromaar Fighter saved in ~2 s).
+- [ ] PF2e feats: the 1,089 `feat` instances are not importable catalog roots,
+  so ancestry/class feat slots stay empty.
+- [ ] PF2e `daily_preparations` after creation is refused by the character
+  dispatcher ("Nomi evento dinamici non supportati"); current HP shows 18/19.
+- [ ] Backup bound: 32 MiB is exceeded by 5e + PF2e catalogs plus a few
+  characters (each copies its whole class graph). Needs a decision before
+  raising the limit or sharing immutable graph members.
+- [ ] Decide whether the app may fetch official releases from the content CDN
+  (new network endpoint: CSP and threat-model review required).
+- [ ] Confirm upstream `$updated_stats` semantics (assumed: base stats changed
+  by the confirmed page).
+- [ ] Label duplicate catalog names by source (e.g. two `Satyr` races).
 - [ ] Implement `on_page_open`, `on_page_close`, `pre_edit` and `post_edit` with
   verified draft, confirmation, cancellation and repeated-operation behavior.
 - [ ] Integrate race, class, background, abilities and related resource choices

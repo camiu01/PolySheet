@@ -17,7 +17,7 @@ export const MAX_SYSTEM_BYTES = 8 * 1024 * 1024;
 /** Renderer field allowlist; unhandled fields remain in the original document. */
 export const viewFields: Record<string, string[]> = {
   text: ['text', 'edit_stat', 'style', 'label', 'hint', 'max_length', 'bold', 'max_lines', 'signed', 'color', 'resource_id', 'resource_instance_ids_stat', 'resource_display_stat'],
-  stat: ['stat', 'edit_stat', 'change_amount', 'min_value_allowed', 'max_value_allowed', 'style', 'always_show_sign', 'override_label',
+  stat: ['stat', 'edit_stat', 'change_amount', 'min_value_allowed', 'max_value_allowed', 'calculated_min_value_allowed', 'calculated_max_value_allowed', 'style', 'always_show_sign', 'override_label',
     'bottom_sheet_view', 'bottom_sheet_in_edit_mode', 'sheet_title', 'stat_color', 'name_color', 'edit_bottom_sheet_title'],
   section: ['header', 'content', 'show_divider', 'collapsible', 'start_collapsed', 'always_show_collapse_icon', 'content_item_min_width', 'alignment'],
   list: ['subviews', 'padding', 'padding_top', 'padding_right', 'padding_bottom', 'padding_left', 'alignment'],
@@ -45,7 +45,7 @@ const commonViewFields = ['type', 'id', 'is_visible', 'validation_message', 'mar
 export function unsupportedViewOptions(v: Record<string, unknown>): string[] {
   const variants: Record<string, Record<string, string[]>> = {
     icon: { size: ['small', 'medium', 'large'] },
-    checkbox: { style: ['checkbox'], label_alignment: ['left', 'right'] },
+    checkbox: { style: ['checkbox', 'switcher'], label_alignment: ['left', 'right'] },
     chip: { style: ['compact', 'fullSize'] },
     popUpButton: { pop_up_type: ['bottomSheet', 'alert'] },
     selectResources: { view_type: ['list', 'icon'], inline_creation_mode: ['disabled', 'optional', 'only'], creation_pop_up_type: ['bottomSheet', 'window'] },
@@ -140,6 +140,8 @@ export function diagnose(system: SystemDefinition): Diagnostic[] {
     for (const key of Object.keys(value)) if (!allowed.includes(key))
       report(`${path}.${key}`, 'Campo conservato, ma non interpretato in questo incremento.');
   }
+  // Resource scopes expose their upstream identity as `id` (see createEvaluator).
+  const resourceScopes = new Set<Stat[]>(system.resources.map(r => r.stats));
   function checkFormula(input: unknown, path: string, stats: Stat[], bindings: string[] = [], allowRoll = false) {
     if (!input || typeof input !== 'object' || Array.isArray(input) || typeof object(input).type !== 'string') {
       report(path, 'Albero formula non valido', 'error'); return;
@@ -156,7 +158,9 @@ export function diagnose(system: SystemDefinition): Diagnostic[] {
         else try {
           const first = statPath(node.stat)[0];
           const contexts = ['created_at', '$view', '$character', '$resource', '$combatants', '$combat', '$combat_difficulty', '$combatant', '$combatant_type', '$template_resource_id', '$instance_resource_id', '$edit_mode'];
-          if (!stats.some(s => s.id === first.id) && !bindings.includes(first.id) && !contexts.includes(first.id) && !first.optional && type !== 'defined')
+          const implicit = first.id === 'id' && resourceScopes.has(stats)
+            || first.id === '$is_new' && path.startsWith('$.character_creation_flow[');
+          if (!stats.some(s => s.id === first.id) && !bindings.includes(first.id) && !contexts.includes(first.id) && !implicit && !first.optional && type !== 'defined')
             report(`${path}.stat`, `Riferimento mancante o contesto non disponibile: ${node.stat}`);
         } catch (error) { report(`${path}.stat`, error instanceof Error ? error.message : String(error), 'error'); }
         if (type === 'stat' && node.ignore_cache != null && typeof node.ignore_cache !== 'boolean')
@@ -240,7 +244,12 @@ export function diagnose(system: SystemDefinition): Diagnostic[] {
       report(`${path}.icon`, 'popUpButton richiede una vista icon.');
     for (const field of ['text', 'label', 'hint', 'is_visible', 'validation_message', 'enabled', 'override_label', 'pop_up_title', 'save_text', 'cancel_text', 'bottom_left_button_title', 'bottom_right_button_title', 'title', 'subtitle', 'first_line_extra', 'second_line_extra', 'title_color', 'subtitle_color', 'first_line_extra_color', 'second_line_extra_color', 'chips',
       'names', 'allowed_values', 'calculated_min_value_allowed', 'calculated_max_value_allowed', 'meta_stat', 'allowed_options', 'resource_options', 'max_selection_amount', 'pop_up_button_text', 'sheet_title', 'stat_color', 'name_color'])
-      if (v[field] != null) checkFormula(v[field], `${path}.${field}`, stats, ['$view']);
+      if (v[field] != null) {
+        // A resourceArray item button label is evaluated against the item resource.
+        const item = field === 'pop_up_button_text' && v.type === 'resourceArray'
+          ? system.resources.find(r => r.id === v.resource_id)?.stats : undefined;
+        checkFormula(v[field], `${path}.${field}`, item ?? stats, item ? [] : ['$view']);
+      }
     // `viewPager.color` is a formula; icon, text and chip colours are literal palette values.
     if (v.type === 'viewPager' && v.color != null) checkFormula(v.color, `${path}.color`, stats, ['$view']);
     if (v.type === 'selectResources' && v.filters != null) {
@@ -349,7 +358,7 @@ export function diagnose(system: SystemDefinition): Diagnostic[] {
   system.character_sheet_sections.forEach((s, i) => checkView(s.view, `$.character_sheet_sections[${i}].view`, system.character_stats));
   checkView(system.character_search_item_view, '$.character_search_item_view', system.character_stats);
   if (system.character_creation_flow.length) {
-    report('$.character_creation_flow', 'Flusso ufficiale ed eventi non eseguiti. Disponibili gruppi di campi sorgente in modifica manuale.');
+    report('$.character_creation_flow', 'Pagine di creazione disponibili come bozza guidata; azioni di pagina eseguite sulla bozza per setStat, addToStat, sequence, when e forEach. pre_edit e gli altri effetti non eseguiti.');
     system.character_creation_flow.forEach((page, i) => {
       if (page && typeof page === 'object' && object(page).view)
         checkView(object(page).view, `$.character_creation_flow[${i}].view`, system.character_stats);

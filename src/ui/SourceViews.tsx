@@ -1,9 +1,11 @@
 /** @file Source popup and local resource controls; general events stay unsupported. */
 import { useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { createEvaluator } from '../engine/formulas';
 import { isResourceReference, jsonValue, object, type ResourceInstance, type View } from '../domain/model';
 import { initialValues } from '../persistence/db';
 import { commitResourceView } from '../persistence/views';
+import { stageTemplate } from '../persistence/catalog';
 import { RenderView, textValue, type RenderContext } from './renderer';
 import { SourceForm } from './SourceForm';
 import { Modal } from './shared';
@@ -58,10 +60,13 @@ export function SourceResourceSelect({ node: v, context: ctx }: { node: View; co
   if (!definition || !field) return <p data-view-error className="unsupported">{it.noResourceType}</p>;
   const fieldId = field.id, arrayField = field.value_type === 'array';
   const inline = v.create_in_place === true || definition.core !== true || v.inline_creation_mode === 'only';
-  const resources = (ctx.resources ?? []).filter(r => !r.catalogSource && r.definitionId === definition.id && (!ctx.systemKey || r.systemKey === ctx.systemKey));
+  // Offer usable catalog roots (choosing one stages a private copy of its whole graph) and local records,
+  // but not the root of another character's private graph: a shallow copy would share its children.
+  const offered = (r: ResourceInstance) => r.catalogSource ? !r.catalogIssue : r.catalogGroup !== r.id;
+  const resources = (ctx.resources ?? []).filter(r => offered(r) && r.definitionId === definition.id && (!ctx.systemKey || r.systemKey === ctx.systemKey));
   const selected = ctx.drafts && Object.hasOwn(ctx.drafts, v.id) ? ctx.drafts[v.id] : ctx.values[fieldId] ?? field.default_value;
   const selectedRefs = Array.isArray(selected) ? selected : [selected];
-  const selectedNames = selectedRefs.filter(isResourceReference).map(ref => resources.find(r => r.id === ref.resourceId)?.name ?? it.missingResource).join(', ');
+  const selectedNames = selectedRefs.filter(isResourceReference).map(ref => ctx.resources?.find(r => r.id === ref.resourceId)?.name ?? it.missingResource).join(', ');
   async function assign(record: ResourceInstance, created: ResourceInstance[]) {
     if (!ctx.onCommit) throw new Error(it.formReadOnly);
     if (ctx.systemKey && record.systemKey !== ctx.systemKey) throw new Error(it.invalidValue);
@@ -73,9 +78,10 @@ export function SourceResourceSelect({ node: v, context: ctx }: { node: View; co
     }, created);
     setOpen(false); setCreating(false);
   }
-  return <><button type="button" className="button secondary" aria-label={`${it.addResource} · ${definition.name}`} disabled={!ctx.onCommit}
+  // Rendered as a field: it shows a value to choose, not an action.
+  return <><button type="button" className={v.view_type === 'icon' ? 'button secondary' : 'choice-field'} aria-label={`${it.addResource} · ${definition.name}`} disabled={!ctx.onCommit}
     onClick={() => { setError(''); setNewId(crypto.randomUUID()); setCreating(inline); setOpen(true); }}>
-    {v.view_type === 'icon' ? '+' : selectedNames || `${it.choose} ${definition.name}`}
+    {v.view_type === 'icon' ? '+' : <><span className={selectedNames ? undefined : 'choice-placeholder'}>{selectedNames || `${it.choose} ${definition.name}`}</span><ChevronDown size={16} aria-hidden="true" /></>}
   </button>{open && <Modal title={`${it.addResource} · ${definition.name}`} bottomSheet={v.creation_pop_up_type == null || v.creation_pop_up_type === 'bottomSheet'} onClose={() => !busy && setOpen(false)}>
     {creating ? definition.edit_view ? <SourceForm
       input={definition.edit_view} onBusyChange={setBusy} onDone={() => setOpen(false)} context={{
@@ -95,6 +101,11 @@ export function SourceResourceSelect({ node: v, context: ctx }: { node: View; co
       <p className="muted">{it.localResourceSelection}</p>
       {!!resources.length && <FilteredResourcePicker input={v.filters} definition={definition} context={ctx} resources={resources} busy={busy} onSelect={r => {
         setBusy(true); setError('');
+        if (r.catalogSource) {
+          void stageTemplate(r.id).then(({ rootId, additions }) => assign({ ...r, id: rootId }, additions))
+            .catch(e => setError(e instanceof Error ? e.message : String(e))).finally(() => setBusy(false));
+          return;
+        }
         const record = v.preserve_ids === true ? r : {
           id: crypto.randomUUID(), systemKey: r.systemKey, definitionId: r.definitionId,
           name: r.name, values: r.values, createdAt: new Date().toISOString()
@@ -130,7 +141,7 @@ export function SourceResourceSection({ node: v, context: ctx }: { node: View; c
     const editable = v.read_only !== true && !!ctx.onCommit && ctx.stats.some(s => s.id === field && s.type === 'base');
     const resourceContext = (r: ResourceInstance): RenderContext => ({
       systemKey: r.systemKey, stats: definition.stats, values: r.values, resources: ctx.resources,
-      resourceDefinitions: ctx.resourceDefinitions, createdAt: r.createdAt,
+      resourceDefinitions: ctx.resourceDefinitions, createdAt: r.createdAt, instanceId: r.sourceId ?? r.id,
       enumerations: ctx.enumerations, character: ctx.character
     });
     const visible = !expanded && typeof v.max_items_in_preview === 'number' ? records.slice(0, Math.max(0, v.max_items_in_preview)) : records;

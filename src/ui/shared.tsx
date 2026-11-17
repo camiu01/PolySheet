@@ -8,10 +8,10 @@ import { it } from './it';
 
 export type Run = (work: () => Promise<unknown>, success?: string) => Promise<void>;
 /** Native modal dialog supplies focus trapping, Escape handling, and focus return. */
-export function Modal({ title, children, onClose, bottomSheet = false }: { title: string; children: ReactNode; onClose: () => void; bottomSheet?: boolean }) {
+export function Modal({ title, children, onClose, bottomSheet = false, wide = false }: { title: string; children: ReactNode; onClose: () => void; bottomSheet?: boolean; wide?: boolean }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => { const dialog = ref.current; dialog?.showModal(); return () => dialog?.close(); }, []);
-  return createPortal(<dialog ref={ref} className={bottomSheet ? 'source-bottom-sheet' : undefined} onCancel={event => { event.preventDefault(); onClose(); }} aria-label={title}>
+  return createPortal(<dialog ref={ref} className={[bottomSheet ? 'source-bottom-sheet' : '', wide ? 'dialog-wide' : ''].join(' ').trim() || undefined} onCancel={event => { event.preventDefault(); onClose(); }} aria-label={title}>
     <div className="modal-heading"><h2>{title}</h2><button className="icon-button" aria-label={it.close} onClick={onClose}><X size={20} /></button></div>
     <div className="modal-body">{children}</div>
   </dialog>, document.body);

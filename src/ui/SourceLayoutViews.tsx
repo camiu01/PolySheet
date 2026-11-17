@@ -10,7 +10,7 @@ import { it } from './it';
 /** Render source children, preserving their own ids and failures. */
 function children(items: unknown, context: RenderContext) {
 	if (!Array.isArray(items)) throw new Error('Lista di componenti non valida');
-	return items.map((v, i) => <RenderView key={String((v as { id?: string }).id ?? i)} input={v} context={context} />);
+	return items.map((v, i) => <RenderView key={`${String((v as { id?: string }).id ?? '')}:${i}`} input={v} context={context} />);
 }
 
 /**

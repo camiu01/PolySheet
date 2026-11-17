@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { createEvaluator } from '../engine/formulas';
 import { enumerationEntries, type EnumerationEntry } from '../engine/enumerations';
 import type { View } from '../domain/model';
-import { boundedNumber, canSourceEvent, inputValue, resourceReferenceId, saveInput, sourceIcons, textValue, viewColor } from './view-support';
+import { boundedNumber, canSourceEvent, inputValue, resourceReferenceId, saveInput, sourceIcons, textValue, viewBounds, viewColor } from './view-support';
 import { it } from './it';
 import type { RenderContext } from './renderer';
 import { Modal } from './shared';
@@ -62,10 +62,7 @@ export function SourceTicker({ node: v, context: ctx, evaluate }: {
 	const editable = stat.type === 'base' && ctx.onChange !== undefined;
 	const raw = editable ? inputValue(v, ctx, stat) : createEvaluator(ctx.stats, ctx.values, undefined, ctx).get(stat.id);
 	const value = boundedNumber(raw);
-	const minimum = boundedNumber(v.min_value_allowed)
-		?? (v.calculated_min_value_allowed != null ? numberValue(evaluate(v.calculated_min_value_allowed), it.tickerMin) : undefined);
-	const maximum = boundedNumber(v.max_value_allowed)
-		?? (v.calculated_max_value_allowed != null ? numberValue(evaluate(v.calculated_max_value_allowed), it.tickerMax) : undefined);
+	const { minimum, maximum } = viewBounds(v, evaluate);
 	const allowed = v.allowed_values == null ? undefined : numberList(evaluate(v.allowed_values));
 	const amount = boundedNumber(v.change_amount) ?? 1;
 	const label = v.label == null ? '' : textValue(evaluate(v.label));
@@ -153,11 +150,11 @@ export function SourceButton({ node: v, context: ctx, evaluate }: {
 interface SelectOption { id: string; label: string; value: string }
 
 /** Read the display label of one local resource instance. */
-function resourceLabel(record: { name: string; values: Record<string, unknown>; createdAt?: string }, definition: { stats: RenderContext['stats']; display_name?: string | null }, display: unknown, ctx: RenderContext) {
+function resourceLabel(record: { id: string; sourceId?: string; name: string; values: Record<string, unknown>; createdAt?: string }, definition: { stats: RenderContext['stats']; display_name?: string | null }, display: unknown, ctx: RenderContext) {
 	const id = typeof display === 'string' ? display : definition.display_name;
 	if (!id) return record.name;
 	const value = createEvaluator(definition.stats, record.values, undefined, {
-		resources: ctx.resources, resourceDefinitions: ctx.resourceDefinitions, createdAt: record.createdAt,
+		resources: ctx.resources, resourceDefinitions: ctx.resourceDefinitions, createdAt: record.createdAt, instanceId: record.sourceId ?? record.id,
 		enumerations: ctx.enumerations, character: ctx.character
 	}).get(id);
 	return textValue(value) || record.name;
@@ -179,7 +176,7 @@ function selectOptions(v: View, ctx: RenderContext, evaluate: (value: unknown) =
 			if (allowed && !allowed.includes(record.id)) return [];
 			const saved = typeof v.resource_saved_stat === 'string'
 				? textValue(createEvaluator(definition.stats, record.values, undefined, {
-					resources: ctx.resources, resourceDefinitions: definitions, createdAt: record.createdAt,
+					resources: ctx.resources, resourceDefinitions: definitions, createdAt: record.createdAt, instanceId: record.sourceId ?? record.id,
 					enumerations: ctx.enumerations, character: ctx.character
 				}).get(v.resource_saved_stat))
 				: record.sourceId ?? record.id;

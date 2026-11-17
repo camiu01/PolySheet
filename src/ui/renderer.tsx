@@ -33,8 +33,12 @@ export interface RenderContext extends EvaluationEnvironment {
   onCommit?: (patch: ValuePatch, additions?: ResourceInstance[]) => Promise<void>;
   drafts?: Record<string, unknown>;
   validationErrors?: Record<string, string>;
+  /** Source validation messages stay hidden until the user first tries to continue. */
+  hideValidation?: boolean;
   onInput?: (viewId: string, statId: string, value: unknown) => void;
   previewValues?: Record<string, unknown>;
+  /** Ids of resources that exist only in an enclosing draft; edits replace the staged copy. */
+  stagedIds?: string[];
   /** Raw `enumerated_types`; used by select and menu options only. */
   enumerations?: unknown[];
 }
@@ -78,7 +82,8 @@ export function ScalarInput({ stat, value, onSave, onDraft, label, min, max, max
 type Renderer = (v: View, ctx: RenderContext, evaluate: (v: unknown) => unknown) => ReactNode;
 function children(items: unknown, ctx: RenderContext) {
   if (!Array.isArray(items)) throw new Error('Lista di componenti non valida');
-  return items.map((v, i) => <RenderView key={String(object(v).id ?? i)} input={v} context={ctx} />);
+  // Index-qualified keys: official sources repeat ids on static siblings.
+  return items.map((v, i) => <RenderView key={`${String(object(v).id ?? '')}:${i}`} input={v} context={ctx} />);
 }
 function resourceText(v: View, ctx: RenderContext) {
   if (v.resource_id == null) return undefined;
@@ -89,7 +94,7 @@ function resourceText(v: View, ctx: RenderContext) {
     const r = ctx.resources?.find(r => r.id === id && r.definitionId === d.id && (!ctx.systemKey || r.systemKey === ctx.systemKey));
     if (!r) throw new Error(it.missingResource);
     const display = typeof v.resource_display_stat === 'string' ? v.resource_display_stat : d.display_name;
-    return display ? textValue(createEvaluator(d.stats, r.values, undefined, { resources: ctx.resources, resourceDefinitions: ctx.resourceDefinitions, createdAt: r.createdAt, enumerations: ctx.enumerations, character: ctx.character }).get(display)) : r.name;
+    return display ? textValue(createEvaluator(d.stats, r.values, undefined, { resources: ctx.resources, resourceDefinitions: ctx.resourceDefinitions, createdAt: r.createdAt, instanceId: r.sourceId ?? r.id, enumerations: ctx.enumerations, character: ctx.character }).get(display)) : r.name;
   }).join(', ');
 }
 const sourceIconEntries = Object.entries(sourceIcons);
@@ -146,7 +151,9 @@ export const rendererRegistry = new Map<string, Renderer>([
   ['text', (v, ctx, e) => {
     if (typeof v.edit_stat === 'string') {
       const stat = ctx.stats.find(s => s.id === v.edit_stat);
-      if (!stat || stat.type !== 'base' || !['string', 'integer', 'decimal', 'bool'].includes(stat.value_type)) throw new Error('Campo non modificabile');
+      if (!stat || !['string', 'integer', 'decimal', 'bool'].includes(stat.value_type)) throw new Error('Campo non modificabile');
+      // A calculated target cannot store input; show its current value read-only (5e `selected_options`).
+      if (stat.type !== 'base') return <span className="text-view">{textValue(e({ type: 'stat', stat: stat.id }))}</span>;
       if (ctx.onChange) return <ScalarInput key={ctx.drafts ? v.id : `${stat.id}:${String(ctx.values[stat.id])}`} stat={stat}
         value={inputValue(v, ctx, stat)}
         label={v.label ? textValue(e(v.label)) : stat.name}
@@ -183,7 +190,8 @@ export const rendererRegistry = new Map<string, Renderer>([
   ['checkbox', (v, ctx, e) => {
     const stat = ctx.stats.find(s => s.id === v.stat && s.type === 'base' && s.value_type === 'bool');
     if (!stat) throw new Error('Checkbox senza statistica booleana base');
-    return <label className={`check-field ${v.label_alignment === 'left' ? 'check-label-left' : ''}`}><input type="checkbox" checked={inputValue(v, ctx, stat) === true}
+    // `switcher` is the same boolean input presented as an accessible switch.
+    return <label className={`check-field ${v.label_alignment === 'left' ? 'check-label-left' : ''} ${v.style === 'switcher' ? 'switch-field' : ''}`}><input type="checkbox" role={v.style === 'switcher' ? 'switch' : undefined} checked={inputValue(v, ctx, stat) === true}
       disabled={!ctx.onChange || (v.enabled != null && e(v.enabled) !== true)}
       onChange={event => saveInput(v, ctx, stat.id, event.target.checked)} />{v.label ? textValue(e(v.label)) : stat.name}</label>;
   }]
@@ -241,7 +249,7 @@ function ViewContent({ input, context }: ViewProps) {
     };
     return <div className="view-wrapper" style={style}>
       {handler(v, environment, e)}
-      {context.validationErrors?.[v.id] && <p role="alert" className="error-text">{context.validationErrors[v.id]}</p>}
+      {!context.hideValidation && context.validationErrors?.[v.id] && <p role="alert" className="error-text">{context.validationErrors[v.id]}</p>}
       {v.validation_message != null && !context.drafts && <small className="unsupported-note">{it.validationRequiresForm}</small>}
       {ignored.length > 0 && <small className="unsupported-note">{it.unsupported}: {ignored.join(', ')}</small>}
     </div>;

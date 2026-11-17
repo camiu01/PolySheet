@@ -58,3 +58,27 @@ it('supports serialized null defaults, checkbox enabling, and numeric validation
   expect(onChange).not.toHaveBeenCalled();
   expect(screen.getByRole('alert')).toHaveTextContent('Inserisci un numero valido');
 });
+it('enforces calculated stat bounds and lets literal bounds take precedence', () => {
+  const { definition } = parseSystem(demoOriginal);
+  const onChange = vi.fn();
+  const context = { stats: definition.character_stats, values: { ingegno: 3 }, onChange };
+  const edit = (value: string) => {
+    fireEvent.change(screen.getByLabelText('Modifica Vigore'), { target: { value } });
+    fireEvent.blur(screen.getByLabelText('Modifica Vigore'));
+  };
+  const { rerender } = render(<RenderView input={{ id: 'v', type: 'stat', stat: 'vigore',
+    calculated_min_value_allowed: { type: 'constant', value_type: 'integer', value: 1 },
+    calculated_max_value_allowed: { type: 'stat', stat: 'ingegno' } }} context={context} />);
+  edit('4');
+  expect(onChange).not.toHaveBeenCalled();
+  edit('3');
+  expect(onChange).toHaveBeenCalledWith('vigore', 3);
+  onChange.mockClear();
+  rerender(<RenderView input={{ id: 'v', type: 'stat', stat: 'vigore', max_value_allowed: 5,
+    calculated_max_value_allowed: { type: 'stat', stat: 'ingegno' } }} context={context} />);
+  edit('5');
+  expect(onChange).toHaveBeenCalledWith('vigore', 5);
+  rerender(<RenderView input={{ id: 'v', type: 'stat', stat: 'vigore',
+    calculated_min_value_allowed: { type: 'constant', value_type: 'string', value: 'x' } }} context={context} />);
+  expect(screen.getByRole('status')).toHaveTextContent('Minimo calcolato non numerico.');
+});

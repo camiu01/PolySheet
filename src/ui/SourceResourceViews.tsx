@@ -13,11 +13,31 @@ import { Modal } from './shared';
 import { inputValue, resourceReferenceIds, textValue } from './view-support';
 import { it } from './it';
 
-/** Resolve one local instance by id and exact definition, or fail visibly. */
-function instance(ctx: RenderContext, definition: ResourceDefinition, id: string): ResourceInstance {
-	const record = ctx.resources?.find(r => r.id === id && r.definitionId === definition.id && (!ctx.systemKey || r.systemKey === ctx.systemKey));
+/** Resolve one local instance by id and exact definition (or any declared type when `anyType`), or fail visibly. */
+function instance(ctx: RenderContext, definition: ResourceDefinition, id: string, anyType = false): ResourceInstance {
+	const record = ctx.resources?.find(r => r.id === id && (anyType || r.definitionId === definition.id) && (!ctx.systemKey || r.systemKey === ctx.systemKey));
 	if (!record) throw new Error(it.missingResource);
 	return record;
+}
+
+/** True when the record exists only in an enclosing draft that can re-stage it. */
+function isStaged(ctx: RenderContext, record: ResourceInstance) {
+	return ctx.drafts !== undefined && !!ctx.onCommit && !!ctx.stagedIds?.includes(record.id);
+}
+
+/** Form context that edits a draft-only record by re-staging an updated copy in the owner draft. */
+function stagedContext(ctx: RenderContext, definition: ResourceDefinition, record: ResourceInstance): RenderContext {
+	return {
+		systemKey: record.systemKey, stats: definition.stats, values: record.values,
+		resources: ctx.resources, resourceDefinitions: ctx.resourceDefinitions, enumerations: ctx.enumerations,
+		createdAt: record.createdAt, instanceId: record.sourceId ?? record.id, character: ctx.character,
+		stagedIds: ctx.stagedIds, hideValidation: ctx.hideValidation,
+		onCommit: async (patch, created = []) => {
+			const changes = typeof patch === 'function' ? patch(record.values) : patch;
+			const values = { ...record.values, ...Object.fromEntries(Object.entries(changes).map(([id, value]) => [id, jsonValue(value)])) };
+			await ctx.onCommit!(() => ({}), [...created, { ...record, values }]);
+		}
+	};
 }
 
 /** Render one resource through the view type declared by the source node. */
@@ -30,12 +50,15 @@ function ResourceBody({ node: v, definition, record, context, onError }: {
 		: viewType === 'list' ? definition.list_view
 		: viewType === 'edit' ? definition.edit_view : undefined;
 	if (!source) throw new Error(it.noSourceView);
+	// Draft-only records stay editable in any declared view: source display views carry choice controls.
+	if (isStaged(context, record))
+		return <SourceForm key={record.id} autoApply input={source} context={stagedContext(context, definition, record)} onDone={() => undefined} />;
 	// Direct edits patch the stored instance; draft sessions keep their single atomic patch.
 	const writable = viewType === 'edit' && context.drafts === undefined && context.onChange !== undefined;
 	return <RenderView input={source} context={{
 		systemKey: record.systemKey, stats: definition.stats, values: record.values,
 		resources: context.resources, resourceDefinitions: context.resourceDefinitions,
-		enumerations: context.enumerations, createdAt: record.createdAt,
+		enumerations: context.enumerations, createdAt: record.createdAt, instanceId: record.sourceId ?? record.id,
 		character: context.character,
 		onChange: writable ? (statId, value) => {
 			void commitResourceView(record.id, { [statId]: value }).catch(cause => onError?.(cause));
@@ -112,8 +135,12 @@ export function SourceResourceArray({ node: v, context: ctx }: { node: View; con
 	const definition = ctx.resourceDefinitions?.find(d => d.id === v.resource_id);
 	if (!definition) throw new Error(it.noResourceType);
 	const field = ctx.stats.find(s => s.id === v.stat && s.type === 'base');
-	const records = resourceReferenceIds(referenceValue(ctx, v)).map(id => instance(ctx, definition, id));
-	const editable = v.view_type === 'edit' && !!field && !!ctx.onCommit && v.allow_adds_and_removes !== false;
+	const records = resourceReferenceIds(referenceValue(ctx, v)).map(id => instance(ctx, definition, id, true));
+	// Official 5e arrays mix sibling types (weapon proficiencies in a choice-text array); each renders with its own definition.
+	const definitionOf = (record: ResourceInstance) => ctx.resourceDefinitions?.find(d => d.id === record.definitionId) ?? definition;
+	const editable = v.view_type === 'edit' && !!field && !!ctx.onCommit;
+	// `allow_adds_and_removes: false` hides manual add/remove only; `auto_add_first` still seeds one item (PF2e classes).
+	const addRemove = editable && v.allow_adds_and_removes !== false;
 	const popUp = typeof v.pop_up_type === 'string';
 	const [selected, setSelected] = useState<ResourceInstance | null>(null);
 	const [editing, setEditing] = useState(false);
@@ -148,29 +175,31 @@ export function SourceResourceArray({ node: v, context: ctx }: { node: View; con
 		const name = definition.display_name
 			? textValue(createEvaluator(definition.stats, values, undefined, ctx).get(definition.display_name)) || definition.name
 			: definition.name;
-		append({ id: crypto.randomUUID(), systemKey: ctx.systemKey ?? '', definitionId: definition.id, name, values, createdAt: new Date().toISOString() }, []);
+		const record = { id: crypto.randomUUID(), systemKey: ctx.systemKey ?? '', definitionId: definition.id, name, values, createdAt: new Date().toISOString() };
+		append(record, [record]);
 	}, [editable, records.length, v.auto_add_first, definition, ctx]);
-	const create = editable && definition.edit_view
+	const create = addRemove && definition.edit_view
 		? <button type="button" className="button secondary" onClick={() => { setCreating(true); setError(''); }}>{it.addResource}</button>
 		: null;
 	return <div className={`source-resource-array ${v.hide_line === true ? 'no-line' : ''}`}>
 		<div className="source-array-header">{v.left_view != null && <RenderView input={v.left_view} context={ctx} />}{create}</div>
 		{!records.length && <p className="muted">{it.noResourceValue}</p>}
-		{records.map(record => <ArrayItem key={record.id} node={v} definition={definition} record={record} context={ctx}
-			editable={editable} popUp={popUp} onRemove={remove} onError={fail}
+		{records.map(record => <ArrayItem key={record.id} node={v} definition={definitionOf(record)} record={record} context={ctx}
+			editable={addRemove} popUp={popUp} onRemove={remove} onError={fail}
 			onSelect={next => { setSelected(next); setEditing(false); }} />)}
 		{error && <p role="alert" className="error-text">{error}</p>}
-		{!editable && v.view_type === 'edit' && <p className="unsupported-note">{it.resourceListReadOnly}</p>}
-		{!popUp && v.view_type === 'edit' && ctx.drafts !== undefined && <p className="unsupported-note">{it.resourceEditOutsideForm}</p>}
+		{!editable && v.view_type === 'edit' && records.some(r => !isStaged(ctx, r)) && <p className="unsupported-note">{it.resourceListReadOnly}</p>}
+		{!popUp && v.view_type === 'edit' && ctx.drafts !== undefined && records.some(r => !isStaged(ctx, r)) && <p className="unsupported-note">{it.resourceEditOutsideForm}</p>}
 		{selected && <Modal title={selected.name} bottomSheet={v.pop_up_type === 'bottomSheet'} onClose={() => { if (!busy) { setSelected(null); setEditing(false); } }}>
-			{editing && definition.edit_view ? <SourceForm input={definition.edit_view} context={{
-				systemKey: selected.systemKey, stats: definition.stats, values: selected.values,
+			{editing && definitionOf(selected).edit_view ? <SourceForm input={definitionOf(selected).edit_view} context={isStaged(ctx, selected)
+				? stagedContext(ctx, definitionOf(selected), selected) : {
+				systemKey: selected.systemKey, stats: definitionOf(selected).stats, values: selected.values,
 				resources: ctx.resources, resourceDefinitions: ctx.resourceDefinitions, enumerations: ctx.enumerations,
 				character: ctx.character,
 				onCommit: (patch, additions) => commitResourceView(selected.id, patch, additions)
 			}} onBusyChange={setBusy} onDone={() => { setSelected(null); setEditing(false); }} />
-				: <><ResourceBody node={{ ...v, view_type: 'display' }} definition={definition} record={selected} context={ctx} />
-					{definition.edit_view && <button type="button" className="button secondary" onClick={() => setEditing(true)}>{it.edit}</button>}</>}
+				: <><ResourceBody node={{ ...v, view_type: 'display' }} definition={definitionOf(selected)} record={selected} context={ctx} />
+					{definitionOf(selected).edit_view && <button type="button" className="button secondary" onClick={() => setEditing(true)}>{it.edit}</button>}</>}
 		</Modal>}
 		{creating && <ArrayCreateModal definition={definition} context={ctx} onBusyChange={setBusy}
 			onClose={() => !busy && setCreating(false)}
@@ -181,7 +210,7 @@ export function SourceResourceArray({ node: v, context: ctx }: { node: View; con
 /** Evaluate one per-instance formula with that resource as the visible scope. */
 function evaluateItem(ctx: RenderContext, definition: ResourceDefinition, record: ResourceInstance, value: unknown) {
 	return createEvaluator(definition.stats, record.values, undefined, {
-		resources: ctx.resources, resourceDefinitions: ctx.resourceDefinitions, createdAt: record.createdAt,
+		resources: ctx.resources, resourceDefinitions: ctx.resourceDefinitions, createdAt: record.createdAt, instanceId: record.sourceId ?? record.id,
 		enumerations: ctx.enumerations, character: ctx.character
 	}).evaluate(value);
 }
@@ -189,7 +218,7 @@ function evaluateItem(ctx: RenderContext, definition: ResourceDefinition, record
 /** Direct inputs prefer drafts; declared paths resolve through the bounded scoped evaluator. */
 function referenceValue(ctx: RenderContext, v: View): unknown {
 	const field = ctx.stats.find(s => s.id === v.stat);
-	if (field) return inputValue(v, ctx, field);
+	if (field?.type === 'base') return inputValue(v, ctx, field);
 	if (typeof v.stat !== 'string') throw new Error('Percorso della risorsa richiesto');
 	return createEvaluator(ctx.stats, ctx.previewValues ?? ctx.values, undefined, ctx).get(v.stat);
 }

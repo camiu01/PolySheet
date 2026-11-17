@@ -226,3 +226,10 @@ for (const path of ['.reference/archer-system.rpg', '.reference/derpsy-system.rp
     await waitFor(() => expect(onCommit).toHaveBeenCalledWith({ strength_score: 14 }, []));
   });
 }
+
+it('accepts repeated ids on static views, as in the official 5e About page, but not on inputs', () => {
+  const heading = { id: 'subheader', type: 'text', text: { type: 'constant', value: 'Titolo', value_type: 'string' } };
+  expect(sessionViews({ id: 'list', type: 'list', subviews: [heading, heading] })).toHaveLength(3);
+  const input = { id: 'subheader', type: 'text', edit_stat: 'nome' };
+  expect(() => sessionViews({ id: 'list', type: 'list', subviews: [heading, input] })).toThrow('duplicato');
+});

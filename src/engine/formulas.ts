@@ -20,6 +20,8 @@ export interface EvaluationEnvironment {
   /** Explicit owning-character snapshot; absent for unassigned resource previews. */
   character?: RuntimeResource;
   createdAt?: string;
+  /** Upstream identity of a resource evaluated as the root scope, exposed as `id`. */
+  instanceId?: string;
   resources?: ResourceInstance[];
   resourceDefinitions?: ResourceDefinition[];
   variables?: Record<string, unknown>;
@@ -31,11 +33,14 @@ export interface EvaluationEnvironment {
   enumerations?: unknown[];
   /** Explicit opt-in for commands such as combat initialization, never rendering. */
   roll?: (expression: string) => number;
+  /** Explicit opt-in for `copyResource` during a confirmed command; returns the new reference. */
+  copyResource?: (value: unknown, preserveIds: boolean) => { resourceId: string };
 }
 type ScopeApi = {
   scoped: (key: string, value: unknown, component: unknown) => unknown;
   defined: (path: string) => boolean;
   roll: (expression: string) => number;
+  copy: (value: unknown, preserveIds: boolean) => { resourceId: string };
   enumeration: (typeId: string, id: string, field: 'name' | 'abbreviation') => string;
 };
 type Handler = (node: Node, evaluate: (value: unknown) => unknown, stat: (id: string, bypass?: boolean) => unknown, scope: ScopeApi) => unknown;
@@ -116,7 +121,8 @@ export const formulaFields: Record<string, string[]> = {
   sortBy: ['components', 'sort_by_selector', 'sort_by_value_key', 'order'],
   enumeratedName: ['enumerated_type', 'id'], enumeratedAbbreviation: ['enumerated_type', 'id'],
   toNum: ['components'], toSignedString: ['components'],
-  replace: ['string', 'occurrence', 'replace'],
+  replace: ['string', 'occurrence', 'replace'], split: ['components', 'separator'],
+  copyResource: ['components', 'preserve_ids'],
   createChip: ['id', 'text', 'background_color', 'border_color', 'style', 'resource_id', 'resource_instance_ids_stat', 'resource_display_stat']
 };
 /**
@@ -190,6 +196,21 @@ export const formulaHandlers = new Map<string, Handler>([
     const result = text.split(occurrence).join(replacement);
     if (result.length > 1024 * 1024) throw new Error('Testo calcolato troppo grande');
     return result;
+  }],
+  ['copyResource', (n, e, _get, scope) => {
+    const value = e(n.components);
+    return value == null ? null : scope.copy(value, n.preserve_ids === true);
+  }],
+  ['split', (n, e) => {
+    // `separator` is a literal source pattern (5e uses `\s*,\s*`); bounded to keep regex cost small.
+    const text = e(n.components);
+    if (typeof text !== 'string' || text.length > 10000) throw new Error('split richiede un testo (massimo 10.000 caratteri)');
+    if (typeof n.separator !== 'string' || !n.separator || n.separator.length > 50) throw new Error('Separatore split non valido');
+    let pattern: RegExp;
+    try { pattern = new RegExp(n.separator); } catch (cause) { throw new Error('Separatore split non valido', { cause }); }
+    const parts = text.split(pattern);
+    if (parts.length > 10000) throw new Error('La formula richiede una lista (massimo 10.000 elementi)');
+    return parts;
   }],
   ['contains', (n, e) => {
     const values = e(n.haystack), needle = e(n.needle);
@@ -269,6 +290,8 @@ export const formulaHandlers = new Map<string, Handler>([
   }],
   ['isEmpty', (n, e) => {
     const v = e(n.components);
+    // An absent optional list (PF2e attached talismans) is empty, not an error.
+    if (v === null) return true;
     if (typeof v !== 'string' && !Array.isArray(v)) throw new Error('isEmpty richiede testo o lista');
     return v.length === 0;
   }],
@@ -397,8 +420,10 @@ for (const [type, compare] of [
  * state or object prototypes are exposed. Missing optional path segments return null.
  * Resource membership is captured once; its lookup index is built only on demand.
  */
-export function createEvaluator(stats: Stat[], values: Record<string, unknown> = {}, limits = { steps: 10000, depth: 64 }, environment: EvaluationEnvironment = {}) {
-  const root = new RuntimeResource('root', stats, values, environment.createdAt, environment.variables, environment.overrides, undefined, environment.modifiers);
+// Official PF2e creation formulas (feat/archetype graphs) need ~10^4–10^5 cached steps and stat
+// chains deeper than 64 nested nodes; 256 stays far below the JavaScript stack limit.
+export function createEvaluator(stats: Stat[], values: Record<string, unknown> = {}, limits = { steps: 100000, depth: 256 }, environment: EvaluationEnvironment = {}) {
+  const root = new RuntimeResource('root', stats, values, environment.createdAt, environment.variables, environment.overrides, environment.instanceId, environment.modifiers);
   const scopes = new Map<string, RuntimeResource>();
   const resourceRecords = environment.resources?.slice();
   let resources: Map<string, ResourceInstance> | undefined;
@@ -423,7 +448,8 @@ export function createEvaluator(stats: Stat[], values: Record<string, unknown> =
     return value;
   }
   function bounded<T>(fn: () => T): T {
-    if (++steps > limits.steps || depth >= limits.depth) throw new Error('Limite di valutazione superato');
+    if (++steps > limits.steps) throw new Error('Limite di valutazione superato (passi)');
+    if (depth >= limits.depth) throw new Error('Limite di valutazione superato (profondità)');
     depth++;
     try { return fn(); } finally { depth--; }
   }
@@ -452,6 +478,10 @@ export function createEvaluator(stats: Stat[], values: Record<string, unknown> =
         defined(path) {
           try { return getPath(path, scope, true) === true; }
           catch (error) { if (error instanceof MissingStat) return false; throw error; }
+        },
+        copy(value, preserveIds) {
+          if (!environment.copyResource) throw new Error('copyResource viene eseguito solo in un comando esplicito, non durante il rendering');
+          return environment.copyResource(value, preserveIds);
         },
         roll(expression) {
           if (!environment.roll) throw new Error('roll richiede un comando esplicito; non viene eseguito durante il rendering');
@@ -494,7 +524,8 @@ export function createEvaluator(stats: Stat[], values: Record<string, unknown> =
   function get(scope: RuntimeResource, id: string, presence = false, bypass = false): unknown {
     return bounded(() => {
       if (Object.hasOwn(scope.variables, id)) return presence ? true : scope.variables[id];
-      if (Object.hasOwn(environment.variables ?? {}, id)) return presence ? true : environment.variables?.[id];
+      // `$view` is local to the scope that owns the form; nested resources never see their parent's drafts.
+      if (id !== '$view' && Object.hasOwn(environment.variables ?? {}, id)) return presence ? true : environment.variables?.[id];
       if (id === '$character' && environment.character) return presence ? true : environment.character;
       const s = scope.stats.find(s => s.id === id);
       if (!s && id === 'id' && scope.instanceId) return presence ? true : scope.instanceId;
@@ -502,14 +533,19 @@ export function createEvaluator(stats: Stat[], values: Record<string, unknown> =
       if (!s) throw new MissingStat(`Statistica mancante: ${id}`);
       if (presence) return true;
       const key = `${scope.key}:${id}`;
-      if (!bypass && !frames.length && cache.has(key)) return cache.get(key);
+      if (!bypass && cache.has(key)) return cache.get(key);
       if (active.includes(key)) throw new Error(`Dipendenza circolare: ${[...active, key].join(' → ')}`);
       active.push(key);
       try {
         let result: unknown;
         if (Object.hasOwn(scope.overrides, id)) result = scope.overrides[id];
         else if (s.type === 'base') result = Object.hasOwn(scope.values, id) ? scope.values[id] : s.default_value;
-        else if (s.type === 'calculated') result = evaluate(s.components, scope);
+        else if (s.type === 'calculated') {
+          // Stat formulas are lexically scoped: a caller's lambda variables never leak in,
+          // which also makes every stat value cacheable inside map/filter (PF2e feat graphs).
+          const outer = frames.splice(0);
+          try { result = evaluate(s.components, scope); } finally { frames.push(...outer); }
+        }
         else throw new Error(`Tipo statistica non supportato: ${s.type}`);
         if (Object.hasOwn(scope.modifiers, id)) {
           const base = result, delta = scope.modifiers[id];
@@ -521,7 +557,7 @@ export function createEvaluator(stats: Stat[], values: Record<string, unknown> =
         const resourceArray = s.value_type === 'array' && s.sub_value_type === 'resource' && Array.isArray(result)
           && result.every(v => v instanceof RuntimeResource || isResourceReference(v));
         if (!resourceResult && !resourceArray && !matchesType(result, s.value_type, s.sub_value_type)) throw new Error(`Valore non valido per ${s.value_type}`);
-        if (!frames.length && !bypass) cache.set(key, result);
+        if (!bypass) cache.set(key, result);
         return result;
       } catch (error) {
         if (error instanceof MissingStat) throw error;

@@ -324,8 +324,10 @@ special contexts such as `$character.$edit_mode`.
   referenced resource for editing; calculated target fields cannot be overwritten.
 - `resource` inline creation (`create_if_empty`) is not executed and stays
   diagnosed instead of silently inventing a record.
-- Popup `extra_buttons`, `in_edit_mode`, `dismissible`, checkbox-specific autosave,
-  dynamic stat bounds and dynamic list chips are not accepted as supported.
+- Popup `extra_buttons`, `in_edit_mode`, `dismissible`, checkbox-specific autosave
+  and dynamic list chips are not accepted as supported.
+  Stat and ticker `calculated_min/max_value_allowed` are enforced; a literal
+  bound takes precedence and a non-numeric result fails visibly.
   The documented subset uses explicit root Save, or an enclosing draft session.
 - Resources with or without a source edit view can use the explicit manual
   editor. Existing-record saves patch changed fields against the latest record;
