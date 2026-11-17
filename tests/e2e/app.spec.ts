@@ -9,7 +9,7 @@ import { resolve } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
 import { demo, demoOriginal } from '../../src/demo';
-import { capabilitySystem, constant, list, stat } from '../fixtures/capabilities';
+import { base, capabilitySystem, constant, list, stat } from '../fixtures/capabilities';
 import { viewSystem } from '../fixtures/views';
 import { it as copy } from '../../src/ui/it';
 import { catalogSystem, classOriginal, raceOriginal, backgroundOriginal, subraceOriginal } from '../fixtures/catalog';
@@ -21,7 +21,7 @@ async function navigate(page: Page, label: string) {
   await all.getByRole('button', { name: label === 'Personaggi' ? /^Personaggi \d+$/ : label, exact: true }).click();
 }
 async function importJson(page: Page, text: string, confirm = true) {
-  await navigate(page, 'Libreria sistemi');
+  await navigate(page, copy.systems);
   await page.locator('input[type=file]').setInputFiles({ name: 'system.rpg.json', mimeType: 'application/json', buffer: Buffer.from(text) });
   await expect(page.getByRole('dialog')).toBeVisible();
   if (confirm) {
@@ -29,16 +29,17 @@ async function importJson(page: Page, text: string, confirm = true) {
     await expect(page.getByRole('dialog')).not.toBeVisible();
   }
 }
-async function create(page: Page, name: string) {
+async function create(page: Page, name: string, systemKey?: string) {
   await navigate(page, 'Personaggi');
   await page.getByRole('button', { name: 'Nuovo personaggio', exact: true }).first().click();
+  await page.getByRole('combobox', { name: copy.chooseSystem, exact: true }).selectOption(systemKey ?? { index: 1 });
   await expect(page.getByText('Creazione manuale', { exact: true })).toBeVisible();
   await page.getByLabel('Nome del personaggio').fill(name);
   await page.getByRole('button', { name: 'Crea personaggio', exact: true }).click();
   await expect(page.getByRole('heading', { name, exact: true, level: 1 })).toBeVisible();
 }
-async function waitForWorker(page: Page) {
-  await expect(page.getByTestId('save-status')).toHaveText(copy.saved);
+async function waitForWorker(page: Page, expectedStatus: string = copy.saved) {
+  await expect(page.getByTestId('save-status')).toHaveText(expectedStatus);
   await page.evaluate(async () => { await navigator.serviceWorker.ready; });
   await page.reload();
   await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
@@ -53,11 +54,66 @@ async function captureInterface(page: Page, name: string) {
   await page.screenshot({ path: resolve(`.reference/ui-review/${name}.png`), animations: 'disabled' });
 }
 
+test('nested resource previews read the live selection, cancel without writes and reopen offline', async ({ page, context }, info) => {
+  const source = { ...demo, character_stats: [...demo.character_stats, base('origin', 'resource', null)],
+    resources: [{ id: 'origin', name: 'Origine locale', core: false, display_name: 'name',
+      stats: [base('name', 'string', '')],
+      edit_view: { id: 'origin-edit', type: 'text', edit_stat: 'name', label: constant('Nome origine') },
+      display_view: { id: 'origin-display', type: 'text', text: stat('name') }
+    }],
+    character_sheet_sections: [{ id: 'origin-section', view: {
+      id: 'origin-popup', type: 'popUpButton', text: constant('Modifica origine'), pop_up_title: constant('Origine'),
+      display_save_button: true, should_persist_on_save: true,
+      pop_up_view: { id: 'origin-form', type: 'list', subviews: [
+        { id: 'origin-choice', type: 'selectResources', stat: 'origin', resource_id: 'origin', create_in_place: true },
+        { id: 'origin-details', type: 'popUpButton', text: constant('Anteprima origine'), pop_up_title: constant('Dettaglio origine'),
+          display_save_button: false, display_cancel_button: true, cancel_text: constant('OK'),
+          pop_up_view: { id: 'origin-preview', type: 'resource', resource_id: 'origin',
+            stat: '$view.origin-choice', view_type: 'display', create_if_empty: false } }
+      ] }
+    } }]
+  };
+  await page.goto('./'); await importJson(page, JSON.stringify(source)); await create(page, 'Scoped preview');
+  async function choose(name: string) {
+    await page.getByRole('button', { name: 'Modifica origine', exact: true }).click();
+    await page.getByRole('button', { name: 'Aggiungi risorsa · Origine locale', exact: true }).click();
+    const creation = page.getByRole('dialog', { name: 'Aggiungi risorsa · Origine locale', exact: true });
+    await creation.getByLabel('Nome origine', { exact: true }).fill(name);
+    await creation.getByRole('button', { name: 'Salva', exact: true }).click();
+    await expect(creation).not.toBeVisible();
+    await page.getByRole('button', { name: 'Anteprima origine', exact: true }).click();
+    const preview = page.getByRole('dialog', { name: 'Dettaglio origine', exact: true });
+    await expect(preview.getByText(name, { exact: true })).toBeVisible();
+    await expect(preview.locator('[data-view-error],.unsupported-note')).toHaveCount(0);
+    return preview;
+  }
+  const draft = await choose('Solo bozza');
+  await page.screenshot({ path: resolve(`.reference/ui-review/${info.project.name}-scoped-resource-preview.png`) });
+  await draft.getByRole('button', { name: 'OK', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Origine', exact: true }).getByRole('button', { name: 'Annulla', exact: true }).click();
+  const saved = await choose('Origine salvata');
+  await saved.getByRole('button', { name: 'OK', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Origine', exact: true }).getByRole('button', { name: 'Salva', exact: true }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await waitForWorker(page); await context.setOffline(true); await page.reload();
+  await navigate(page, 'Personaggi');
+  await page.getByRole('button', { name: /Scoped preview/ }).click();
+  await page.getByRole('button', { name: 'Modifica origine', exact: true }).click();
+  await page.getByRole('button', { name: 'Anteprima origine', exact: true }).click();
+  const preview = page.getByRole('dialog', { name: 'Dettaglio origine', exact: true });
+  await expect(preview.getByText('Origine salvata', { exact: true })).toBeVisible();
+  await preview.getByRole('button', { name: 'OK', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Origine', exact: true }).getByRole('button', { name: 'Annulla', exact: true }).click();
+  await navigate(page, 'Risorse');
+  await expect(page.getByRole('heading', { name: 'Solo bozza', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Origine salvata', exact: true })).toBeVisible();
+});
+
 test('reported original HP, AC and description recover with manual class and race resources', async ({ page, context }) => {
   const file = resolve('.reference/reported-system.rpg');
   test.skip(!existsSync(file), 'Local-only user-provided HP reproduction fixture is absent');
   await page.goto('./');
-  await navigate(page, 'Libreria sistemi');
+  await navigate(page, copy.systems);
   await page.locator('input[type=file]').setInputFiles(file);
   await page.getByRole('button', { name: 'Conferma importazione', exact: true }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
@@ -212,7 +268,7 @@ test('collection formulas recalculate through real inputs and offline reopening'
   await expect(page.getByText('1,3|2|si|si', { exact: true })).toBeVisible();
 });
 
-test('omitted sortBy order shows a persistent compatibility notice beyond truncated diagnostics', async ({ page, context }) => {
+test('omitted sortBy order imports without a notice and sorts ascending', async ({ page, context }) => {
   const sorted = {
     id: 'default-sort', view: { id: 'sorted-result', type: 'text', text: {
       type: 'joinToString', separator: ',', components: { type: 'sortBy',
@@ -227,8 +283,7 @@ test('omitted sortBy order shows a persistent compatibility notice beyond trunca
   await page.goto('./');
   await importJson(page, original, false);
   const preview = page.getByRole('dialog', { name: 'Prima di importare' });
-  await expect(preview.locator('.notice-warning').filter({ hasText: copy.sortOrderDefault })).toBeVisible();
-  await expect(preview.locator('.diagnostic-preview')).not.toContainText(copy.sortOrderDefault);
+  await expect(preview).not.toContainText('sortBy');
   await expect(preview.getByText('Supporto parziale', { exact: true })).toBeVisible();
   await expect(preview.getByRole('button', { name: 'Conferma importazione' })).toBeEnabled();
   await preview.getByRole('button', { name: 'Annulla', exact: true }).click();
@@ -237,12 +292,10 @@ test('omitted sortBy order shows a persistent compatibility notice beyond trunca
   Object.assign(invalid.view.text.components, { order: null });
   await importJson(page, JSON.stringify({ ...source, character_sheet_sections: [...demo.character_sheet_sections, invalid] }), false);
   await expect(preview.getByRole('button', { name: 'Conferma importazione' })).toBeDisabled();
-  await expect(preview.locator('.notice-warning').filter({ hasText: copy.sortOrderDefault })).toHaveCount(0);
   await preview.getByRole('button', { name: 'Annulla', exact: true }).click();
   await importJson(page, original);
   await navigate(page, 'Compatibilità');
-  await expect(page.locator('.notice-warning').filter({ hasText: copy.sortOrderDefault })).toBeVisible();
-  await expect(page.locator('.diagnostic-list')).not.toContainText(copy.sortOrderDefault);
+  await expect(page.locator('main')).not.toContainText('sortBy');
   await create(page, 'Ordine compatibile');
   await expect(page.getByText('1,2,10', { exact: true })).toBeVisible();
   await page.getByLabel('Modifica Vigore', { exact: true }).fill('12');
@@ -263,32 +316,30 @@ test('omitted sortBy order shows a persistent compatibility notice beyond trunca
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await page.getByRole('button', { name: /Ordine compatibile/ }).click();
   await expect(page.getByText('1,10,12', { exact: true })).toBeVisible();
-  await navigate(page, 'Compatibilità');
-  await expect(page.locator('.notice-warning').filter({ hasText: copy.sortOrderDefault })).toBeVisible();
 });
 
 for (const id of ['5e', '5e2024', 'pf2e']) {
-  test(`official ${id} imports unchanged with a visible ascending compatibility warning`, async ({ page, context }, testInfo) => {
+  test(`official ${id} imports unchanged without a sortBy order notice`, async ({ page, context }, testInfo) => {
     const file = resolve(`.reference/official-releases-2026-11-16/${id}-system.rpg`);
     test.skip(!existsSync(file), 'Prepare the local-only official release package.');
     const bytes = readFileSync(file);
     await page.goto('./');
-    await navigate(page, 'Libreria sistemi');
+    await navigate(page, copy.systems);
     await page.locator('input[type=file]').setInputFiles(file);
     const preview = page.getByRole('dialog', { name: 'Prima di importare' });
     await expect(preview.getByText('Supporto parziale', { exact: true })).toBeVisible();
-    await expect(preview.locator('.notice-warning').filter({ hasText: copy.sortOrderDefault })).toBeVisible();
+    await expect(preview).not.toContainText('sortBy');
     await expect(preview.getByRole('button', { name: 'Conferma importazione' })).toBeEnabled();
     if (id === '5e') await page.screenshot({ path: testInfo.outputPath('official-5e-import-warning.png'), fullPage: true });
     await preview.getByRole('button', { name: 'Conferma importazione' }).click();
     await expect(preview).not.toBeVisible();
     await expect(page.locator('.system-card')).toHaveCount(1);
     await page.locator('.system-card .icon-button').click();
-    await expect(page.locator('.notice-warning').filter({ hasText: copy.sortOrderDefault })).toBeVisible();
+    await expect(page.locator('main')).not.toContainText('sortBy senza order');
     await waitForWorker(page);
     await context.setOffline(true);
     await page.reload();
-    await navigate(page, 'Libreria sistemi');
+    await navigate(page, copy.systems);
     const download = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Esporta .rpg originale', exact: true }).click();
     expect(readFileSync((await (await download).path())!)).toEqual(bytes);
@@ -466,7 +517,7 @@ test('typed photos, lists, resource references and encounter turns survive offli
   await page.getByRole('button', { name: 'Esporta backup', exact: true }).click();
   const bytes = readFileSync((await (await event).path())!);
   const backup = JSON.parse(bytes.toString('utf8'));
-  expect(backup.version).toBe(3); expect(backup.combats[0].round).toBe(2);
+  expect(backup.version).toBe(4); expect(backup.combats[0].round).toBe(2);
   expect(backup.characters[0].values.words).toEqual(['Nord']);
   expect(backup.characters[0].values.companions).toEqual([backup.characters[0].values.origin]);
   expect(backup.characters[0].values.portrait.base64).toBeTruthy();
@@ -478,7 +529,7 @@ test('typed photos, lists, resource references and encounter turns survive offli
 });
 
 test('rejects malformed files and shows unknown components without running scripts', async ({ page }) => {
-  await page.goto('./'); await navigate(page, 'Libreria sistemi');
+  await page.goto('./'); await navigate(page, copy.systems);
   await page.locator('input[type=file]').setInputFiles({ name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from('{broken') });
   await expect(page.getByRole('alert')).toContainText('JSON malformato');
   await importJson(page, JSON.stringify({ ...demo, character_sheet_sections: [
@@ -491,9 +542,9 @@ test('rejects malformed files and shows unknown components without running scrip
 });
 
 test('URL imports report HTTP and CORS errors and import a permitted JSON response', async ({ page }) => {
-  await page.goto('./'); await navigate(page, 'Libreria sistemi');
+  await page.goto('./'); await navigate(page, copy.systems);
   await page.route('https://fixtures.polysheet.test/missing.json', route => route.fulfill({ status: 404, body: 'Not found', headers: { 'access-control-allow-origin': '*' } }));
-  await page.getByRole('button', { name: 'Da URL' }).click();
+  await page.getByRole('button', { name: copy.importUrl }).click();
   await page.getByLabel('URL del sistema o repository GitHub').fill('https://fixtures.polysheet.test/missing.json');
   await page.getByRole('button', { name: 'Carica anteprima' }).click();
   await expect(page.getByRole('alert')).toContainText('HTTP 404');
@@ -536,21 +587,21 @@ for (const id of ['5e', '5e2024', 'pf2e']) {
       if (body === undefined) return route.fulfill({ status: 404, headers, body: 'Unexpected source' });
       return route.fulfill({ headers, contentType: 'application/json', body });
     });
-    await page.goto('./'); await navigate(page, 'Libreria sistemi');
+    await page.goto('./'); await navigate(page, copy.systems);
     async function preview() {
-      await page.getByRole('button', { name: 'Da URL', exact: true }).click();
+      await page.getByRole('button', { name: copy.importUrl, exact: true }).click();
       await page.getByLabel('URL del sistema o repository GitHub').fill('https://github.com/blastervla/rpg-companion-app-systems');
       await page.getByRole('button', { name: 'Carica anteprima', exact: true }).click();
       const options = page.getByRole('combobox', { name: 'Sistema disponibile', exact: true });
       await expect(options.locator('option')).toHaveText(['5e · v1.0.0', '5.5e · v1.0.0', 'pf2e · v1.0.0']);
       await options.selectOption(id);
-      await expect(page.getByRole('button', { name: 'Carica sistema e cataloghi', exact: true })).toBeDisabled();
+      await expect(page.getByRole('button', { name: 'Carica sistema e cataloghi', exact: true })).toBeEnabled();
       await page.getByLabel('Sistema compilato da file', { exact: true }).setInputFiles({
         name: 'system.rpg', mimeType: 'application/gzip', buffer: gzipSync(JSON.stringify({ ...catalogSystem, id }))
       });      await page.getByRole('button', { name: 'Carica sistema e cataloghi', exact: true }).click();
       const dialog = page.getByRole('dialog', { name: 'Prima di importare', exact: true });
       await expect(dialog).toContainText('Modelli di catalogo: 3 · Modelli non assegnabili: 1');
-      await dialog.locator('summary').click();
+      await dialog.locator('summary').filter({ hasText: copy.repositoryCatalogs }).click();
       await expect(dialog).toContainText('Originale conservato, non assegnabile');
       await expect(page.locator('.system-card')).toHaveCount(0);
     }
@@ -584,12 +635,13 @@ for (const id of ['5e', '5e2024', 'pf2e']) {
     await page.getByRole('button', { name: /Cataloghi automatici/ }).click();
     await expect(level).toHaveValue('2');
     await context.setOffline(false);
-    await navigate(page, 'Libreria sistemi');
-    await page.getByRole('button', { name: 'Da URL', exact: true }).click();
+    await navigate(page, copy.systems);
+    await page.getByRole('button', { name: copy.importUrl, exact: true }).click();
     await page.getByLabel('URL del sistema o repository GitHub').fill('https://github.com/blastervla/rpg-companion-app-systems');
     await page.getByRole('button', { name: 'Carica anteprima', exact: true }).click();
     await page.getByRole('combobox', { name: 'Sistema disponibile', exact: true }).selectOption(id);
     await expect(page.getByRole('combobox', { name: 'Sistema locale da riutilizzare', exact: true })).toBeVisible();
+    await page.getByRole('combobox', { name: 'Sistema locale da riutilizzare', exact: true }).selectOption({ index: 1 });
     await expect(page.getByRole('button', { name: 'Carica sistema e cataloghi', exact: true })).toBeEnabled();
     await page.getByRole('button', { name: 'Carica sistema e cataloghi', exact: true }).click();
     await page.getByRole('button', { name: 'Conferma importazione', exact: true }).click();
@@ -629,10 +681,11 @@ test('GitHub clone URL discovers files, validates selection and retains an immut
     expect(route.request().url()).toContain('/' + commit + '/');
     await route.fulfill({ headers, body: route.request().url().endsWith('system.json') ? bad : bytes, contentType: 'application/octet-stream' });
   });
-  await page.goto('./'); await navigate(page, 'Libreria sistemi');
-  await page.getByRole('button', { name: 'Da URL' }).click();
+  await page.goto('./'); await navigate(page, copy.systems);
+  await page.getByRole('button', { name: copy.importUrl }).click();
   await page.getByLabel('URL del sistema o repository GitHub').fill(repository + '.git');
-  await page.getByLabel('Branch, tag o commit (facoltativo)').fill('release/test');
+  await page.getByText(copy.importAdvanced, { exact: true }).click();
+  await page.getByRole('textbox', { name: copy.repositoryRef, exact: true }).fill('release/test');
   await page.getByRole('button', { name: 'Carica anteprima' }).click();
   await expect(page.getByLabel('File di sistema nel repository')).toBeVisible();
   expect(rawRequests).toBe(0); expect(htmlRequests).toBe(0); expect(apiRequests).toBe(2);
@@ -648,7 +701,7 @@ test('GitHub clone URL discovers files, validates selection and retains an immut
   await expect(page.locator('.system-card')).toHaveCount(0);
   await page.getByRole('button', { name: 'Annulla', exact: true }).click();
   await expect(page.locator('.system-card')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Da URL' }).click();
+  await page.getByRole('button', { name: copy.importUrl }).click();
   await page.getByRole('button', { name: 'Carica anteprima' }).click();
   await page.getByRole('button', { name: 'Carica file selezionato' }).click();
   await page.getByRole('button', { name: 'Conferma importazione' }).click();
@@ -659,7 +712,7 @@ test('GitHub clone URL discovers files, validates selection and retains an immut
   if (!path) throw new Error('Missing original export');
   expect(readFileSync(path)).toEqual(bytes);
   await waitForWorker(page);
-  await context.setOffline(true); await page.reload(); await navigate(page, 'Libreria sistemi');
+  await context.setOffline(true); await page.reload(); await navigate(page, copy.systems);
   await expect(page.getByRole('heading', { name: 'Sentieri', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
@@ -673,8 +726,8 @@ test('GitHub discovery reports rate limits, missing repositories and authoring-o
       ? [{ sha: commit, commit: { tree: { sha: treeSha } } }]
       : { sha: treeSha, truncated: false, tree: [{ path: 'stats.rpgs', type: 'blob', mode: '100644', size: 2 }] } });
   });
-  await page.goto('./'); await navigate(page, 'Libreria sistemi');
-  await page.getByRole('button', { name: 'Da URL' }).click();
+  await page.goto('./'); await navigate(page, copy.systems);
+  await page.getByRole('button', { name: copy.importUrl }).click();
   await page.getByLabel('URL del sistema o repository GitHub').fill('git@github.com:owner/repo.git');
   await page.getByRole('button', { name: 'Carica anteprima' }).click();
   await expect(page.getByRole('alert')).toContainText('Limite di richieste GitHub');
@@ -688,10 +741,11 @@ test('GitHub discovery reports rate limits, missing repositories and authoring-o
 });
 
 if (process.env.LIVE_GITHUB_IMPORT === '1') test('live public GitHub repository resolves the pinned original system', async ({ page }) => {
-  await page.goto('./'); await navigate(page, 'Libreria sistemi');
-  await page.getByRole('button', { name: 'Da URL' }).click();
+  await page.goto('./'); await navigate(page, copy.systems);
+  await page.getByRole('button', { name: copy.importUrl }).click();
   await page.getByLabel('URL del sistema o repository GitHub').fill('https://github.com/derpsyhome/3rd-party-books-for-5e.git');
-  await page.getByLabel('Branch, tag o commit (facoltativo)').fill('00f55b2c3023c59f5857297dc933a7505c9b6aa4');
+  await page.getByText(copy.importAdvanced, { exact: true }).click();
+  await page.getByRole('textbox', { name: copy.repositoryRef, exact: true }).fill('00f55b2c3023c59f5857297dc933a7505c9b6aa4');
   await page.getByRole('button', { name: 'Carica anteprima' }).click();
   await page.getByLabel('File di sistema nel repository').selectOption('5e/system.rpg');
   await page.getByRole('button', { name: 'Carica file selezionato' }).click();
@@ -761,7 +815,7 @@ for (const { label, file, stat, input, before, after, value } of [
   test(`original ${label} .rpg survives file import, offline, exact export and backup restore`, async ({ page, context }) => {
     test.skip(Boolean(file) && !existsSync(resolve(file)), 'Prepare the local-only pinned source artifact.');
     const original = file ? readFileSync(resolve(file)) : gzipSync(demoOriginal);
-    await page.goto('./'); await navigate(page, 'Libreria sistemi');
+    await page.goto('./'); await navigate(page, copy.systems);
     await page.locator('input[type=file]').setInputFiles({ name: 'system.rpg', mimeType: 'application/gzip', buffer: original });
     if (file) await expect(page.getByRole('dialog').getByText('Supporto parziale', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Conferma importazione' }).click();
@@ -806,7 +860,7 @@ for (const { label, file, stat, input, before, after, value } of [
     await waitForWorker(page); await context.setOffline(true); await page.reload();
     await page.getByRole('button', { name: /Original package/ }).click();
     await expect(sheet.getByTestId(`stat-${stat}`)).toHaveText(after);
-    await navigate(page, 'Libreria sistemi');
+    await navigate(page, copy.systems);
     let event = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Esporta .rpg originale', exact: true }).click();
     let exported = await event;
@@ -822,7 +876,7 @@ for (const { label, file, stat, input, before, after, value } of [
       expect(parsed.characters[0].values.strength_score).toBe(14);
       expect(parsed.characters[0].values.notes).toHaveLength(1);
     }
-    expect(parsed.version).toBe(3);
+    expect(parsed.version).toBe(4);
     expect(Buffer.from(parsed.systems[0].artifact.base64, 'base64')).toEqual(original);
     await page.locator('input[type=file]').setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(backup) });
     await expect(page.getByRole('dialog')).toBeVisible();
@@ -830,7 +884,7 @@ for (const { label, file, stat, input, before, after, value } of [
     await expect(page.getByRole('dialog')).not.toBeVisible();
     await page.getByRole('button', { name: /Original package/ }).click();
     await expect(sheet.getByTestId(`stat-${stat}`)).toHaveText(after);
-    await navigate(page, 'Libreria sistemi');
+    await navigate(page, copy.systems);
     event = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Esporta .rpg originale', exact: true }).click();
     exported = await event;
@@ -846,8 +900,8 @@ test('direct raw .rpg imports the supplied repository system', async ({ page }) 
   if (process.env.LIVE_RPG_IMPORT !== '1') {
     await page.route(url, route => route.fulfill({ status: 200, body: bytes, contentType: 'application/octet-stream', headers: { 'access-control-allow-origin': '*' } }));
   }
-  await page.goto('./'); await navigate(page, 'Libreria sistemi');
-  await page.getByRole('button', { name: 'Da URL' }).click();
+  await page.goto('./'); await navigate(page, copy.systems);
+  await page.getByRole('button', { name: copy.importUrl }).click();
   await page.getByLabel('URL del sistema o repository GitHub').fill(url);
   await page.getByRole('button', { name: 'Carica anteprima' }).click();
   await expect(page.getByRole('dialog', { name: 'Prima di importare' })).toBeVisible();
@@ -860,7 +914,7 @@ test('direct raw .rpg imports the supplied repository system', async ({ page }) 
 });
 
 test('bad .rpg envelopes and gzip resource indexes fail without installation', async ({ page }) => {
-  await page.goto('./'); await navigate(page, 'Libreria sistemi');
+  await page.goto('./'); await navigate(page, copy.systems);
   await page.locator('input[type=file]').setInputFiles({ name: 'bad.rpg', mimeType: 'application/octet-stream', buffer: Buffer.from([80, 75, 3, 4]) });
   await expect(page.getByRole('alert')).toContainText('Formato .rpg non riconosciuto');
   await page.locator('input[type=file]').setInputFiles({ name: 'systems.rpg', mimeType: 'application/gzip', buffer: gzipSync('{"systems":[]}') });
@@ -872,7 +926,7 @@ test('bad .rpg envelopes and gzip resource indexes fail without installation', a
 test('.rpg expanded byte ceiling rejects 8 MiB plus one and accepts exactly 8 MiB', async ({ page }) => {
   const limit = 8 * 1024 * 1024;
   const boundary = demoOriginal + ' '.repeat(limit - Buffer.byteLength(demoOriginal));
-  await page.goto('./'); await navigate(page, 'Libreria sistemi');
+  await page.goto('./'); await navigate(page, copy.systems);
   await page.locator('input[type=file]').setInputFiles({ name: 'bomb.rpg', mimeType: 'application/gzip', buffer: gzipSync(boundary + ' ') });
   await expect(page.getByRole('alert')).toContainText('troppo grande');
   await expect(page.locator('.system-card')).toHaveCount(0);
@@ -907,8 +961,8 @@ for (const [id, expected, blocked] of [['5e', 208, 0], ['5e2024', 74, 19], ['pf2
       if (!bytes) return route.fulfill({ headers, status: 404, body: 'Unexpected path' });
       return route.fulfill({ headers, contentType: 'application/json', body: bytes });
     });
-    await page.goto('./'); await navigate(page, 'Libreria sistemi');
-    await page.getByRole('button', { name: 'Da URL', exact: true }).click();
+    await page.goto('./'); await navigate(page, copy.systems);
+    await page.getByRole('button', { name: copy.importUrl, exact: true }).click();
     await page.getByLabel('URL del sistema o repository GitHub').fill('https://github.com/blastervla/rpg-companion-app-systems');
     await page.getByRole('button', { name: 'Carica anteprima', exact: true }).click();
     await page.getByRole('combobox', { name: 'Sistema disponibile', exact: true }).selectOption(id);
@@ -973,8 +1027,8 @@ for (const [id, expected, blocked] of [['5e', 208, 0], ['5e2024', 74, 19], ['pf2
 if (process.env.LIVE_REPOSITORY_IMPORT === '1') {
   test('live published repository discovers systems and downloads actual catalogs without interception', async ({ page, context }) => {
     test.setTimeout(120000);
-    await page.goto('./'); await navigate(page, 'Libreria sistemi');
-    await page.getByRole('button', { name: 'Da URL', exact: true }).click();
+    await page.goto('./'); await navigate(page, copy.systems);
+    await page.getByRole('button', { name: copy.importUrl, exact: true }).click();
     await page.getByLabel('URL del sistema o repository GitHub').fill('https://github.com/blastervla/rpg-companion-app-systems');
     await page.getByRole('button', { name: 'Carica anteprima', exact: true }).click();
     const systems = page.getByRole('combobox', { name: 'Sistema disponibile', exact: true });
@@ -1122,7 +1176,7 @@ test('grimoire theme, local fonts and responsive navigation preserve every desti
     await page.locator('.sidebar').getByRole('button', { name: copy.resources, exact: true }).click();
     await expect(page.getByRole('heading', { name: copy.resources, level: 1 })).toBeVisible();
   }
-  await navigate(page, 'Libreria sistemi');
+  await navigate(page, copy.systems);
   await captureInterface(page, `${testInfo.project.name}-systems`);
   await navigate(page, 'Dadi');
   await page.getByRole('button', { name: copy.roll, exact: true }).click();
@@ -1192,7 +1246,7 @@ for (const kind of ['json', 'web-folder', 'github-folder']) {
     await expect(page.getByRole('alert')).toContainText('HTTP 503');
     await expect(page.getByRole('dialog')).not.toBeVisible();
     await expect(page.locator('article.resource-card')).toHaveCount(count);
-    await waitForWorker(page); await context.setOffline(true); await page.reload();
+    await waitForWorker(page, copy.error); await context.setOffline(true); await page.reload();
     await navigate(page, 'Risorse'); await expect(page.locator('article.resource-card')).toHaveCount(count);
     await navigate(page, 'Impostazioni');
     const event = page.waitForEvent('download'); await page.getByRole('button', { name: copy.export, exact: true }).click();
@@ -1218,12 +1272,12 @@ test('system removal cancels safely, protects pinned versions, removes related c
   ]);
   await page.getByRole('button', { name: copy.confirmImport, exact: true }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible(); await expect(page.locator('.resource-card')).toHaveCount(2);
-  await importJson(page, original + '\n'); await create(page, 'Personaggio da conservare');
+  await importJson(page, original + '\n'); await create(page, 'Personaggio da conservare', `${catalogSystem.id}@${catalogSystem.version}:${otherDigest}`);
   await navigate(page, 'Impostazioni');
   const event = page.waitForEvent('download'); await page.getByRole('button', { name: copy.export, exact: true }).click();
   const backup = readFileSync((await (await event).path())!, 'utf8');
   expect(JSON.parse(backup).systems).toHaveLength(2);
-  await navigate(page, 'Libreria sistemi'); await remove(digest).click();
+  await navigate(page, copy.systems); await remove(digest).click();
   let modal = page.getByRole('dialog', { name: copy.removeSystemTitle, exact: true });
   await expect(modal).toContainText(digest);
   await modal.getByRole('button', { name: copy.cancel, exact: true }).click();
@@ -1245,7 +1299,7 @@ test('system removal cancels safely, protects pinned versions, removes related c
   await page.locator('input[type=file]').setInputFiles({ name: 'before-removal.json', mimeType: 'application/json', buffer: Buffer.from(backup) });
   await page.getByRole('button', { name: copy.confirmRestore, exact: true }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
-  await navigate(page, 'Libreria sistemi'); await expect(page.locator('.system-card')).toHaveCount(2);
+  await navigate(page, copy.systems); await expect(page.locator('.system-card')).toHaveCount(2);
   await navigate(page, 'Risorse');
   await page.getByRole('combobox', { name: copy.chooseSystem, exact: true }).selectOption(`${catalogSystem.id}@${catalogSystem.version}:${digest}`);
   await expect(page.locator('.resource-card')).toHaveCount(2);

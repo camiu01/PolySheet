@@ -9,6 +9,7 @@ import { SourceForm } from './SourceForm';
 import { Modal } from './shared';
 import { it } from './it';
 import { FilteredResourcePicker } from './FilteredResourcePicker';
+import { gridColumns } from './view-support';
 
 /** Outside an edit session, selection waits for an explicit form Save. */
 export function DeferredResourceSelect({ node, context }: { node: View; context: RenderContext }) {
@@ -145,10 +146,8 @@ export function SourceResourceSection({ node: v, context: ctx }: { node: View; c
         return { [field]: next };
       }).catch(e => setError(String(e)));
     }
-    const width = typeof v.content_item_min_width === 'number' && Number.isFinite(v.content_item_min_width) ? Math.max(1, Math.min(800, v.content_item_min_width)) : 160;
-    const minimum = typeof v.content_item_min_width === 'number' && v.content_item_min_width > 0 && v.content_item_min_width <= 1 ? `${v.content_item_min_width * 100}%` : `${width}px`;
     return <div className="source-resource-section" style={{
-      gridTemplateColumns: `repeat(auto-fit,minmax(min(100%,${minimum}),1fr))`,
+      gridTemplateColumns: gridColumns(v.content_item_min_width),
       justifyItems: v.alignment === 'start' ? 'start' : v.alignment === 'end' ? 'end' : 'center'
     }}>
       {v.header_view != null && <RenderView input={v.header_view} context={ctx} />}
@@ -172,6 +171,7 @@ export function SourceResourceSection({ node: v, context: ctx }: { node: View; c
           </>}
         </div>
       </article>)}
+      {records.length === 0 && <p className="muted source-empty">{it.emptyList}</p>}
       {visible.length < records.length && <button type="button" className="button secondary" onClick={() => setExpanded(true)}>{it.showAll}</button>}
       {error && <p role="alert">{error}</p>}
       {!editable && v.read_only !== true && ctx.onCommit && <p className="unsupported-note">{it.resourceListReadOnly}</p>}

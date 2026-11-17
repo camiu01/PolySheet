@@ -2,6 +2,7 @@
 import { createEvaluator } from '../engine/formulas';
 import { object, type StoredSystem } from '../domain/model';
 import { RenderView, textValue, type RenderContext } from './renderer';
+import { readableId } from './view-support';
 import { it } from './it';
 
 /** Read source titles without inventing labels or changing source visibility/content. */
@@ -17,9 +18,9 @@ export function SheetSections({ sections, context }: {
     try {
       if (node.is_visible != null && evaluator.evaluate(node.is_visible) === false) return [];
       const title = node.header.map(item => object(item)).find(v => v.type === 'text' && ['title', 'headline', 'section'].includes(String(v.style)));
-      const label = title?.text ? textValue(evaluator.evaluate(title.text)) : section.id;
-      return [{ id: `sheet-section-${index}`, label: label || section.id }];
-    } catch { return [{ id: `sheet-section-${index}`, label: section.id }]; }
+      const label = title?.text ? textValue(evaluator.evaluate(title.text)) : '';
+      return [{ id: `sheet-section-${index}`, label: label || readableId(section.id) }];
+    } catch { return [{ id: `sheet-section-${index}`, label: readableId(section.id) }]; }
   });
   return <>
     {links.length > 1 && <nav className="sheet-navigation" aria-label={it.sheetSections}>

@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { expect, it, vi } from 'vitest';
 import { characterEventEffect, executeCharacterEvent, rollEventDice } from '../src/engine/character-events';
+import { eventNames } from '../src/engine/effects';
 import { RuntimeResource } from '../src/engine/formulas';
 import { prepareSystem } from '../src/importing/system';
 import { createCharacter, db, installSystem, SheetDatabase } from '../src/persistence/db';
@@ -15,6 +16,17 @@ import { RenderView } from '../src/ui/renderer';
 const roll = { type: 'roll', rolls: list({ type: 'rollable', formulas: list(constant('1d20 + -1')), text: stat('$event.label') }) };
 const definition = { ...demo, mechanics: [{ id: 'roll', event_names: 'testRoll', effects: roll }] };
 const event = { name: 'testRoll', payload: { label: 'Prova originale' } };
+
+it('accepts empty subscriptions without accepting empty event names in a list', () => {
+  for (const value of [undefined, null, '', '   ', []]) expect(eventNames(value)).toEqual([]);
+  expect(eventNames(' testRoll, other, testRoll ')).toEqual(['testRoll', 'other']);
+  for (const value of [[''], ['testRoll', ''], 'testRoll,', ',testRoll', ['a,b'], [1], 'x'.repeat(201)])
+    expect(() => eventNames(value)).toThrow('Nome evento non valido');
+  expect(characterEventEffect({ ...definition, mechanics: [
+    { ...definition.mechanics[0], revert_event_names: '' },
+    { id: 'unsubscribed', event_names: '', revert_event_names: '', effects: { type: 'unsupported' } }
+  ] }, event)).toEqual(roll);
+});
 
 async function fixture() {
   const system = await prepareSystem(JSON.stringify(definition), 'Original MIT event fixture');

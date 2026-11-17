@@ -2,7 +2,23 @@
 
 ## Use
 
-1. Open **Libreria sistemi → Da URL**.
+For D&D, open **I miei GDR** and choose the 2014 or 2024 edition.
+These shortcuts prepare the verified source commit
+`8788e3b18099e4a1b3510f02869d97f1488586b4`, including its catalogs, through the
+same preview and explicit confirmation below. Internet is required; no rules
+are bundled. Partial gameplay support remains visible. The 2024 preview
+identifies 19 nonassignable catalog templates rather than hiding them.
+
+Sentieri is the original included demonstration, labeled **Sistema di prova**,
+not D&D. Every new character starts with an empty game selection, even if only
+the demo is installed. Existing characters stay pinned to their own imports.
+PF2e's known source error and the absence of a verified compatible Daggerheart
+source are disclosed; neither is presented as a working shortcut. Other
+compatible files, including compiled PF2e, can still be imported explicitly.
+
+To use another file or source:
+
+1. Open **I miei GDR → Incolla un link**.
 2. Enter a public GitHub repository root, optionally ending in `.git`.
 3. Optionally enter a branch, tag or commit. An empty field uses the default branch.
 4. Choose **Carica anteprima**. Ordinary distribution repositories show a file
@@ -30,30 +46,34 @@ For [blastervla/rpg-companion-app-systems](https://github.com/blastervla/rpg-com
 1. Paste the repository URL and choose **Carica anteprima**. The pinned metadata
    identifies **5e**, **5.5e** (source ID `5e2024`) and **Pathfinder 2e (Remaster)**.
    Names and versions come from the repository, not a fixed system list.
-2. Choose a system. If its exact ID/version is already installed, select the
-   local import to reuse; the selector shows its source digest.
-3. Otherwise, choose **Scegli sistema .rpg o JSON** and select the compiled
-   original once. The optional **Scarica sistema originale** link opens the known
-   publisher's download normally; save it, then choose that local file.
-   PolySheet does not fetch the CORS-blocked CDN or use a proxy.
+2. Choose a system. JSON and RPGScript sources are prepared locally by default;
+   no local file is required, including when another import is already installed.
+3. Optionally choose an installed exact-ID/version import to reuse its rules
+   instead. The selector shows its digest. A compiled-file alternative remains
+   under **Usa un file già compilato (facoltativo)**. Neither alternative is
+   required for supported source trees. The CORS-blocked CDN is never fetched.
 4. Choose **Carica sistema e cataloghi**. PolySheet reads all discovered class,
    race/species, background, ancestry and heritage JSON files for that system at the pinned
    GitHub commit. No files are installed during this download.
 5. Review totals and nonassignable entries, then confirm once. The system and
-   catalog originals install atomically. Later imports can reuse the stored
-   compiled system without selecting its file again.
+   catalog originals install atomically. Later imports can compose sources
+   again or explicitly reuse an installed system.
 
-The repository's metadata is not a compiled system. Source composition and
-RPGScript compilation remain unsupported. The selected local system must have
-the same source ID/version and no blocking diagnostics. This match is not proof
-of complete compiler or gameplay parity.
+The repository's root JSON alone is not a complete system. PolySheet downloads
+its JSON/RPGScript siblings and transitive shared macros from the same immutable
+commit, composes them without executing imported code, and validates the result
+normally. Unknown syntax, missing dependencies or invalid definitions block
+preparation, never silently omit rules. The inspected PF2e tree currently fails
+at `resources/weapon/stats.rpgs:928:3`; see the
+[source compiler evidence](COMPATIBILITY.md#browser-source-compiler-2026-11-17).
+Compilation does not establish full gameplay compatibility.
 
 The same source/catalog convention works in other public repositories:
 `systems/<id>/system/system.rpg.json` plus matching
 `systems/<id>/resource_instances/` JSON files. Download-host shortcuts are
 provided only for the inspected publisher, never guessed from remote scripts.
 
-Only the four root resource types above are included. Nested content within
+Only the catalog root types above are included. Nested content within
 those templates is retained, but separate spell/item/background libraries and
 `resources.rpg.gzip` archives are not imported by this workflow.
 See [catalog use and manual assignment](VIEWS.md#catalogs-and-character-assignment).
@@ -79,8 +99,12 @@ their declared resource type is checked before installation.
 
 A moving branch cannot switch the resolved commit mid-import. Catalog provenance
 retains its commit-pinned Raw URL, exact UTF-8 original and SHA-256 digest.
-The local compiled system retains its own exact-upload identity. Reusing a system
-never migrates existing characters or overwrites an immutable import.
+Explicitly reused compiled systems retain their own exact-upload identity.
+New source imports retain exact file texts, BOM and line endings inside the
+generated document's `polysheet_source` envelope (`format`, `root`, `files`).
+**Esporta sistema e sorgenti** exports that document, not a claimed original
+compiled upload. Its hash and embedded originals survive existing v4 backups.
+Neither path migrates characters or overwrites an immutable import.
 
 ## Removing an installed system
 
@@ -99,10 +123,14 @@ the complete local archive, not just the removed system.
 ## Bounds and failure behavior
 
 - Two public API reads. Source mode additionally reads matching system metadata,
-  then all catalog files for the selected system, four at a time. No Git clone,
-  recursive HTTP crawl, archive download, compiler, background sync or automatic retry.
+  then selected JSON/RPGScript sources and all catalog files, four at a time.
+  No Git clone, recursive HTTP crawl, archive download, native compiler,
+  background sync or automatic retry.
 - Each response: 8 MiB and 15 seconds. Existing JSON/decompression limits remain.
   Catalog batch: at most 1,000 files and 24 MiB total declared/verified source bytes.
+  Source parts and transitive macro imports: 1,000 files/8 MiB combined. The
+  generated document, including exact originals, must still fit 8 MiB, 400,000
+  nodes and depth 64. Macro/import recursion is bounded at 32; tokens at 400,000.
 - At most 20,000 tree entries and 100 system candidates. Truncated/oversized
   trees, duplicate/unsafe paths and inconsistent sizes fail explicitly.
 - A system/catalog candidate over 8 MiB blocks discovery. Each downloaded file
@@ -119,9 +147,12 @@ the complete local archive, not just the removed system.
 
 ## Verification
 
-`tests/github.test.ts`, `tests/repository.test.ts` and `tests/catalog.test.ts`
+`tests/github.test.ts`, `tests/repository.test.ts`, `tests/rpgscript.test.ts`,
+`tests/source-repository.test.ts` and `tests/catalog.test.ts`
 cover URL normalization, commit pinning, safe discovery, local ID/version
 matching, budgets, atomic writes, private graphs, immutable originals and backups.
+Source browser cases additionally type the URL character by character and verify
+file-free preparation, cancellation, original export, offline reopening and restore.
 Always-on browser fixtures use original MIT content. Optional local real-source
 cases exercise all three inspected catalogs; see [fixture setup](DEVELOPMENT.md#external-fixtures).
 

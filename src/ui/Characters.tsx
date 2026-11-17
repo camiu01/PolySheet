@@ -1,8 +1,8 @@
 /** @file Manual character creation and source-generated character sheets. */
 import { memo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ArrowLeft, ArrowUpRight, BookOpen, Check, Plus, Search, Trash2 } from 'lucide-react';
-import { object, type Character, type StoredSystem, type View } from '../domain/model';
+import { ArrowLeft, ArrowUpRight, BookOpen, Check, ListChecks, Plus, Search, Trash2 } from 'lucide-react';
+import { isResourceReference, object, type Character, type StoredSystem, type View } from '../domain/model';
 import { db, detachResource, setCharacterValue } from '../persistence/db';
 import { CompatibilityBadge, Empty, Modal, PageHeading, Warning, type Run } from './shared';
 import { it } from './it';
@@ -18,13 +18,23 @@ import { CharacterCreator } from './CharacterCreator';
 import { useCharacterEvents } from './CharacterEvents';
 import { resolveCharacterOverrides } from '../engine/overrides';
 import { CharacterProgression } from './CharacterProgression';
+import { catalogFields } from '../persistence/catalog';
+
+/** Name the declared class/origin fields that have no assigned resource yet; nothing is assigned or inferred here. */
+function missingSetup(system: StoredSystem, character: Character): string[] {
+  const fields = catalogFields(system.definition);
+  const classes = fields.classes ? character.values[fields.classes.id] : undefined;
+  return [
+    ...(fields.classes && !(Array.isArray(classes) && classes.length > 0) ? [it.setupClassShort] : []),
+    ...fields.singular.filter(field => !isResourceReference(character.values[field.id])).map(field => field.name)
+  ];
+}
 
 /** List persisted characters; creation never claims to execute the official flow. */
 export function Characters({ systems, characters, run }: { systems: StoredSystem[]; characters: Character[]; run: Run }) {
-  const { search, setSearch, openCharacter, navigate, systemKey, selectSystem } = useUi();
+  const { search, setSearch, openCharacter, navigate, selectSystem } = useUi();
   const [creating, setCreating] = useState(false);
   const [filter, setFilter] = useState('');
-  const selectedKey = systems.some(s => s.key === systemKey) ? systemKey : systems[0]?.key ?? '';
   const filtered = characters.filter(c => (!filter || c.systemKey === filter)
     && c.name.toLocaleLowerCase('it').includes(search.toLocaleLowerCase('it')));
   return <>
@@ -46,13 +56,14 @@ export function Characters({ systems, characters, run }: { systems: StoredSystem
         {!search && !filter && index === 0 && <span className="recent-label">{it.recentCharacter}</span>}
         <div className="character-art" aria-hidden="true"><div className="character-monogram">{c.name.slice(0, 2).toLocaleUpperCase('it')}</div><span className="character-system">{s?.definition.abbreviation ?? '?'}</span></div>
         <div className="character-card-body"><div className="card-title-row"><h2>{c.name}</h2><ArrowUpRight size={19} /></div><p className="muted">{s?.definition.name} · v{s?.definition.version}</p>
+          {s?.definition.id === 'polysheet-sentieri' && <p className="badge badge-warning">{it.demoBadge}</p>}
           <div className="character-card-meta"><span><i />{it.saved}</span><small>{new Date(c.updatedAt).toLocaleDateString('it')}</small></div>
           <div className="card-open-row">{s && <CompatibilityBadge system={s} />}<span>{it.openSheet}<ArrowUpRight size={15} /></span></div></div>
       </button>;
     })}<button className="add-character-card" onClick={() => setCreating(true)}><Plus size={28} /><span>{it.newCharacter}</span><small>{it.anotherStory}</small></button></div> : <Empty title={it.noResults} />}
     <div className="privacy-strip"><Check size={16} /><span>{it.local}.</span><span className="muted">{it.noAccount}</span></div>
     {characters.length > 0 && <div className="getting-started"><BookOpen size={24} /><div><strong>{it.chooseRules}</strong><p className="muted">{it.chooseRulesHelp}</p></div><button className="button secondary" onClick={() => navigate('systems')}>{it.systems}</button></div>}
-    {creating && <CharacterCreator systems={systems} systemKey={selectedKey} onSystemChange={selectSystem} run={run}
+    {creating && <CharacterCreator systems={systems} onSystemChange={selectSystem} run={run}
       onClose={() => setCreating(false)} onDone={id => { setCreating(false); openCharacter(id); }} />}
   </>;
 }
@@ -78,6 +89,7 @@ export const CharacterSheet = memo(function CharacterSheet({ character, system, 
     enumerations: system.definition.enumerated_types,
     onCommit: (patch: import('../persistence/views').ValuePatch, additions?: import('../domain/model').ResourceInstance[]) => commitCharacterView(character.id, patch, additions)
   };
+  const missing = missingSetup(system, character);
   const groups = system.definition.character_creation_flow.flatMap(page => {
     try { return sessionViews(object(page).view).filter(v => v.type === 'section' && Array.isArray(v.content) && v.content.some(c => object(c).type === 'stat')); }
     catch { return []; }
@@ -86,7 +98,7 @@ export const CharacterSheet = memo(function CharacterSheet({ character, system, 
     {events.dialog}
     <button className="link-button back-link" onClick={() => navigate('characters')}><ArrowLeft size={17} />{it.back}</button>
     <PageHeading title={character.name}
-      description={`${system.definition.name} · v${system.definition.version} · ${system.digest.slice(0, 8)} · ${it.manual}`}
+      description={`${system.definition.name} · v${system.definition.version} · ${system.digest.slice(0, 8)} · ${it.sheet}`}
       action={<div className="button-row character-sheet-actions">
         {system.definition.progression_systems.experience_levelling_system != null
           && <button type="button" className="button secondary" onClick={() => setProgression(true)}>{it.progression}</button>}
@@ -94,8 +106,12 @@ export const CharacterSheet = memo(function CharacterSheet({ character, system, 
         <button type="button" className="icon-button danger-text" aria-label={it.delete} title={it.deleteCharacter}
           onClick={() => setDeleting(true)}><Trash2 size={17} /></button>
       </div>} />
+    {system.definition.id === 'polysheet-sentieri' && <Warning>{it.demoDescription}</Warning>}
     {system.diagnostics.length > 0 && <Warning>{it.rulesWarning} <button className="link-button" onClick={() => { useUi.getState().selectSystem(system.key); navigate('diagnostics'); }}>{it.diagnostics}</button></Warning>}
-    {setup && <CharacterCreator systems={[system]} systemKey={system.key} character={character} onSystemChange={() => undefined}
+    {missing.length > 0 && <div className="notice setup-notice" role="note"><ListChecks size={20} aria-hidden="true" />
+      <div><strong>{it.sheetIncomplete}</strong><p>{it.sheetIncompleteHelp} <b>{missing.join(', ')}</b>. {it.sheetIncompleteWhy}</p></div>
+      <button type="button" className="button secondary" onClick={() => setSetup(true)}>{it.completeSetup}</button></div>}
+    {setup && <CharacterCreator systems={[system]} character={character} onSystemChange={() => undefined}
       run={run} onClose={() => setSetup(false)} onDone={() => setSetup(false)} />}
     {progression && <CharacterProgression character={character} system={system} resources={resources} onClose={() => setProgression(false)} />}
     <div className="sheet-layout"><div className="sheet-main">

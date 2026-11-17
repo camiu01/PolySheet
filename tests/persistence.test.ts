@@ -66,6 +66,29 @@ describe('local persistence', () => {
   });
 });
 describe('backup v2 and legacy v1', () => {
+  it('exports backup v4 with reversible layers and restores previously emitted v3 overrides', async () => {
+    const { c } = await setup();
+    const overrides = { bonus: {
+      values: { vigore: { aggregation: 'set' as const, value: 8 } },
+      modifiers: { vigore: { aggregation: 'sum' as const, value: 2 } }
+    } };
+    await database.characters.update(c.id, { overrides });
+    const text = await exportBackup(database);
+    const backup = JSON.parse(text);
+    expect(backup.version).toBe(4);
+    for (const version of [4, 3]) {
+      await restoreBackup(JSON.stringify({ ...backup, version }), database);
+      expect((await database.characters.get(c.id))?.overrides).toEqual(overrides);
+      expect((await database.characters.get(c.id))?.values).toEqual(c.values);
+    }
+    delete backup.characters[0].overrides;
+    for (const version of [1, 2, 3]) {
+      await restoreBackup(JSON.stringify({ ...backup, version }), database);
+      expect((await database.characters.get(c.id))?.overrides).toBeUndefined();
+      expect((await database.characters.get(c.id))?.values).toEqual(c.values);
+    }
+  });
+
   it('round-trips every table and the exact original system document', async () => {
     const { system, c } = await setup();
     const r = { id: 'r', systemKey: system.key, definitionId: 'ricordo', name: 'Mappa', values: { titolo: 'Il passo', testo: 'Verso nord' } };

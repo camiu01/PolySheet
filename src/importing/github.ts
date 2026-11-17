@@ -10,6 +10,7 @@ export interface GithubSnapshot {
   commit: string;
   files: { path: string; size: number }[];
   catalogFiles?: { path: string; size: number }[];
+  sourceFiles?: { path: string; size: number }[];
 }
 const shaPattern = /^[a-f0-9]{40}$/i;
 const systemName = /^(system\.rpg|system\.rpg\.json|system\.json)$/i;
@@ -90,10 +91,11 @@ export async function discoverGithub(input: string, ref = ''): Promise<GithubSna
   const snapshot = await listGithubFiles(input, ref);
   const files = snapshot.files.filter(f => systemName.test(f.path.split('/').at(-1)!));
   const catalogFiles = snapshot.files.filter(f => /^systems\/[a-z0-9_-]+\/resource_instances\/(?:class|race|species|ancestry|heritage|background)_[^/]+\.rpg\.json$/i.test(f.path));
+  const sourceFiles = snapshot.files.filter(f => /\.rpgs$/i.test(f.path) || /^systems\/[a-z0-9_-]+\/system\/.*\.json$/i.test(f.path));
   if ([...files, ...catalogFiles].some(f => f.size > MAX_SYSTEM_BYTES)) throw new Error(it.repositoryFileTooLarge);
   if (files.length > 100) throw new Error(it.repositoryTooMany);
   if (!files.length) throw new Error(it.repositoryNoSystems);
-  return { ...snapshot, files, ...(catalogFiles.length ? { catalogFiles } : {}) };
+  return { ...snapshot, files, ...(catalogFiles.length ? { catalogFiles } : {}), ...(sourceFiles.length ? { sourceFiles } : {}) };
 }
 
 /** Download only the selected file at the discovered commit, then apply normal validation. */

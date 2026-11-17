@@ -186,9 +186,10 @@ function evaluateItem(ctx: RenderContext, definition: ResourceDefinition, record
 	}).evaluate(value);
 }
 
-/** Read a view's referenced value from drafts, overrides or persisted values. */
+/** Direct inputs prefer drafts; declared paths resolve through the bounded scoped evaluator. */
 function referenceValue(ctx: RenderContext, v: View): unknown {
 	const field = ctx.stats.find(s => s.id === v.stat);
-	if (!field) throw new Error(`Statistica mancante: ${String(v.stat)}`);
-	return inputValue(v, ctx, field);
+	if (field) return inputValue(v, ctx, field);
+	if (typeof v.stat !== 'string') throw new Error('Percorso della risorsa richiesto');
+	return createEvaluator(ctx.stats, ctx.previewValues ?? ctx.values, undefined, ctx).get(v.stat);
 }

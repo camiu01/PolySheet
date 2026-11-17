@@ -1,6 +1,6 @@
 # Threat Model for PolySheet
 
-Last updated: 2026-11-16. Version: 1.4.0. Method: STRIDE.
+Last updated: 2026-11-17. Version: 1.5.0. Method: STRIDE.
 This is a source review, not a penetration-test or compliance certification.
 
 ## 1. System Overview
@@ -53,7 +53,14 @@ metadata. Remote URL import is user initiated and subject to browser CORS.
 - HTTPS reader: no URL credentials; timeout and streamed bounds; cookies omitted.
   Public GitHub discovery adds two metadata reads and selected files at one
   pinned commit. Source catalogs add bounded metadata and original JSON reads.
-  No clone, proxy, compiler or remote document merge.
+  No clone, proxy, native compiler or imported script execution.
+  Repository source mode composes JSON and parses RPGScript into data ASTs;
+  imports are relative, confined to regular files in the same pinned Git tree.
+  Source snapshots allow 1,000 files/8 MiB, including transitive macros, four
+  concurrent downloads; parser/output depth 64, 400,000 tokens/nodes and macro/
+  import recursion 32 are bounded. Unknown syntax/constructors fail explicitly.
+  Generated JSON embeds exact source texts and is revalidated through the
+  unchanged monolithic boundary. No imported functions or network code execute.
   API payloads use the bounded JSON parser. Complete trees are required, with
   20,000 entries/100 candidates; symlinks/submodules are excluded. Paths are
   validated and encoded, and remote response URLs do not choose download hosts.
@@ -169,6 +176,11 @@ automated LLM scanning service or a new enforced CI gate.
   Only public repository metadata is queried; no local records or tokens are sent.
 
 ## 9. Version Changelog
+
+- 1.5.0 (2026-11-17): Bounded browser-local JSON/RPGScript composition from
+  one pinned Git tree, confined transitive macro imports, exact-source export
+  envelope and unchanged final validation/backup limits. No imported code
+  execution, native tool, CDN workaround or new network service.
 
 - 1.4.0 (2026-11-16): Compact original catalogs, private manual assignments and
   bounded GitHub/web-index retrieval; no CDN CORS bypass or new backend.

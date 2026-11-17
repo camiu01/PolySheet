@@ -1,12 +1,13 @@
-/** @file Commit-pinned source discovery and automatic catalogs; never a compiler or proxy. */
+/** @file Commit-pinned source discovery, local source preparation and automatic catalogs. */
 import { object, type StoredSystem } from '../domain/model';
 import { discoverGithub, githubRepository, importGithubFile, type GithubSnapshot } from './github';
 import { boundedJson, decodeUtf8 } from './system';
 import { downloadBytes } from './url';
 import { prepareCatalogTemplate, MAX_REPOSITORY_CATALOG_BYTES, MAX_REPOSITORY_CATALOG_FILES, type CatalogPreview } from './catalog';
 import { it } from '../ui/it';
+import { prepareSourceRepository } from './source-repository';
 
-export interface RepositorySystem { id: string; name: string; version: string; path: string }
+export interface RepositorySystem { id: string; name: string; version: string; path: string; original?: string }
 export interface RepositoryDiscovery { snapshot: GithubSnapshot; systems: RepositorySystem[] }
 export interface RepositoryBundle { system: StoredSystem; catalogs: CatalogPreview[] }
 
@@ -16,9 +17,9 @@ function rawBase(snapshot: GithubSnapshot) {
   return 'https://raw.githubusercontent.com/' + repository.slice('https://github.com/'.length) + '/' + snapshot.commit + '/';
 }
 /**
- * Discover conventional source systems from their metadata, not an inaccessible CDN.
+ * Discover conventional source systems and retain their exact root JSON for preparation.
  * @remarks Repositories without the source/catalog layout keep normal file selection.
- * Read metadata only; never merge directories, compile RPGScript or execute scripts.
+ * Read metadata only here; source compilation happens after explicit system selection.
  */
 export async function discoverRepository(input: string, ref = ''): Promise<RepositoryDiscovery> {
   const snapshot = await discoverGithub(input, ref);
@@ -33,7 +34,7 @@ export async function discoverRepository(input: string, ref = ''): Promise<Repos
       if (input.id !== id || typeof input.name !== 'string' || !input.name.trim() || input.name.length > 500
         || typeof input.version !== 'string' || !input.version.length || input.version.length > 100)
         throw new Error(it.repositoryInvalid);
-      return { id, name: input.name, version: input.version, path: file.path };
+      return { id, name: input.name, version: input.version, path: file.path, original: decodeUtf8(bytes) };
     }));
     systems.push(...batch);
   }
@@ -46,7 +47,7 @@ export function repositorySystemDownload(discovery: RepositoryDiscovery, selecte
   return `https://d2dmd8x0lyn9l8.cloudfront.net/${encodeURIComponent(selected)}/system.rpg`;
 }
 /**
- * Download all selected source catalogs for an explicitly chosen local compiled system.
+ * Prepare the selected repository's sources, or reuse an explicitly matching local system.
  * @remarks Source ID/version must match. No local record changes until confirmation;
  * network failures abort the entire preview rather than hiding missing files.
  */
@@ -55,7 +56,9 @@ export async function prepareRepositoryBundle(discovery: RepositoryDiscovery, se
   const { snapshot } = discovery;
   if (!discovery.systems.length) return { system: await importGithubFile(snapshot, selected), catalogs: [] };
   const source = discovery.systems.find(s => s.id === selected);
-  if (!source || !localSystem || localSystem.definition.id !== source.id || localSystem.definition.version !== source.version
+  if (!source) throw new Error(it.repositoryInvalid);
+  localSystem ??= await prepareSourceRepository(snapshot, source);
+  if (localSystem.definition.id !== source.id || localSystem.definition.version !== source.version
     || localSystem.diagnostics.some(d => d.severity === 'error')) throw new Error(it.repositoryLocalMismatch);
   const base = rawBase(snapshot);
   const files = (snapshot.catalogFiles ?? []).filter(f => f.path.startsWith(`systems/${source.id}/resource_instances/`));

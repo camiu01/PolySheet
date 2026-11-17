@@ -1,5 +1,6 @@
 /** @file Local-only photo editing and preview, with explicit remote-image fallback. */
 import { useState } from 'react';
+import { ImagePlus } from 'lucide-react';
 import { isPhoto, MAX_PHOTO_BYTES, photoFromBytes, photoImageUrl, type Photo } from '../domain/photo';
 import { it } from './it';
 import { Modal } from './shared';
@@ -17,7 +18,7 @@ export function PhotoInput({ value, label, onSave, preview = false, size = 'medi
     <span>{label}</span>
     {image && preview ? <button type="button" className="photo-preview-button" aria-label={`${it.details} · ${label}`} onClick={() => setOpen(true)}>{picture}</button> : picture}
     {photo.url && !image && <small className="muted">{it.remotePhoto}</small>}
-    {onSave && <><label className="field"><span>{it.choosePhoto}</span><input aria-label={`${it.choosePhoto} · ${label}`} type="file" accept="image/png,image/jpeg" onChange={event => {
+    {onSave && <><label className="button secondary photo-choose"><ImagePlus size={16} aria-hidden="true" /><span>{it.choosePhoto}</span><input className="sr-only" aria-label={`${it.choosePhoto} · ${label}`} type="file" accept="image/png,image/jpeg" onChange={event => {
       const file = event.target.files?.[0]; event.target.value = '';
       if (!file) return;
       void (async () => {

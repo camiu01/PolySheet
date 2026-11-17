@@ -13,6 +13,7 @@ import { CombatTracker } from './ui/CombatTracker';
 import { diagnose } from './importing/system';
 import './ui/fields.css';
 import { useUi, type Page } from './ui/store';
+import { connectNavigation } from './ui/navigation';
 import { it } from './ui/it';
 import type { Run } from './ui/shared';
 
@@ -35,6 +36,8 @@ export default function App() {
   const [menu, setMenu] = useState(false);
   const [pending, setPending] = useState(0);
   const [notification, setNotification] = useState<{ text: string; error: boolean } | null>(null);
+  useEffect(connectNavigation, []);
+  useEffect(() => { setMenu(false); }, [page, characterId]);
   const [installEvent, setInstallEvent] = useState<InstallEvent | null>(null);
   const { needRefresh: [needRefresh], offlineReady: [offlineReady, setOfflineReady], updateServiceWorker } = useRegisterSW({
     onRegisterError(error) { setNotification({ text: `Service worker: ${String(error)}`, error: true }); }
@@ -53,6 +56,7 @@ export default function App() {
   }, []);
   const run = useCallback<Run>(async (work, success) => {
     setPending(n => n + 1);
+    setNotification(previous => previous?.error ? null : previous);
     try { await work(); if (success) setNotification({ text: success, error: false }); }
     catch (error) { setNotification({ text: error instanceof Error ? error.message : String(error), error: true }); }
     finally { setPending(n => n - 1); }
@@ -77,8 +81,8 @@ export default function App() {
     </aside>
     <div className="main-shell"><header className="topbar"><div className="breadcrumb"><button className="icon-button mobile-menu" aria-label={it.mainNavigation} aria-expanded={menu} onClick={() => setMenu(!menu)}><Menu size={21} /></button><span>{it.mySpace}</span><span className="breadcrumb-slash">/</span><strong>{it[page]}</strong></div>
       <button className="mobile-brand" onClick={() => go('characters')}><Hexagon size={22} />{it.brand}</button>
+      <span className="save-status" data-testid="save-status" role="status">{pending ? it.saving : notification?.error ? it.error : it.saved}</span>
       {installEvent && <button className="icon-button" aria-label={it.install} onClick={() => void run(async () => { await installEvent.prompt(); await installEvent.userChoice; setInstallEvent(null); })}><Download size={18} /></button>}</header>
-      <span className="sr-only" data-testid="save-status" role="status">{pending ? it.saving : it.saved}</span>
       <main id="main" tabIndex={-1}>
         {notification && <div role={notification.error ? 'alert' : 'status'} className={`notification ${notification.error ? 'notification-error' : ''}`}><div><strong>{notification.error ? it.error : it.brand}</strong><p>{notification.text}</p></div><button className="icon-button" aria-label={it.close} onClick={() => setNotification(null)}><X size={18} /></button></div>}
         {needRefresh && <div className="notice update-notice"><p>{it.update}</p><button className="button secondary" onClick={() => void run(() => updateServiceWorker(true))}>{it.updateAction}</button></div>}

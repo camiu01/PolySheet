@@ -8,9 +8,9 @@ import { formula, object, view, type Stat, type View } from '../domain/model';
 import { unsupportedViewOptions, viewFields } from '../importing/system';
 import { it } from './it';
 import { PhotoInput } from './PhotoInput';
-import { inputValue, saveInput, sourceColor, sourceIcons, textValue, viewColor } from './view-support';
+import { inputValue, readableOn, saveInput, sourceColor, sourceIcons, textValue, viewColor } from './view-support';
 import { SourcePopup, SourceResourceSelect, SourceResourceSection, DeferredResourceSelect } from './SourceViews';
-import { SourceCollapsible, SourceViewPager } from './SourceLayoutViews';
+import { BalancedGrid, SourceCollapsible, SourceViewPager } from './SourceLayoutViews';
 import { SourceButton, SourceMenuButton, SourceSelect, SourceTicker } from './SourceValueViews';
 import { SourceResourceArray, SourceResourceView } from './SourceResourceViews';
 import type { ValuePatch } from '../persistence/views';
@@ -124,13 +124,25 @@ export const rendererRegistry = new Map<string, Renderer>([
   ['popUpButton', (v, ctx) => <SourcePopup node={v} context={ctx} />],
   ['selectResources', (v, ctx) => !ctx.drafts && v.should_save_on_selection !== true ? <DeferredResourceSelect node={v} context={ctx} /> : <SourceResourceSelect node={v} context={ctx} />],
   ['resourceSection', (v, ctx) => <SourceResourceSection node={v} context={ctx} />],
-  ['chip', (v, ctx, e) => <span className={`source-chip ${v.style === 'compact' ? 'source-chip-compact' : ''}`} style={{ backgroundColor: viewColor(v.background_color, e), borderColor: viewColor(v.border_color, e) }}>{resourceText(v, ctx) ?? (v.text ? textValue(e(v.text)) : '')}</span>],
-  ['listItem', (v, _ctx, e) => <div className="source-list-item">
-    <div><strong style={{ color: viewColor(v.title_color, e) }}>{v.title ? textValue(e(v.title)) : ''}</strong>
-      <span style={{ color: viewColor(v.first_line_extra_color, e) }}>{v.first_line_extra ? textValue(e(v.first_line_extra)) : ''}</span></div>
-    <div><p style={{ color: viewColor(v.subtitle_color, e) }}>{v.subtitle ? textValue(e(v.subtitle)) : ''}</p>
-      <span style={{ color: viewColor(v.second_line_extra_color, e) }}>{v.second_line_extra ? textValue(e(v.second_line_extra)) : ''}</span></div>
-  </div>],
+  ['chip', (v, ctx, e) => {
+    const background = viewColor(v.background_color, e);
+    return <span className={`source-chip ${v.style === 'compact' ? 'source-chip-compact' : ''}`} style={{ backgroundColor: background, color: readableOn(background), borderColor: viewColor(v.border_color, e) }}>{resourceText(v, ctx) ?? (v.text ? textValue(e(v.text)) : '')}</span>;
+  }],
+  ['listItem', (v, ctx, e) => {
+    // `chips` computes to the literal chip views built by `createChip`; anything else is rejected by the view schema.
+    const chips = v.chips == null ? [] : e(v.chips);
+    if (!Array.isArray(chips) || chips.length > 50) throw new Error('chips richiede una lista di al massimo 50 chip');
+    return <div className="source-list-item">
+      <div><strong style={{ color: viewColor(v.title_color, e) }}>{v.title ? textValue(e(v.title)) : ''}</strong>
+        <span style={{ color: viewColor(v.first_line_extra_color, e) }}>{v.first_line_extra ? textValue(e(v.first_line_extra)) : ''}</span></div>
+      <div><p style={{ color: viewColor(v.subtitle_color, e) }}>{v.subtitle ? textValue(e(v.subtitle)) : ''}</p>
+        <span style={{ color: viewColor(v.second_line_extra_color, e) }}>{v.second_line_extra ? textValue(e(v.second_line_extra)) : ''}</span></div>
+      {chips.length > 0 && <div className="source-list-chips">{chips.map((chip, i) => {
+        if (object(chip).type !== 'chip') throw new Error('chips accetta solo viste chip');
+        return <RenderView key={String(object(chip).id ?? i)} input={chip} context={ctx} />;
+      })}</div>}
+    </div>;
+  }],
   ['text', (v, ctx, e) => {
     if (typeof v.edit_stat === 'string') {
       const stat = ctx.stats.find(s => s.id === v.edit_stat);
@@ -160,12 +172,7 @@ export const rendererRegistry = new Map<string, Renderer>([
   }],
   ['section', (v, ctx) => {
     const header = <div className={`section-heading ${v.show_divider === false ? 'no-divider' : ''}`}>{children(v.header, ctx)}</div>;
-    const width = typeof v.content_item_min_width === 'number' ? v.content_item_min_width : 160;
-    const minimum = width > 0 && width <= 1 ? `${width * 100}%` : `${size(width, 160)}px`;
-    const content = <div className="section-content" style={{
-      gridTemplateColumns: `repeat(auto-fit,minmax(min(100%,${minimum}),1fr))`,
-      justifyItems: align(v.alignment ?? 'center')
-    }}>{children(v.content, ctx)}</div>;
+    const content = <BalancedGrid minWidth={v.content_item_min_width} justifyItems={align(v.alignment ?? 'center')}>{children(v.content, ctx)}</BalancedGrid>;
     return v.collapsible === true
       ? <details className={`sheet-section ${v.always_show_collapse_icon !== true ? 'collapse-icon-closed-only' : ''}`} open={v.start_collapsed !== true}><summary>{header}</summary>{content}</details>
       : <section className="sheet-section">{header}{content}</section>;
@@ -194,7 +201,7 @@ class ViewErrorBoundary extends Component<ViewProps & { children: ReactNode }, V
   }
   render() {
     return this.state.error !== null
-      ? <div role="status" data-view-error className="unsupported"><p>{it.viewUnavailable}</p>{this.state.error}</div>
+      ? <div role="status" data-view-error className="unsupported view-error" title={it.viewUnavailable}><span className="sr-only">{it.viewUnavailable} </span>{this.state.error}</div>
       : this.props.children;
   }
 }
@@ -239,6 +246,6 @@ function ViewContent({ input, context }: ViewProps) {
       {ignored.length > 0 && <small className="unsupported-note">{it.unsupported}: {ignored.join(', ')}</small>}
     </div>;
   } catch (error) {
-    return <div role="status" data-view-error className="unsupported">{error instanceof Error ? error.message : String(error)}</div>;
+    return <div role="status" data-view-error className="unsupported view-error">{error instanceof Error ? error.message : String(error)}</div>;
   }
 }

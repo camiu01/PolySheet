@@ -41,7 +41,8 @@ it('discovers only conventional regular system files and pins the default-branch
   const fetch = stubTree(tree([entry('z/system.json'), entry(), entry('systems.rpg'), entry('resources.rpg'),
     entry('system.rpgs'), { ...entry('system.rpg'), mode: '120000' }, { ...entry('submodule'), type: 'commit' }]));
   const snapshot = await discoverGithub(repository + '.git');
-  expect(snapshot).toEqual({ repository, commit, files: [{ path: '5e/system.rpg', size: bytes.length }, { path: 'z/system.json', size: bytes.length }] });
+  expect(snapshot).toEqual({ repository, commit, files: [{ path: '5e/system.rpg', size: bytes.length }, { path: 'z/system.json', size: bytes.length }],
+    sourceFiles: [{ path: 'system.rpgs', size: bytes.length }] });
   expect(fetch).toHaveBeenCalledTimes(2);
   expect(fetch.mock.calls[0][0].href).toBe('https://api.github.com/repos/owner/repo/commits?per_page=1');
   expect(fetch.mock.calls[1][0].href).toBe(`https://api.github.com/repos/owner/repo/git/trees/${treeSha}?recursive=1`);

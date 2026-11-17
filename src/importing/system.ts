@@ -1,10 +1,12 @@
 /**
  * @file Untrusted JSON boundary and conservative compatibility diagnostics.
- * @remarks Split sources and RPGScript are excluded. The verified gzip-JSON
- * package adapter performs decompression before reaching this JSON boundary.
+ * @remarks Direct split roots remain invalid. Repository source composition and
+ * the gzip-JSON adapter produce monolithic input before reaching this boundary.
  * @see https://docs.rpg-companion.app/GettingStarted/SystemCreation
  */
 import { formulaFields, formulaHandlers, statPath } from '../engine/formulas';
+import { viewBindings } from './view-bindings';
+import { characterEventPlan } from '../engine/character-events';
 import {
   matchesType, object, systemSchema, type Diagnostic, type Stat,
   type StoredSystem, type SystemDefinition
@@ -28,14 +30,14 @@ export const viewFields: Record<string, string[]> = {
   resourceSection: ['resource_stat', 'resource_set_stat', 'resource_id', 'header_view', 'read_only', 'tap_displays_resource', 'max_items_in_preview', 'reorganizable', 'content_item_min_width', 'alignment'],
   popUpButton: ['text', 'icon', 'pop_up_title', 'pop_up_view', 'display_cancel_button', 'cancel_text', 'display_save_button', 'save_text', 'should_persist_on_save', 'pop_up_type'],
   chip: ['text', 'background_color', 'border_color', 'style', 'resource_id', 'resource_instance_ids_stat', 'resource_display_stat'],
-  listItem: ['title', 'subtitle', 'first_line_extra', 'second_line_extra', 'title_color', 'subtitle_color', 'first_line_extra_color', 'second_line_extra_color'],
+  listItem: ['title', 'subtitle', 'first_line_extra', 'second_line_extra', 'title_color', 'subtitle_color', 'first_line_extra_color', 'second_line_extra_color', 'chips'],
   collapsible: ['title', 'subtitle', 'subviews', 'start_expanded'],
   viewPager: ['subviews', 'names', 'color'],
   ticker: ['stat', 'style', 'button_location', 'button_look', 'change_amount', 'allowed_values', 'min_value_allowed', 'max_value_allowed', 'calculated_min_value_allowed', 'calculated_max_value_allowed', 'label', 'label_alignment', 'should_auto_save', 'always_show_sign', 'hide_value', 'edit_bottom_sheet_title'],
   button: ['text', 'enabled', 'event', 'event_names'],
   select: ['stat', 'meta_stat', 'options', 'allowed_options', 'resource_options', 'resource_saved_stat', 'max_selection_amount', 'options_display_stat', 'multi_select', 'style', 'should_auto_save'],
   menuButton: ['icon_name', 'icon_size', 'icon_color', 'options', 'allowed_options'],
-  resource: ['resource_id', 'stat', 'view_type'],
+  resource: ['resource_id', 'stat', 'view_type', 'create_if_empty'],
   resourceArray: ['resource_id', 'stat', 'left_view', 'pop_up_type', 'pop_up_button_text', 'view_type', 'hide_line', 'auto_add_first', 'allow_adds_and_removes']
 };
 const commonViewFields = ['type', 'id', 'is_visible', 'validation_message', 'margin_left', 'margin_right', 'margin_top', 'margin_bottom'];
@@ -165,11 +167,9 @@ export function diagnose(system: SystemDefinition): Diagnostic[] {
         report(`${path}.treat_as_set`, 'Valore booleano richiesto', 'error');
       if (type === 'divide' && !['down', 'up', 'none'].includes(String(node.rounding_method)))
         report(`${path}.rounding_method`, 'Supportati solo down, up, none espliciti; closest non verificato.');
-      if (type === 'sortBy') {
-        if (!Object.hasOwn(node, 'order')) report(`${path}.order`, it.sortOrderDefault);
-        else if (node.order !== 'asc' && node.order !== 'desc')
-          report(`${path}.order`, 'Ordine sortBy richiesto: asc o desc.', 'error');
-      }
+      // An omitted order is accepted silently and sorts ascending; only an explicit invalid value is an error.
+      if (type === 'sortBy' && Object.hasOwn(node, 'order') && node.order !== 'asc' && node.order !== 'desc')
+        report(`${path}.order`, 'Ordine sortBy richiesto: asc o desc.', 'error');
       if ((type === 'enumeratedName' || type === 'enumeratedAbbreviation') &&
           (typeof node.enumerated_type !== 'string' || !node.enumerated_type))
         report(`${path}.enumerated_type`, 'Tipo di enumerazione richiesto', 'error');
@@ -190,8 +190,16 @@ export function diagnose(system: SystemDefinition): Diagnostic[] {
     } else if (['add', 'subtract', 'multiply', 'divide', 'and', 'or', 'isEmpty', 'isNull', 'notNull', 'toLowerCase', 'sortBy', 'findFirst', 'flatMap', 'concat', 'trim', 'date', 'max', 'min', 'map', 'filter', 'defaultIfNull', 'joinToString', 'equals', 'notEquals', 'length', 'not', 'greaterThan', 'greaterThanEquals', 'lessThan', 'lessThanEquals', 'toNum', 'toSignedString'].includes(type)) {
       report(`${path}.components`, 'Formula components richiesta (non una lista JSON diretta)', 'error');
     }
-    for (const field of ['mapper', 'filter', 'sort_by_selector', 'haystack', 'needle', 'default_components', 'meta_stat', 'formula', 'string', 'occurrence', 'replace', 'id']) {
-      if (!formulaFields[type]?.includes(field)) continue;
+    if (type === 'createChip') {
+      const resourceFields = ['resource_id', 'resource_instance_ids_stat', 'resource_display_stat'].filter(field => node[field] != null);
+      if (typeof node.id !== 'string' || !node.id) report(`${path}.id`, 'ID chip richiesto', 'error');
+      if ((node.text != null) === (resourceFields.length > 0) || (resourceFields.length > 0 && (resourceFields.length < 3 || resourceFields.some(field => typeof node[field] !== 'string'))))
+        report(path, 'createChip richiede text oppure i tre campi risorsa.', 'error');
+    }
+    for (const field of ['mapper', 'filter', 'sort_by_selector', 'haystack', 'needle', 'default_components', 'meta_stat', 'formula', 'string', 'occurrence', 'replace', 'id', 'text', 'background_color', 'border_color', 'style']) {
+      if (!formulaFields[type]?.includes(field) || node[field] == null && type === 'createChip') continue;
+      // `createChip.id` is the literal view id, unlike the computed `enumeratedName.id`.
+      if (type === 'createChip' && field === 'id') continue;
       if (type === 'findFirst' && field === 'filter' && node.filter == null) continue;
       let inner = bindings;
       if (field === 'mapper' || field === 'filter' || field === 'sort_by_selector') {
@@ -204,17 +212,33 @@ export function diagnose(system: SystemDefinition): Diagnostic[] {
       checkFormula(node[field], `${path}.${field}`, stats, inner, allowRoll);
     }
   }
-  function checkView(input: unknown, path: string, stats: Stat[]) {
+  function checkView(input: unknown, path: string, stats: Stat[], parentInputs = new Map<string, Stat>(), root = true) {
     if (!input || typeof input !== 'object' || Array.isArray(input)) { report(path, 'Vista non valida', 'error'); return; }
     const v = object(input);
     if (typeof v.id !== 'string' || typeof v.type !== 'string') { report(path, 'Vista senza id o type', 'error'); return; }
+    const inputs = new Map(parentInputs);
+    if (root) {
+      try {
+        for (const [id, stat] of viewBindings(input, stats)) inputs.set(id, stat);
+      } catch (error) { report(path, error instanceof Error ? error.message : String(error), 'error'); }
+    }
+    const eventFields = v.type === 'stat' ? ['on_tap_event', 'on_long_tap_event']
+      : v.type === 'avatarSection' ? ['bottom_left_button_event', 'bottom_right_button_event'] : [];
     const allowed = viewFields[v.type];
     if (!allowed) report(`${path}.type`, `Componente non supportato: ${v.type}`);
-    else fields(v, [...commonViewFields, ...allowed], path);
+    else fields(v, [...commonViewFields, ...allowed, ...eventFields], path);
+    for (const key of eventFields) if (v[key] != null) {
+      if (stats !== system.character_stats || !path.startsWith('$.character_sheet_sections[') || path.includes('.pop_up_view'))
+        report(`${path}.${key}`, 'Evento disponibile solo nella scheda del personaggio, non in risorse, combattimento o bozze.');
+      else try { characterEventPlan(system, v[key]); }
+      catch (error) { report(`${path}.${key}`, error instanceof Error ? error.message : String(error)); }
+    }
     for (const key of unsupportedViewOptions(v)) report(`${path}.${key}`, `Opzione non supportata: ${String(v[key])}`);
+    if (v.type === 'resource' && v.create_if_empty != null && v.create_if_empty !== false)
+      report(`${path}.create_if_empty`, 'Creazione automatica di risorse vuote non supportata.');
     if (v.type === 'popUpButton' && v.icon != null && object(v.icon).type !== 'icon')
       report(`${path}.icon`, 'popUpButton richiede una vista icon.');
-    for (const field of ['text', 'label', 'hint', 'is_visible', 'validation_message', 'enabled', 'override_label', 'pop_up_title', 'save_text', 'cancel_text', 'bottom_left_button_title', 'bottom_right_button_title', 'title', 'subtitle', 'first_line_extra', 'second_line_extra', 'title_color', 'subtitle_color', 'first_line_extra_color', 'second_line_extra_color',
+    for (const field of ['text', 'label', 'hint', 'is_visible', 'validation_message', 'enabled', 'override_label', 'pop_up_title', 'save_text', 'cancel_text', 'bottom_left_button_title', 'bottom_right_button_title', 'title', 'subtitle', 'first_line_extra', 'second_line_extra', 'title_color', 'subtitle_color', 'first_line_extra_color', 'second_line_extra_color', 'chips',
       'names', 'allowed_values', 'calculated_min_value_allowed', 'calculated_max_value_allowed', 'meta_stat', 'allowed_options', 'resource_options', 'max_selection_amount', 'pop_up_button_text', 'sheet_title', 'stat_color', 'name_color'])
       if (v[field] != null) checkFormula(v[field], `${path}.${field}`, stats, ['$view']);
     // `viewPager.color` is a formula; icon, text and chip colours are literal palette values.
@@ -234,13 +258,23 @@ export function diagnose(system: SystemDefinition): Diagnostic[] {
     }
     for (const field of ['stat', 'edit_stat', 'photo_stat', 'name_stat']) if (v[field] != null) {
       if (typeof v[field] !== 'string') report(`${path}.${field}`, 'ID statistica richiesto', 'error');
-      else if (!stats.some(s => s.id === v[field])) report(`${path}.${field}`, `Riferimento non risolto: ${v[field]}`);
+      else if (!stats.some(s => s.id === v[field])) {
+        try {
+          const parts = statPath(v[field]);
+          const binding = parts[0].id === '$view' && parts.length === 2 ? inputs.get(parts[1].id) : undefined;
+          if (field !== 'stat' || !['resource', 'resourceArray'].includes(v.type) || !binding
+            || v.type === 'resource' && binding.value_type !== 'resource'
+            || v.type === 'resourceArray' && (binding.value_type !== 'array' || binding.sub_value_type !== 'resource'))
+            report(`${path}.${field}`, `Riferimento non risolto: ${v[field]}`);
+        } catch (error) { report(`${path}.${field}`, error instanceof Error ? error.message : String(error), 'error'); }
+      }
     }
     for (const field of ['subviews', 'header', 'content', 'center_content', 'bottom_left_stack', 'bottom_right_stack']) {
       if (v[field] != null && !Array.isArray(v[field])) report(`${path}.${field}`, 'Lista di viste richiesta', 'error');
-      if (Array.isArray(v[field])) v[field].forEach((c, i) => checkView(c, `${path}.${field}[${i}]`, stats));
+      if (Array.isArray(v[field])) v[field].forEach((c, i) => checkView(c, `${path}.${field}[${i}]`, stats, inputs, false));
     }
-    for (const field of ['pop_up_view', 'icon', 'header_view', 'left_view', 'bottom_sheet_view']) if (v[field] != null) checkView(v[field], `${path}.${field}`, stats);
+    for (const field of ['pop_up_view', 'icon', 'header_view', 'left_view', 'bottom_sheet_view']) if (v[field] != null)
+      checkView(v[field], `${path}.${field}`, stats, inputs, ['pop_up_view', 'bottom_sheet_view'].includes(field));
     if (['list', 'composite', 'collapsible', 'viewPager'].includes(v.type) && !Array.isArray(v.subviews)) report(`${path}.subviews`, 'Lista richiesta', 'error');
     if (v.type === 'section' && (!Array.isArray(v.header) || !Array.isArray(v.content))) report(path, 'header e content richiesti', 'error');
     if (v.type === 'viewPager') {
@@ -321,7 +355,7 @@ export function diagnose(system: SystemDefinition): Diagnostic[] {
         checkView(object(page).view, `$.character_creation_flow[${i}].view`, system.character_stats);
     });
   }
-  if (system.mechanics.length) report('$.mechanics', `${system.mechanics.length} meccaniche non eseguite: il sistema non è pienamente utilizzabile.`);
+  if (system.mechanics.length) report('$.mechanics', `${system.mechanics.length} meccaniche dichiarate. Supporto parziale agli eventi espliciti del personaggio; lifecycle, risorse e flussi asincroni non eseguiti.`);
   if (Object.keys(system.progression_systems).length) report('$.progression_systems', 'Progressione automatica non supportata.');
   if (system.enumerated_types.length) report('$.enumerated_types', 'Enumerazioni usate da select, menuButton e dalle formule enumerated; le chip dinamiche non sono ancora interpretate.');
   if (!system.dice) report('$.dice', 'Definizioni dadi assenti nella variante storica. Disponibile solo il lanciatore manuale dell’app.');

@@ -1,5 +1,6 @@
 /** @file Source stat presentation, safe dynamic colors and centered detail forms. */
 import { useEffect, useRef, useState } from 'react';
+import { MoreHorizontal } from 'lucide-react';
 import type { View } from '../domain/model';
 import { RenderView, ScalarInput, type RenderContext } from './renderer';
 import { inputValue, saveInput, textValue, viewColor } from './view-support';
@@ -52,8 +53,9 @@ export function SourceStat({ node: v, context: ctx, evaluate: e }: {
       <output data-testid={`stat-${stat.id}`} className="stat-value" style={{ color: viewColor(v.stat_color, e) }}>{shown || '—'}</output>
     </button> : <output data-testid={`stat-${stat.id}`} className="stat-value" style={{ color: viewColor(v.stat_color, e) }}>{shown || '—'}</output>}
     {stat.type === 'calculated' && <small className="calculated">{it.calculated}</small>}
-    {longTap && <button type="button" className="link-button" disabled={ctx.eventBusy}
-      onClick={() => ctx.onEvent?.(v.on_long_tap_event)}>{it.longTapAction} · {name}</button>}
+    {longTap && <button type="button" className="icon-button stat-more" disabled={ctx.eventBusy}
+      aria-label={`${it.longTapAction} · ${name}`} title={`${it.longTapAction} · ${name}`}
+      onClick={() => ctx.onEvent?.(v.on_long_tap_event)}><MoreHorizontal size={16} aria-hidden="true" /></button>}
     {ctx.onChange && edit && v.change_amount !== 0 && <ScalarInput key={ctx.drafts ? v.id : `${edit.id}:${String(ctx.values[edit.id])}`} stat={edit}
       value={inputValue(v, ctx, edit)} label={`${it.edit} ${edit.name}`}
       step={typeof v.change_amount === 'number' ? v.change_amount : undefined}

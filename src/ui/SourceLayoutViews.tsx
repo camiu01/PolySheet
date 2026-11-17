@@ -2,15 +2,51 @@
  * @file Source layout views: accordion sections and horizontal page containers.
  * @remarks Page state is local presentation state; it never changes source values.
  */
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { RenderView, type RenderContext } from './renderer';
-import { textValue, viewColor } from './view-support';
+import { gridColumns, textValue, viewColor } from './view-support';
 import { it } from './it';
 
 /** Render source children, preserving their own ids and failures. */
 function children(items: unknown, context: RenderContext) {
 	if (!Array.isArray(items)) throw new Error('Lista di componenti non valida');
 	return items.map((v, i) => <RenderView key={String((v as { id?: string }).id ?? i)} input={v} context={context} />);
+}
+
+/**
+ * Section content grid that keeps the source minimum width but balances rows.
+ * @remarks Six 125px items in a row that fits five wrap as 3 + 3 instead of 5 + 1.
+ * Fractional widths, single rows and unmeasured layouts keep the plain source tracks.
+ */
+export function BalancedGrid({ minWidth, justifyItems, children }: {
+	minWidth: unknown; justifyItems: CSSProperties['justifyItems']; children: ReactNode;
+}) {
+	const ref = useRef<HTMLDivElement>(null);
+	const [columns, setColumns] = useState<number | null>(null);
+	const pixels = typeof minWidth === 'number' && Number.isFinite(minWidth) && minWidth > 0
+		? (minWidth <= 1 ? null : Math.min(800, minWidth)) : 160;
+	const measure = useCallback(() => {
+		const element = ref.current;
+		if (!element || pixels === null) { setColumns(null); return; }
+		const style = getComputedStyle(element);
+		const gap = parseFloat(style.columnGap) || 0;
+		const width = element.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0);
+		const count = element.children.length;
+		const fit = Math.max(1, Math.floor((width + gap) / (pixels + gap)));
+		setColumns(width > 0 && count > fit ? Math.ceil(count / Math.ceil(count / fit)) : null);
+	}, [pixels]);
+	useEffect(() => {
+		const element = ref.current;
+		if (!element || typeof ResizeObserver === 'undefined') return;
+		const observer = new ResizeObserver(measure);
+		observer.observe(element);
+		return () => observer.disconnect();
+	}, [measure]);
+	// Visibility formulas can change the child count without resizing the container.
+	useEffect(() => { if (typeof ResizeObserver !== 'undefined') measure(); });
+	return <div ref={ref} className="section-content" style={{
+		gridTemplateColumns: columns ? `repeat(${columns},minmax(0,1fr))` : gridColumns(minWidth), justifyItems
+	}}>{children}</div>;
 }
 
 /** Source `collapsible`: accordion with a title, optional subtitle and subviews. */

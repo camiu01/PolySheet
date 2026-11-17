@@ -38,8 +38,9 @@ function fields(node: Record<string, unknown>, allowed: string[]) {
     throw new Error('Opzione evento o effetto non supportata.');
 }
 
-/** Accept the source's comma-separated string or an explicit string list. */
+/** Accept comma-separated subscriptions or a string list; a blank string means no subscriptions. */
 export function eventNames(value: unknown): string[] {
+  if (typeof value === 'string' && !value.trim()) return [];
   const names = typeof value === 'string' ? value.split(',').map(item => item.trim())
     : Array.isArray(value) ? value : [];
   if (names.some(name => typeof name !== 'string' || !name || name.length > 200 || name.includes(',')))

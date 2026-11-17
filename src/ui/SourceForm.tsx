@@ -1,12 +1,12 @@
 /** @file Real scoped source drafts. Nothing is persisted before a successful Save. */
 import { useRef, useState } from 'react';
 import { matchesType, type ResourceInstance } from '../domain/model';
-import { draftCalculations, initialDrafts, inputStat, sessionViews, validationMessages } from '../engine/view-session';
+import { draftCalculations, initialDrafts, inputStat, scopedDrafts, sessionViews, validationMessages } from '../engine/view-session';
 import { RenderView, type RenderContext } from './renderer';
 import { it } from './it';
 import { RuntimeResource } from '../engine/formulas';
 
-/** Stage one form, validate all source messages and submit one atomic patch. */
+/** Stage one form with local input shadowing, validate source messages and submit one atomic patch. */
 export function SourceForm({ input, context, onDone, onBusyChange, saveText = it.save, cancelText = it.cancel, showSave = true, showCancel = true }: {
   input: unknown; context: RenderContext; onDone: () => void;
   saveText?: string; cancelText?: string; showSave?: boolean; showCancel?: boolean;
@@ -25,7 +25,7 @@ export function SourceForm({ input, context, onDone, onBusyChange, saveText = it
   try {
     const nodes = sessionViews(input);
     const environment = { ...context, resources: [...(context.resources ?? []), ...additions],
-      variables: { ...context.variables, $view: drafts, $edit_mode: true },
+      variables: { ...context.variables, $view: scopedDrafts(context.variables?.$view, drafts), $edit_mode: true },
       character: context.character?.stats === context.stats
         ? new RuntimeResource(context.character.key, context.stats, { ...sourceValues, ...changes }, context.createdAt)
         : context.character };

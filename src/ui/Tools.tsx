@@ -16,6 +16,7 @@ import { CompatibilityBadge, Empty, Modal, PageHeading, SystemSelect, Warning, d
 import { useUi } from './store';
 import { it } from './it';
 import { CatalogImport } from './CatalogImport';
+import { groupDiagnostics } from '../importing/diagnostic-groups';
 
 interface SystemPageProps { systems: StoredSystem[]; system?: StoredSystem; run: Run }
 function Selector({ systems, system }: Omit<SystemPageProps, 'run'>) {
@@ -95,9 +96,14 @@ export function Diagnostics({ systems, system }: Omit<SystemPageProps, 'run'>) {
     <div className="notice"><ShieldCheck size={21} /><p>{it.diagnosticHelp}</p></div>
     {system ? <><div className="diagnostic-summary"><FileCheck2 size={26} /><div><h2>{system.definition.name} · v{system.definition.version}</h2><p className="muted">{system.diagnostics.length} {it.issues} · SHA-256 <code>{system.digest.slice(0, 16)}…</code></p></div><CompatibilityBadge system={system} /></div>
       <p className="muted">{it.provenance}: {system.source}</p>
-      {system.diagnostics.some(d => d.message === it.sortOrderDefault) && <Warning>{it.sortOrderDefault}</Warning>}
-      {system.diagnostics.length ? <><Warning>{it.rulesWarning}</Warning><div className="diagnostic-list">{system.diagnostics.slice(0, 100).map((d, i) => <article key={i}><span className={`badge ${d.severity === 'error' ? 'badge-error' : 'badge-warning'}`}>{d.severity === 'error' ? it.errorLabel : it.unsupported}</span><div><code>{d.path}</code><p>{d.message}</p></div></article>)}</div>
-        {system.diagnostics.length > 100 && <p className="muted">{it.displayedDiagnostics}</p>}</> : <div className="notice notice-success"><ShieldCheck size={20} /><p>{it.noDiagnostics}</p></div>}
+      {system.diagnostics.length ? <><Warning>{it.rulesWarning}</Warning>
+        <p className="muted diagnostic-intro">{it.diagnosticGroupsHelp}</p>
+        {groupDiagnostics(system.diagnostics).map(group => <details className="diagnostic-group" key={group.category} open={group.category === 'error'}>
+          <summary><span className={`badge ${group.category === 'error' ? 'badge-error' : 'badge-warning'}`}>{group.items.length}</span>
+            <span><strong>{it.diagnosticGroups[group.category]}</strong><small className="muted">{it.diagnosticGroupNotes[group.category]}</small></span></summary>
+          <div className="diagnostic-list">{group.items.slice(0, 100).map((d, i) => <article key={i}><div><code>{d.path}</code><p>{d.message}</p></div></article>)}</div>
+          {group.items.length > 100 && <p className="muted">{it.displayedDiagnostics}</p>}
+        </details>)}</> : <div className="notice notice-success"><ShieldCheck size={20} /><p>{it.noDiagnostics}</p></div>}
     </> : <Empty title={it.noSystemSelected} />}
   </>;
 }

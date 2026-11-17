@@ -6,6 +6,7 @@
 | --- | --- | --- | --- |
 | PolySheet application and documentation | PolySheet contributors | This repository | MIT, `LICENSE.md` |
 | Sentieri example | PolySheet contributors | `src/demo.ts` | MIT |
+| RPGScript field/type metadata, stripped of descriptions | Blastervla Enterprises LLC | RPGScript VS Code extension 1.3.0, `dev_tool_schema.json`; `src/importing/rpgscript/schema.json` | MIT, `docs/licenses/rpgscript-extension-MIT.txt` |
 | App icon and monogram artwork | PolySheet contributors | `public/icon.svg`, `scripts/icons.mjs`, UI/CSS | MIT |
 | EB Garamond | EB Garamond Project Authors | [Google Fonts source](https://github.com/google/fonts/tree/main/ofl/ebgaramond), served locally in `public/fonts/` | SIL OFL 1.1, `public/fonts/ebgaramond-OFL.txt` |
 | Plus Jakarta Sans | Plus Jakarta Sans Project Authors | [Google Fonts source](https://github.com/google/fonts/tree/main/ofl/plusjakartasans), served locally in `public/fonts/` | SIL OFL 1.1, `public/fonts/plusjakartasans-OFL.txt` |
@@ -55,7 +56,9 @@ README additionally calls scripts/tools MIT without a corresponding full MIT
 grant in `LICENSE.md`.
 
 PolySheet does **not** decide that one statement supersedes another. No external
-game content or tool code from those repositories is distributed. Before redistributing any local
+game content or compiler implementation from those repositories is distributed.
+The separately MIT-licensed extension field/type metadata is the explicit
+exception listed under distributed material above. Before redistributing any local
 fixture, subset, game text, tool, or image, resolve the applicable license and
 any underlying third-party rights with the rights holder. In particular, do not
 include these fixtures in a commercial distribution under PolySheet's MIT

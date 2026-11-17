@@ -63,6 +63,8 @@ requested. Prefer short imperative subjects, using existing `feat:` style when
 appropriate. Describe scope, compatibility limits and checks in PRs; include
 screenshots for UI changes and link relevant issues. Never commit secrets,
 external fixtures or generated test/build output.
+Do not add AI co-authoring trailers (such as `Co-Authored-By: Claude`) or
+session links to commit messages or PR descriptions.
 
 ## Shared coding standards
 

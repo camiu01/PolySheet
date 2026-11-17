@@ -58,10 +58,10 @@ const schema = z.object({
     historyLimit: z.number().int().min(1).max(1000)
   })).max(1)
 });
-/** Export all tables from one read transaction for a coherent snapshot. */
+/** Export a v4 snapshot including reversible character overrides in one read transaction. */
 export async function exportBackup(database = db) {
   const text = await database.transaction('r', [database.systems, database.characters, database.resources, database.rolls, database.preferences, database.combats], async () => JSON.stringify({
-    format: 'polysheet-backup', version: 3, exportedAt: new Date().toISOString(),
+    format: 'polysheet-backup', version: 4, exportedAt: new Date().toISOString(),
     systems: (await database.systems.toArray()).map(({ key, original, artifact, source, digest, importedAt }) => ({ key, original, artifact, source, digest, importedAt })),
     characters: await database.characters.toArray(),
     resources: await database.resources.toArray(), rolls: await database.rolls.toArray(),

@@ -1,5 +1,25 @@
 # Architecture
 
+## Game selection and local navigation
+
+The library presents verified, commit-pinned D&D 2014/2024 source shortcuts
+through the existing repository preparation/review pipeline. They bundle no
+third-party rules and retain partial-compatibility warnings. The known PF2e
+source error and absence of a verified Daggerheart source are disclosed rather
+than offered as working imports. File/link import remains available.
+
+Each new character requires an explicit game choice; a previously selected or
+sole installed Sentieri demo is never silently chosen. Imported names remain
+unchanged, with separate application-owned demo notices. Setup uses declared
+numeric base fields when the source has no numeric creation form.
+
+`src/ui/navigation.ts` mirrors screen/character transitions into same-document
+browser history. Back/Forward restores the ephemeral destination and selected
+import without rewriting URLs or domain records. Identical destinations and
+search edits add no history entries. Reload keeps the existing roster landing
+behavior; Back at the entry page can leave the app normally.
+Save status is visible and announced; an operation failure is not labeled saved.
+
 ## Layers and ownership
 
 `src/engine/progression.ts` derives guided manual class/HP increments from the
@@ -16,10 +36,12 @@ are independent of imported creation lifecycle effects. Other systems retain
 typed manual fields.
 `src/engine/character-events.ts` preflights bounded static character handlers,
 first-true branches and single-target forwarding to popup/dice results.
-Editable popups accept one direct base-string enum selection.
+Editable popups accept one direct base-string enum selection and retain the
+opening source event through explicit Save.
 `src/persistence/character-events.ts` revalidates its target and option against
-the latest owner transaction. No persistent overrides, lifecycle dispatch or
-implicit resource/combat/draft event forwarding is implemented.
+the latest owner transaction. Supported character commands persist separate
+mechanic-owned reversible value/modifier layers. Lifecycle dispatch and implicit
+resource/combat/draft event forwarding remain unsupported.
 
 `CharacterInventory` reuses source forms for explicitly typed inventory arrays.
 Setup holds new instances locally until its atomic character transaction.
@@ -50,6 +72,10 @@ transactions. Nullable resource predicates are handled centrally by the formula
 interpreter, without resource deep equality.
 Source forms and guided setup place their disabled fieldset inside a div
 scrollport, leaving footer actions outside the scrolling content.
+Nested source forms merge parent input-ID drafts with local input shadowing.
+Validation shares that scope, and resource views resolve declared paths with
+the bounded formula evaluator before checking the selected instance's type/pin.
+Import-time bindings include only real, unambiguous inputs, not display labels.
 
 | Location | Responsibility |
 | --- | --- |
@@ -58,14 +84,15 @@ scrollport, leaving footer actions outside the scrolling content.
 | `src/importing/package.ts` | Bounded native gzip-JSON decoding and exact binary-source retention |
 | `src/importing/url.ts` | Direct HTTPS downloads, URL/HTML/HTTP/timeout/network diagnostics |
 | `src/importing/github.ts` | Public GitHub metadata discovery, explicit file choice and commit-pinned download |
-| `src/importing/repository.ts`, `src/importing/catalog.ts` | Source metadata discovery and strict, bounded catalog templates; no compiler or proxy |
+| `src/importing/repository.ts`, `src/importing/catalog.ts` | Source metadata discovery and strict, bounded catalog templates; no proxy |
+| `src/importing/source-repository.ts`, `src/importing/rpgscript/` | Commit-pinned JSON/RPGScript retrieval, bounded data-AST compilation and split-source composition; no imported code execution |
 | `src/importing/catalog-url.ts` | Direct JSON, commit-pinned GitHub file/folder and confined web-index catalog previews |
 | `src/persistence/catalog.ts` | Atomic compact templates, private character graphs and explicit manual assignment |
 | `src/engine/formulas.ts` | React-independent formula registry and bounded evaluator |
 | `src/engine/character-origins.ts` | Declared race/subrace contract and upstream-identity choices |
 | `src/engine/dice.ts` | Bounded manual dice expression and unbiased random faces |
 | `src/persistence/db.ts` | Dexie schema, migrations, immutable imports and transactional writes |
-| `src/persistence/backup.ts` | Backup v3, legacy v1/v2 restore, integrity/relation checks, atomic restore |
+| `src/persistence/backup.ts` | Backup v4, legacy v1/v2/v3 restore, integrity/relation checks, atomic restore |
 | `src/engine/combat.ts`, `src/persistence/combat.ts` | Pure combat evaluation and atomic, source-pinned commands |
 | `src/ui/CombatTracker.tsx`, `src/ui/FieldInput.tsx` | Encounter controls and typed base editors |
 | `src/domain/photo.ts`, `src/domain/references.ts` | Bounded raster images and exact-version reference integrity |
@@ -76,7 +103,7 @@ scrollport, leaving footer actions outside the scrolling content.
 | `src/engine/enumerations.ts` | Bounded enumerated-type resolution with inheritance and allowlists |
 | `src/ui/store.ts` | Only ephemeral navigation, selection and search, not copies of DB data |
 | `src/ui/it.ts` | Initial Italian UI catalogue |
-| `src/ui/Library.tsx` | Local/HTTPS file import preview and confirmation |
+| `src/ui/Library.tsx`, `src/ui/SystemImport.tsx`, `src/ui/library.css` | File/link choices, optional GitHub references, grouped import review and explicit confirmation |
 | `src/ui/Characters.tsx` | Manual character creation, source sheet, manual base editor |
 | `src/ui/Tools.tsx` | Local resources, notebook links, dice, diagnostics, settings, backup |
 | `vite.config.ts` | Manifest, update-prompt worker and shell precache |
@@ -90,6 +117,17 @@ The exact imported text is retained separately as `StoredSystem.original`.
 For gzip-JSON uploads, `original` holds exact decoded JSON and
 `StoredSystem.artifact` holds `{format: "gzip-json", base64: "..."}` containing
 the exact compressed upload, not a recompression. Export emits the retained bytes.
+For repository source imports, `original` is explicitly a generated monolithic
+JSON document containing `polysheet_source: {format: "rpgscript-v1", root, files}`.
+Each file retains its repository-relative path and exact UTF-8 `original`,
+including BOM, whitespace and line endings. This is not an original compiled
+upload. Source export and existing v4 backups retain that entire generated
+document and its SHA-256 identity. Files are sorted deterministically before
+serialization; neither restore nor ordinary offline opening needs a network read.
+The compiler is lazy-loaded and precached with the app shell. Source downloads
+are explicit, four at a time, at most 1,000 files/8 MiB, including transitive
+relative macro imports in the same pinned Git tree. The generated export still
+must fit the existing 8 MiB, 400,000-node and depth-64 system limits.
 `definition.character_stats` supplies stat definitions;
 `character_sheet_sections[].view` supplies sheet nodes. Resource definitions
 remain in `definition.resources`, not in the mutable local instance table.
@@ -133,6 +171,17 @@ contains actual input values keyed by source view IDs. General parent/event
 scopes remain unsupported.
 
 ## Interface and local assets
+
+System import has separate file and link entry points, with no duplicate header
+action. GitHub references are progressively disclosed only for repository
+inputs. Discovered catalog repositories still require a compatible compiled
+system or an existing local version; no compilation or proxy is introduced.
+Import review counts all diagnostics by topic, expands blocking errors, and
+renders at most 100 details per group with an explicit truncation note.
+Provenance and original-app version metadata remain in a technical disclosure.
+Dialog bodies scroll independently of their action footer. Source selection
+and cancellation never install records; the final existing confirmation command
+still owns the write transaction.
 
 The UI uses one charcoal/brass token system with a light variant. The default
 preference is dark; existing saved preferences are not migrated. Fonts in
@@ -261,7 +310,7 @@ Backup envelope:
 ```json
 {
   "format": "polysheet-backup",
-  "version": 3,
+  "version": 4,
   "exportedAt": "2026-01-01T00:00:00.000Z",
   "systems": [],
   "characters": [],
@@ -294,6 +343,11 @@ initiative and turn state. Restore validates references and active-state invaria
 before replacement; it never reruns initialization. Legacy v1/v2 backups restore
 with an empty encounter table. Base editors use transaction-safe field patches;
 the “saving” indicator remains active until the transaction commits.
+
+Backup v4 adds optional mechanic-owned character override layers. New exports
+declare v4; readers still accept v1–v3, including v3 exports carrying overrides
+produced by the initial event-pipeline implementation. Restore preserves those
+layers without rerunning events or merging them into character base values.
 
 Public GitHub repository roots support commit-pinned discovery and explicit file
 selection. GitHub `tree` and `blob` pages are rejected before download, rather

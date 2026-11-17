@@ -117,7 +117,7 @@ describe('typed persistence and combat', () => {
     await expect(commandCombat(combat.id, { type: 'add', typeId: 'scout' }, database)).rejects.toThrow();
     expect((await database.combats.get(combat.id))?.combatants).toEqual([]);
   });
-  it('preserves resource references, blocks dangling/cross-version links and restores v3', async () => {
+  it('preserves resource references, blocks dangling/cross-version links and restores v4', async () => {
     const { database, system } = await setup();
     const c = await createCharacter(system, 'Ada', database);
     const r: ResourceInstance = { id: 'r', systemKey: system.key, definitionId: 'scout', name: 'Sentinella', values: { name: 'Sentinella', hp: 6, initiative: 2 } };
@@ -129,7 +129,7 @@ describe('typed persistence and combat', () => {
     await expect(setCharacterValue(c.id, 'origin', { resourceId: 'foreign' }, database)).rejects.toThrow();
     await expect(deleteResource('r', database)).rejects.toThrow('riferimento');
     const backup = await exportBackup(database);
-    expect(JSON.parse(backup).version).toBe(3);
+    expect(JSON.parse(backup).version).toBe(4);
     await restoreBackup(backup, database);
     expect(isResourceReference((await database.characters.get(c.id))?.values.origin)).toBe(true);
     const bad = JSON.parse(backup); bad.characters[0].values.origin.resourceId = 'missing';

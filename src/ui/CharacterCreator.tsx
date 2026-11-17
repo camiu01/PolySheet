@@ -11,21 +11,26 @@ import { Modal, SystemSelect, Warning, type Run } from './shared';
 import { it } from './it';
 import { CharacterInventory } from './CharacterInventory';
 import { RuntimeResource } from '../engine/formulas';
+import { useUi } from './store';
 
 /** Keep every choice in a local draft; cancel/failure writes no partial character or graph. */
-export function CharacterCreator({ systems, systemKey, onSystemChange, character, run, onDone, onClose }: {
-  systems: StoredSystem[]; systemKey: string; onSystemChange: (key: string) => void;
+export function CharacterCreator({ systems, onSystemChange, character, run, onDone, onClose }: {
+  systems: StoredSystem[]; onSystemChange: (key: string) => void;
   character?: Character; run: Run; onDone: (id: string) => void; onClose: () => void;
 }) {
-  const system = systems.find(s => s.key === (character?.systemKey ?? systemKey))!;
+  const [chosenKey, setChosenKey] = useState('');
+  const system = systems.find(s => s.key === (character?.systemKey ?? chosenKey));
+  const chooseSystem = (key: string) => { setChosenKey(key); onSystemChange(key); };
   const [busy, setBusy] = useState(false);
   return <Modal title={character ? it.characterSetup : it.newCharacter} onClose={() => !busy && onClose()}>
-    <SetupForm key={system.key} system={system} systems={systems} onSystemChange={onSystemChange}
+    {system ? <SetupForm key={system.key} system={system} systems={systems} onSystemChange={chooseSystem}
       character={character} busy={busy} setBusy={setBusy} run={run} onDone={onDone} onClose={onClose} />
+      : <><p>{it.chooseGameHelp}</p><SystemSelect systems={systems} value="" onChange={chooseSystem} />
+        <div className="modal-actions"><button className="button secondary" onClick={onClose}>{it.cancel}</button></div></>}
   </Modal>;
 }
 
-/** Reuse declared catalog fields and typed editors without running source page hooks. */
+/** Reuse source creation fields, or declared numeric bases when no creation form exists; never run page hooks. */
 function SetupForm({ system, systems, onSystemChange, character, busy, setBusy, run, onDone, onClose }: {
   system: StoredSystem; systems: StoredSystem[]; onSystemChange: (key: string) => void;
   character?: Character; busy: boolean; setBusy: (value: boolean) => void;
@@ -47,7 +52,11 @@ function SetupForm({ system, systems, onSystemChange, character, busy, setBusy, 
   const canInitializeHealth = !character && supportsInitialHealth(system.definition);
   const initializeHealth = canInitializeHealth && automaticHealth && Boolean(fields.classes && selections[fields.classes.id]);
   const choices = [...(fields.classes ? [{ ...fields.classes, resource_type: 'class', name: character ? it.classChoice : it.setupClass }] : []), ...fields.singular];
-  const stats = useMemo(() => setupStats(system.definition), [system.definition]);
+  const stats = useMemo(() => {
+    const declared = setupStats(system.definition);
+    return declared.length ? declared : system.definition.character_stats.filter(stat =>
+      stat.type === 'base' && ['integer', 'decimal'].includes(stat.value_type));
+  }, [system.definition]);
   return <form className="source-form" onSubmit={event => {
     event.preventDefault(); if (busy || pendingScores || event.currentTarget.querySelector('[aria-invalid="true"]')) return;
     setBusy(true); setError('');
@@ -60,15 +69,22 @@ function SetupForm({ system, systems, onSystemChange, character, busy, setBusy, 
     });
   }}>
     <div className="source-form-fields"><fieldset className="source-form-controls" disabled={busy}>
-      <p>{it.manual}</p>
-      <p className="muted">{it.setupHelp}</p>
+      <p>{character ? it.characterSetup : it.manual}</p>
+      <h3>{system.definition.name}</h3>
+      {system.definition.id === 'polysheet-sentieri' && <Warning>{it.demoDescription}</Warning>}
+      <p className="muted">{character ? it.editSetupHelp : it.setupHelp}</p>
       {!character && <>
         <SystemSelect systems={systems} value={system.key} onChange={onSystemChange} />
         <label className="field"><span>{it.name}</span><input name="character-name" autoComplete="off" value={name}
           onChange={event => setName(event.target.value)} maxLength={100} required placeholder={it.namePlaceholder} /></label>
       </>}
       {choices.length > 0 && <section className="setup-group"><h3>{it.catalog}</h3>
-        {!choices.some(field => templates.some(record => record.definitionId === field.resource_type)) && <p className="muted">{it.setupNoCatalog}</p>}
+        {!choices.some(field => templates.some(record => record.definitionId === field.resource_type)) && <div className="setup-empty">
+          <p className="muted">{it.setupNoCatalog}</p>
+          <button type="button" className="button secondary" onClick={() => {
+            useUi.getState().selectSystem(system.key); useUi.getState().navigate('resources'); onClose();
+          }}>{it.goToCatalogs}</button>
+        </div>}
         {choices.map(field => <label className="field" key={field.id}><span>{field.name}</span>
           <select name={`setup-${field.id}`} value={selections[field.id] ?? ''}
             onChange={event => setSelections(previous => ({ ...previous, [field.id]: event.target.value }))}>

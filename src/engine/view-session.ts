@@ -1,5 +1,5 @@
 /** @file Scoped input drafts and source validation, independent of React/storage. */
-import { view, type Stat, type View } from '../domain/model';
+import { object, view, type Stat, type View } from '../domain/model';
 import { createEvaluator, statPath, type EvaluationEnvironment } from './formulas';
 
 /** Walk only the current form; nested popups own independent sessions. */
@@ -30,6 +30,10 @@ export function initialDrafts(input: unknown, stats: Stat[], values: Record<stri
     return s ? [[v.id, Object.hasOwn(values, s.id) ? values[s.id] : s.default_value ?? null]] : [];
   }));
 }
+/** Nested sessions shadow matching input IDs without losing the parent's other live inputs. */
+export function scopedDrafts(parent: unknown, drafts: Record<string, unknown>) {
+  return { ...(parent == null ? {} : object(parent)), ...drafts };
+}
 /** Explicit manual projection: retain input nodes, not official page visibility/hooks. */
 export function manualFieldGroup(group: View): View {
   if (!Array.isArray(group.content)) throw new Error('Gruppo di campi non valido');
@@ -55,7 +59,9 @@ export function draftCalculations(stats: Stat[], drafts: Record<string, unknown>
 }
 /** Every validation must yield null or a visible string; failures block Save. */
 export function validationMessages(input: unknown, stats: Stat[], values: Record<string, unknown>, drafts: Record<string, unknown>, environment: EvaluationEnvironment = {}) {
-  const e = createEvaluator(stats, values, undefined, { ...environment, variables: { ...environment.variables, $view: drafts } });
+  const e = createEvaluator(stats, values, undefined, {
+    ...environment, variables: { ...environment.variables, $view: scopedDrafts(environment.variables?.$view, drafts) }
+  });
   // Imported view IDs must never resolve or overwrite inherited object properties.
   const result: Record<string, string> = Object.create(null);
   for (const v of sessionViews(input)) {

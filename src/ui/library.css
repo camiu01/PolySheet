@@ -1,0 +1,46 @@
+.system-import{margin-bottom:32px;border:1px solid var(--line);border-radius:4px;background:var(--surface);padding:24px}
+.system-import>h2{font:500 26px/1.25 var(--heading)}
+.system-import>p{max-width:68ch;margin-top:8px;font-size:14px}
+.import-steps{display:flex;flex-wrap:wrap;gap:8px 32px;list-style:decimal;padding-left:20px;margin:20px 0 24px;color:var(--muted);font-size:12px}
+.import-steps li{padding-left:4px}
+.import-source-row{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:16px;align-items:center;padding:24px 0;border-top:1px solid var(--line)}
+.import-source-row>svg,.import-demo>svg{color:var(--muted)}
+.import-source-row>.button{max-width:100%}
+.import-source-row h3,.import-demo h3{font:600 15px/1.5 "Plus Jakarta Sans","Segoe UI",sans-serif}
+.import-source-row p,.import-demo p{max-width:58ch;margin-top:4px;font-size:13px;line-height:1.65;color:var(--muted)}
+.system-import>.import-before-confirm{margin-top:0;color:var(--muted);font-size:12px}
+.import-format-help{margin-top:12px;font-size:13px}
+.import-format-help>summary,.import-advanced>summary,.import-diagnostic-group>summary,.import-source-details>summary{min-height:44px;align-content:center;cursor:pointer}
+.import-format-help>p{max-width:68ch;color:var(--muted);margin:4px 0 12px;line-height:1.65}
+.import-demo{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:16px;align-items:center;margin-top:20px;padding-top:20px;border-top:1px solid var(--line)}
+.import-link-intro,.import-review-help{margin-top:16px;font-size:14px;color:var(--muted);max-width:68ch}
+.import-link-help{padding-left:20px;font-size:13px;line-height:1.7;color:var(--muted)}
+.import-link-help li+li{margin-top:8px}
+.import-advanced{border-top:1px solid var(--line);margin-top:16px;font-size:13px}
+.import-repository-step{margin:24px 0}
+.import-repository-step>h3{font:600 16px/1.5 "Plus Jakarta Sans","Segoe UI",sans-serif}
+.import-repository-step>p{font-size:13px;color:var(--muted);margin-top:8px}
+.import-repository-step .repository-ready{color:var(--success)}
+.import-repository-source{font-size:12px;color:var(--muted)}
+.import-repository-source code{font-size:11px}
+.import-diagnostic-group{border-top:1px solid var(--line);font-size:13px}
+.import-diagnostic-group>summary{font-weight:600;padding:8px 0}
+.import-diagnostic-group ul{padding-left:20px;margin:8px 0 16px}
+.import-diagnostic-group li{margin:12px 0}
+.import-diagnostic-group code{font-size:11px;color:var(--muted)}
+.import-source-details{font-size:12px;margin-top:16px;overflow-wrap:anywhere}
+.import-source-details>p{color:var(--muted);margin:8px 0}
+.import-confirm-help{font-size:12px;color:var(--muted);margin-top:20px}
+.modal-body:has(>.system-import-dialog){display:flex;flex-direction:column;overflow:hidden}
+.system-import-dialog{display:flex;flex-direction:column;min-height:0}
+.system-import-dialog-fields{min-height:0;overflow:auto;overscroll-behavior:contain;padding:4px}
+.system-import-dialog>.modal-actions{flex-shrink:0}
+@media(max-width:760px){
+  .system-import{padding:20px 16px}
+  .system-import>h2{font-size:24px}
+  .import-steps{gap:8px 24px}
+  .import-source-row{grid-template-columns:24px minmax(0,1fr);gap:8px 12px;padding:20px 0}
+  .import-source-row>.button{grid-column:2;justify-self:start;margin-top:8px}
+  .import-demo{grid-template-columns:24px minmax(0,1fr);gap:8px 12px}
+  .import-demo>.button{grid-column:2;justify-self:start;padding-left:0}
+}

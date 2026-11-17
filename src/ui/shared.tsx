@@ -21,8 +21,8 @@ export function PageHeading({ title, description, action }: { title: string; des
 }
 export function SystemSelect({ systems, value, onChange }: { systems: StoredSystem[]; value: string; onChange: (key: string) => void }) {
   return <label className="field system-select"><span>{it.chooseSystem}</span><select value={value} onChange={e => onChange(e.target.value)}>
-    {!systems.length && <option value="">{it.choose}</option>}
-    {systems.map(s => <option key={s.key} value={s.key}>{s.definition.name} · v{s.definition.version} · {s.digest.slice(0, 6)}</option>)}
+    {(!systems.length || !value) && <option value="">{it.choose}</option>}
+    {systems.map(s => <option key={s.key} value={s.key}>{s.definition.name}{s.definition.id === 'polysheet-sentieri' ? ` · ${it.demoBadge}` : ''} · v{s.definition.version} · {s.digest.slice(0, 6)}</option>)}
   </select></label>;
 }
 export function CompatibilityBadge({ system }: { system: StoredSystem }) {

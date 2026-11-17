@@ -5,7 +5,6 @@ import { expect, it } from 'vitest';
 import { createEvaluator } from '../src/engine/formulas';
 import { parseSystem } from '../src/importing/system';
 import { demo } from '../src/demo';
-import { it as copy } from '../src/ui/it';
 import { base, constant, list, stat } from './fixtures/capabilities';
 
 it('sorts homogeneous selectors stably without mutating the original array', () => {
@@ -27,7 +26,7 @@ it('sorts homogeneous selectors stably without mutating the original array', () 
   ]) expect(() => e.evaluate({ ...sort, ...bad })).toThrow();
 });
 
-it('uses the approved ascending compatibility order only when sortBy omits order', () => {
+it('sorts ascending when sortBy omits order', () => {
   const values = [{ level: 3, id: 'last' }, { level: 1, id: 'first' }, { level: 1, id: 'second' }];
   const original = structuredClone(values);
   const sort = { type: 'sortBy', components: stat('entries'), sort_by_selector: stat('$sortByValue.level') };
@@ -44,15 +43,13 @@ it('uses the approved ascending compatibility order only when sortBy omits order
   }
 });
 
-it('warns about omitted sortBy order without changing source and rejects explicit invalid orders', () => {
+it('accepts omitted sortBy order without a diagnostic or source change and rejects explicit invalid orders', () => {
   const components = { type: 'sortBy', components: list(constant(3), constant(1)), sort_by_selector: stat('$sortByValue') };
   const source = (formula: unknown) => JSON.stringify({ ...demo, character_stats: [{
     id: 'sorted', name: 'Sorted', type: 'calculated', value_type: 'array', sub_value_type: 'integer', components: formula
   }] });
   const parsed = parseSystem(source(components));
-  expect(parsed.diagnostics.filter(d => d.path.startsWith('$.character_stats'))).toEqual([{
-    path: '$.character_stats[0].components.order', message: copy.sortOrderDefault, severity: 'warning'
-  }]);
+  expect(parsed.diagnostics.filter(d => d.path.startsWith('$.character_stats'))).toEqual([]);
   expect(parsed.definition.character_stats[0].components).toEqual(components);
   expect(createEvaluator(parsed.definition.character_stats).get('sorted')).toEqual([1, 3]);
   for (const order of [null, '', false, 0, 'ascending', {}, [], ['asc'], ['desc']]) {

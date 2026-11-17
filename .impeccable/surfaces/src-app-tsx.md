@@ -2,13 +2,28 @@
 version: 1
 slug: "src-app-tsx"
 primary_target: "src/App.tsx"
-related_targets: ["src/styles.css","src/ui/Characters.tsx","src/ui/Tools.tsx","src/ui/Library.tsx"]
+related_targets: ["src/styles.css","src/ui/Characters.tsx","src/ui/Tools.tsx","src/ui/Library.tsx","src/ui/SystemImport.tsx","src/ui/library.css"]
 ---
 
 # Interface surface
 
 Mode: Operate. Targets: application shell and existing screens, desktop and phone.
 The supplied desktop/mobile screenshots are the visual authority, not sample data.
+
+## First-run clarification
+
+Lead with recognizable game choices under "I miei GDR", using ruled rows rather
+than a new visual system. D&D 2014/2024 fetch verified pinned sources into the
+existing review flow; neither button promises complete rules automation.
+Disclose unavailable PF2e/Daggerheart sources without a fake import action.
+File/link choices stay available below. Sentieri says "Sistema di prova",
+explicitly identifies itself as a demo, not D&D, and never claims hidden rules.
+New-character forms start with an empty game choice, even after demo import.
+Keep the game name and demo notice visible through creation, roster and sheet.
+Existing-character setup says modification, not creation. Native typed numeric
+bases remain editable when a source does not define creation inputs.
+Browser Back/Forward restores local screens, and the top bar exposes honest
+operation/save feedback without a profile or fake sync status.
 
 ## Direction contract
 
@@ -69,3 +84,25 @@ separate from name search and paged results. Search stays available during
 scrolling; body-font resource names and directional glyphs identify choices.
 The sheet header prioritizes configuration over the compact destructive action.
 Compatibility guidance and original source labels remain visible.
+
+## System import clarification
+
+Keep the library heading free of the duplicate import button. One ruled panel
+separates file and link choices, with short explanations and an explicit
+source/preview/confirmation sequence. Sentieri is a compact secondary option.
+Formats and system-versus-catalog guidance use native disclosure, not a wall
+of technical prose before the first action.
+
+The link dialog distinguishes direct system downloads from public GitHub
+repositories. A specific branch/tag/commit is optional and only shown for a
+repository, inside an advanced disclosure. Repository discovery asks for the
+system and explains automatic local preparation of JSON and RPGScript from one
+commit, without requiring a compiled file. Existing-version reuse is explicit;
+the optional compiled-file alternative stays collapsed. Never imply complete
+gameplay compatibility or that the publisher's CDN is proxied.
+
+Review counts all diagnostics by topic, expands blocking errors, and leaves
+precise paths and provenance available without putting them ahead of the task.
+Both dialog body and review body scroll independently of their always-visible
+actions. Keep confirmation-before-write, exact originals, safety limits, busy
+dismissal protection and the existing centered desktop/phone dialogs.

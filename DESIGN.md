@@ -163,7 +163,8 @@ recency, not an invented active session.
 Navigation retains every existing destination. Mobile shortcuts do not replace
 the complete drawer. Remove the requested fake workspace selector, top-right
 profile/status group, sidebar version footer and privacy promotion panels.
-Keep install, settings and backup actions. Save status remains screen-reader-only.
+Keep install, settings and backup actions. Save status is visible in the top bar
+and announced to screen readers; failed operations must not claim successful saving.
 
 ### Dialogs
 

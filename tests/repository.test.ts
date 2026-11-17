@@ -87,9 +87,8 @@ it('rejects malformed source identity and metadata rather than silently rewritin
     }
   } finally { originals.set(key, previous); }
 });
-it('requires a matching local compiled system and never fetches the CDN as a fallback', async () => {
+it('validates a supplied local system and never fetches the CDN as a fallback', async () => {
   const fetch = fixture(), found = await discoverRepository(repository); fetch.mockClear();
-  await expect(prepareRepositoryBundle(found, '5e')).rejects.toThrow('stesso ID');
   await expect(prepareRepositoryBundle(found, '5e', await localSystem('5e2024'))).rejects.toThrow('stesso ID');
   await expect(prepareRepositoryBundle(found, '5e', await localSystem('5e', '2'))).rejects.toThrow('stesso ID');
   expect(fetch).not.toHaveBeenCalled();

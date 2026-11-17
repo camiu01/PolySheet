@@ -58,6 +58,21 @@ export function sourceColor(value: unknown): string | undefined {
 	throw new Error(it.invalidColor);
 }
 
+/**
+ * Pick a legible foreground for a literal hex background.
+ * @returns Near-black or white by relative luminance, or undefined for palette variables that already pair with the theme ink.
+ */
+export function readableOn(background: string | undefined): string | undefined {
+	const hex = background?.match(/^#([a-f\d]{3}|[a-f\d]{6}|[a-f\d]{8})$/i)?.[1];
+	if (!hex) return undefined;
+	const full = hex.length === 3 ? [...hex].map(c => c + c).join('') : hex;
+	const [r, g, b] = [0, 2, 4].map(i => {
+		const channel = parseInt(full.slice(i, i + 2), 16) / 255;
+		return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+	});
+	return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.179 ? '#111417' : '#ffffff';
+}
+
 /** View colours are either literal palette values or formulas returning one. */
 export function viewColor(value: unknown, evaluate: (input: unknown) => unknown): string | undefined {
 	if (value == null) return undefined;
@@ -78,6 +93,23 @@ export function viewColor(value: unknown, evaluate: (input: unknown) => unknown)
 export function resourceReferenceIds(value: unknown): string[] {
 	const items = Array.isArray(value) ? value : [value];
 	return items.map(resourceReferenceId).filter((id): id is string => id !== undefined);
+}
+
+/**
+ * CSS grid tracks for a source `content_item_min_width`.
+ * @remarks A fraction up to 1 is a share of the row, so 0.5 always yields two
+ * columns; larger values are pixel minimums that wrap to the available width.
+ */
+export function gridColumns(value: unknown): string {
+	const width = typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 160;
+	if (width <= 1) return `repeat(${Math.min(12, Math.max(1, Math.floor(1 / width + 1e-9)))},minmax(0,1fr))`;
+	return `repeat(auto-fit,minmax(min(100%,${Math.min(800, width)}px),1fr))`;
+}
+
+/** Readable fallback for a source identifier shown where the source gives no title. */
+export function readableId(id: string): string {
+	const text = id.replace(/[_-]+/g, ' ').trim();
+	return text ? text.charAt(0).toLocaleUpperCase('it') + text.slice(1) : id;
 }
 
 /** Clamp a finite numeric option into a safe display range. */

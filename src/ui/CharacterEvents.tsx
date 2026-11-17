@@ -26,11 +26,11 @@ function MessageList({ messages }: { messages: { text: string; type: string }[] 
     className={message.type === 'error' ? 'error-text' : undefined}>{message.text}</p>)}</>;
 }
 
-/** Serialize commands locally and never roll during rendering, popup reopening or offline restore. */
+/** Serialize commands and retain the opening source event for popup saves; never roll during rendering or restore. */
 export function useCharacterEvents(system: StoredSystem, character: Character) {
   const lock = useRef(false);
   const [busy, setBusy] = useState(false);
-  const [display, setDisplay] = useState<Awaited<ReturnType<typeof runCharacterEvent>>>();
+  const [display, setDisplay] = useState<Awaited<ReturnType<typeof runCharacterEvent>> & { event: unknown }>();
   const [error, setError] = useState('');
   const [formBusy, setFormBusy] = useState(false);
   const canEvent = (event: unknown) => {
@@ -39,7 +39,7 @@ export function useCharacterEvents(system: StoredSystem, character: Character) {
   function onEvent(event: unknown) {
     if (lock.current) return;
     lock.current = true; setBusy(true); setError('');
-    void runCharacterEvent(character.id, event).then(setDisplay)
+    void runCharacterEvent(character.id, event).then(snapshot => setDisplay({ ...snapshot, event }))
       .catch(cause => setError(cause instanceof Error ? cause.message : String(cause)))
       .finally(() => { lock.current = false; setBusy(false); });
   }
@@ -56,7 +56,7 @@ export function useCharacterEvents(system: StoredSystem, character: Character) {
     variables: result.kind === 'popup' ? result.variables : { $edit_mode: false },
     onCommit: result.kind === 'popup' && result.edit ? async patch => {
       if (typeof patch === 'function') throw new Error(it.invalidValue);
-      await saveCharacterEvent(display.character.id, event, result.edit!.field, patch);
+      await saveCharacterEvent(display.character.id, display.event, result.edit!.field, patch);
     } : undefined
   } : undefined;
   const dialog = error ? <Modal title={it.eventFailed} onClose={() => setError('')}><p role="alert">{error}</p></Modal>

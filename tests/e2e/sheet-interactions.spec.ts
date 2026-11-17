@@ -6,6 +6,7 @@ import { it } from '../../src/ui/it';
 
 async function setupValues(page: Page, existing = false, constitution = '14') {
   const dialog = page.getByRole('dialog');
+  if (!existing) await dialog.getByRole('combobox', { name: it.chooseSystem, exact: true }).selectOption({ index: 1 });
   if (!existing) await dialog.getByLabel('Nome del personaggio').fill('Mira · configurata');
   await dialog.getByRole('combobox', { name: existing ? it.classChoice : it.setupClass, exact: true }).selectOption({ label: 'Fighter' });
   await dialog.locator('select[name="setup-race"]').selectOption({ label: 'Human' });
@@ -60,7 +61,7 @@ test('real 5e guided setup recovers an incomplete sheet, cancels cleanly, edits 
   const catalogs = ['class_fighter_fighter', 'class_wizard_wizard', 'race_human', 'background_soldier']
     .map(name => resolve(`.reference/rpg-companion-app-systems/systems/5e/resource_instances/${name}.rpg.json`));
   test.skip(!existsSync(file) || catalogs.some(file => !existsSync(file)), 'Local-only pinned 5e/catalog fixtures are absent');
-  await page.goto('./'); await navigate(page, 'Libreria sistemi');
+  await page.goto('./'); await navigate(page, it.systems);
   await page.locator('input[type=file]').setInputFiles(file);
   await page.getByRole('button', { name: 'Conferma importazione', exact: true }).click();
   await navigate(page, 'Risorse');
@@ -68,6 +69,7 @@ test('real 5e guided setup recovers an incomplete sheet, cancels cleanly, edits 
   await page.getByRole('button', { name: 'Conferma importazione', exact: true }).click();
   await navigate(page, /^Personaggi \d+$/);
   await page.getByRole('button', { name: 'Nuovo personaggio', exact: true }).first().click();
+  await page.getByRole('combobox', { name: it.chooseSystem, exact: true }).selectOption({ index: 1 });
   await page.getByLabel('Nome del personaggio').fill('Mira · incompleta');
   await page.getByRole('button', { name: 'Crea personaggio', exact: true }).click();
   await expect(page.locator('[data-view-error]').filter({ hasText: 'max_hp: classes_hp_mods: max richiede una lista non vuota' }).first()).toBeVisible();
@@ -295,12 +297,13 @@ async function verifySpellPicker(page: Page, project: string) {
 test('beginner D&D setup explains and applies point buy, dice and standard scores without partial writes', async ({ page }, info) => {
   const file = resolve('.reference/official-releases-2026-11-16/5e-system.rpg');
   test.skip(!existsSync(file), 'Local-only official 5e fixture is absent');
-  await page.goto('./'); await navigate(page, 'Libreria sistemi');
+  await page.goto('./'); await navigate(page, it.systems);
   await page.locator('input[type=file]').setInputFiles(file);
   await page.getByRole('button', { name: 'Conferma importazione', exact: true }).click();
   await navigate(page, /^Personaggi \d+$/);
   await page.getByRole('button', { name: 'Nuovo personaggio', exact: true }).first().click();
   const dialog = page.getByRole('dialog');
+  await dialog.getByRole('combobox', { name: it.chooseSystem, exact: true }).selectOption({ index: 1 });
   await dialog.getByLabel('Nome del personaggio').fill('Primo eroe');
   await dialog.getByLabel(it.abilityMethod).selectOption('point');
   for (const name of it.abilityNames) await dialog.getByLabel(name, { exact: true }).selectOption('15');
@@ -321,6 +324,7 @@ test('beginner D&D setup explains and applies point buy, dice and standard score
   await dialog.getByRole('button', { name: 'Annulla', exact: true }).click();
   expect((await setupSnapshot(page)).characters).toHaveLength(0);
   await page.getByRole('button', { name: 'Nuovo personaggio', exact: true }).first().click();
+  await dialog.getByRole('combobox', { name: it.chooseSystem, exact: true }).selectOption({ index: 1 });
   await dialog.getByLabel('Nome del personaggio').fill('Primo eroe');
   await dialog.getByLabel(it.abilityMethod).selectOption('standard');
   for (let i = 0; i < 6; i++) await dialog.getByLabel(it.abilityNames[i], { exact: true }).selectOption(String(i));
@@ -338,12 +342,13 @@ test('real 5e HP and paged Monster selection retain atomic save, cancel and offl
   const file = resolve('.reference/official-releases-2026-11-16/5e-system.rpg');
   test.skip(!existsSync(file), 'Local-only official 5e fixture is absent');
   await page.goto('./');
-  await navigate(page, 'Libreria sistemi');
+  await navigate(page, it.systems);
   await page.locator('input[type=file]').setInputFiles(file);
   await page.getByRole('button', { name: 'Conferma importazione', exact: true }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await navigate(page, /^Personaggi \d+$/);
   await page.getByRole('button', { name: 'Nuovo personaggio', exact: true }).first().click();
+  await page.getByRole('combobox', { name: it.chooseSystem, exact: true }).selectOption({ index: 1 });
   await page.getByLabel('Nome del personaggio').fill('Mira · verifica HP');
   await page.getByRole('button', { name: 'Crea personaggio', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Mira · verifica HP', exact: true })).toBeVisible();

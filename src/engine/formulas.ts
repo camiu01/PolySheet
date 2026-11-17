@@ -116,8 +116,42 @@ export const formulaFields: Record<string, string[]> = {
   sortBy: ['components', 'sort_by_selector', 'sort_by_value_key', 'order'],
   enumeratedName: ['enumerated_type', 'id'], enumeratedAbbreviation: ['enumerated_type', 'id'],
   toNum: ['components'], toSignedString: ['components'],
-  replace: ['string', 'occurrence', 'replace']
+  replace: ['string', 'occurrence', 'replace'],
+  createChip: ['id', 'text', 'background_color', 'border_color', 'style', 'resource_id', 'resource_instance_ids_stat', 'resource_display_stat']
 };
+/**
+ * Build the literal `chip` view described by one `createChip` node.
+ * @returns A frozen view whose text is a constant and whose colours are literal palette names or hex codes.
+ * @throws If neither or both of `text` and the three resource fields are present, or a computed option has the wrong type.
+ * @see https://docs.rpg-companion.app/Stat/Formulas/createChip
+ */
+function chipView(node: Node, evaluate: (value: unknown) => unknown) {
+  if (typeof node.id !== 'string' || !node.id) throw new Error('createChip richiede un id testuale');
+  const resourceFields = ['resource_id', 'resource_instance_ids_stat', 'resource_display_stat'] as const;
+  const present = resourceFields.filter(field => node[field] != null);
+  if (present.length && (present.length < resourceFields.length || present.some(field => typeof node[field] !== 'string')))
+    throw new Error('createChip richiede i tre campi risorsa testuali');
+  if ((node.text != null) === (present.length > 0)) throw new Error('createChip richiede text oppure i campi risorsa');
+  const option = (field: 'background_color' | 'border_color' | 'style') => {
+    const value = node[field] == null ? null : evaluate(node[field]);
+    if (value !== null && typeof value !== 'string') throw new Error(`createChip.${field} richiede un testo`);
+    return value;
+  };
+  const text = node.text == null ? null : evaluate(node.text);
+  if (text !== null && typeof text !== 'string' && !(typeof text === 'number' && Number.isFinite(text)))
+    throw new Error('createChip.text richiede un testo');
+  const style = option('style') ?? 'fullSize';
+  if (style !== 'compact' && style !== 'fullSize') throw new Error(`Stile chip non supportato: ${style}`);
+  return Object.freeze({
+    type: 'chip', id: node.id, style,
+    ...(text === null ? {} : { text: Object.freeze({ type: 'constant', value: String(text), value_type: 'string' }) }),
+    ...Object.fromEntries(resourceFields.filter(field => node[field] != null).map(field => [field, node[field]])),
+    ...Object.fromEntries((['background_color', 'border_color'] as const).flatMap(field => {
+      const value = option(field);
+      return value === null ? [] : [[field, value]];
+    }))
+  });
+}
 /** Resolve one enumerated entry label through the scoped resolver. */
 function enumeratedValue(scope: ScopeApi, node: Node, evaluate: (value: unknown) => unknown, field: 'name' | 'abbreviation') {
   if (typeof node.enumerated_type !== 'string' || !node.enumerated_type) throw new Error('enumerated_type richiesto');
@@ -127,6 +161,7 @@ function enumeratedValue(scope: ScopeApi, node: Node, evaluate: (value: unknown)
 }
 /** Extensible handler registry. No dynamic JavaScript evaluation is used. */
 export const formulaHandlers = new Map<string, Handler>([
+  ['createChip', (n, e) => chipView(n, e)],
   ['isNull', (n, e) => e(n.components) === null],
   ['notNull', (n, e) => e(n.components) !== null],
   ['toLowerCase', (n, e) => {

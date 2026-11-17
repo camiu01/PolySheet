@@ -9,11 +9,12 @@ import { characterEventEffect, executeCharacterEvent } from '../src/engine/chara
 import { RuntimeResource } from '../src/engine/formulas';
 import { prepareSystem } from '../src/importing/system';
 import { prepareCatalog } from '../src/importing/catalog';
-import { createCharacter, initialValues, installSystem, setCharacterValue, SheetDatabase } from '../src/persistence/db';
+import { createCharacter, db, initialValues, installSystem, setCharacterValue, SheetDatabase } from '../src/persistence/db';
 import { saveCharacterEvent } from '../src/persistence/character-events';
 import { configureCharacter } from '../src/persistence/catalog';
 import { RenderView } from '../src/ui/renderer';
 import { CharacterInventory } from '../src/ui/CharacterInventory';
+import { useCharacterEvents } from '../src/ui/CharacterEvents';
 
 beforeAll(() => {
   HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
@@ -32,6 +33,36 @@ const popup = { type: 'showPopUp', pop_up_title: constant('Competenza'),
 const definition = { ...demo, character_stats: [...demo.character_stats, base('rank', 'string', 'none'), base('hp', 'integer', 0)],
   enumerated_types: [{ id: 'ranks', types: [{ id: 'none', name: 'Nessuna' }, { id: 'trained', name: 'Allenata' }] }],
   mechanics: [{ id: 'choice', event_names: 'choose', effects: popup }] };
+
+it('saves a popup using its opening event after the click event has expired', async () => {
+  const system = await prepareSystem(JSON.stringify(definition), 'Popup UI regression');
+  await installSystem(system);
+  const owner = await createCharacter(system, 'Popup UI regression');
+  function PopupHarness() {
+    const events = useCharacterEvents(system, owner);
+    return <><button onClick={() => events.onEvent(choose)}>Open choice</button>{events.dialog}</>;
+  }
+  const { unmount } = render(<PopupHarness />);
+  try {
+    fireEvent.click(screen.getByRole('button', { name: 'Open choice' }));
+    await screen.findByRole('dialog', { name: 'Competenza' });
+    fireEvent.click(screen.getByRole('radio', { name: 'Allenata' }));
+    expect((await db.characters.get(owner.id))?.values.rank).toBe('none');
+    fireEvent.click(screen.getByRole('button', { name: 'Annulla' }));
+    expect((await db.characters.get(owner.id))?.values.rank).toBe('none');
+    fireEvent.click(screen.getByRole('button', { name: 'Open choice' }));
+    await screen.findByRole('dialog', { name: 'Competenza' });
+    fireEvent.click(screen.getByRole('radio', { name: 'Allenata' }));
+    await setCharacterValue(owner.id, 'hp', 7);
+    fireEvent.click(screen.getByRole('button', { name: 'Salva' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect((await db.characters.get(owner.id))?.values).toMatchObject({ rank: 'trained', hp: 7 });
+  } finally {
+    unmount();
+    await db.characters.delete(owner.id);
+    await db.systems.delete(system.key);
+  }
+});
 
 it('follows the first true branch with unchanged payload; rejects cycles, multiple targets and unsupported branches', async () => {
   const forward = { type: 'forwardEvent', new_event_names: list(constant('choose')) };

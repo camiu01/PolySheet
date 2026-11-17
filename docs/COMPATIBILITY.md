@@ -69,6 +69,73 @@ Broader event/mechanic diagnostics remain visible.
 
 ## General event/effect pipeline, 2026-11-16
 
+### Scoped resource previews and action diagnostics, 2026-11-17
+
+Inspected [resource views](https://docs.rpg-companion.app/Views/resource),
+[creation pages](https://docs.rpg-companion.app/System/CharacterCreationPage)
+and [mechanics](https://docs.rpg-companion.app/Mechanic/), against Archer 5e
+0.9.1 at `378bdf68f055bae8777a233fc0ac6e4f9eb6145c`.
+The unchanged path
+`character_creation_flow[0].view.subviews[2].subviews[0].pop_up_view.stat`
+is `$view.edit_character_basics_race_select`, not a direct character stat ID.
+Resource views now evaluate paths through the existing bounded evaluator.
+Nested form scopes retain distinct parent inputs and shadow matching IDs with
+local drafts. Validation uses the same scope. The selected local instance still
+requires the declared definition and exact import pin; unsafe paths stay invalid.
+`create_if_empty: false` is an implemented inert option; `true` remains diagnosed.
+
+Static reference diagnostics collect actual typed inputs, excluding nested
+popups and ambiguous duplicate inputs. Display-only duplicate labels are not
+draft bindings and do not invalidate the import. The original Archer popup test
+uses the unchanged button and a minimal original resource fixture to isolate
+selection lookup, not to claim the entire creation page executes.
+Independent expectations: a parent selection of Draft must display Draft, not
+the committed Committed instance; closing a preview writes nothing; local
+validation values shadow parent values. Browser acceptance additionally creates
+the resource through nested source controls, cancels it, saves a new selection
+and reopens the committed selection offline.
+
+Stat tap/long-press and avatar button diagnostics now check the existing
+character dispatcher instead of declaring every event field unknown. Unsupported
+resource/combat/draft scopes and handlers retain diagnostics. Current pinned
+package totals are 184 / 183 / 357 for 5e / 5e2024 / PF2e, replacing the earlier
+273 / 272 / 409 totals. These reductions do not establish full system support.
+The broad character mechanics notice now describes partial explicit-command
+support rather than incorrectly claiming that no mechanics run.
+
+Still unimplemented from the reported request: the official creation lifecycle
+(`pre_edit`, open/close, final `post_edit`), full `progression_systems` effects,
+and Archer `resources[1]` armor, `[6]` companion and `[9]` damage-variant mechanics.
+Their warnings remain, as do unsupported asynchronous popups and roll callbacks.
+This increment fixes scoped previews and inaccurate diagnostics only; it does
+not fulfill those remaining automation requests.
+
+### Merge corrections, 2026-11-17
+
+The pinned Archer 0.9.1 JSON from revision
+`378bdf68f055bae8777a233fc0ac6e4f9eb6145c`, `mechanics[*].revert_event_names`,
+contains an empty string on all 21 mechanics. A blank subscription string means
+no subscribed events, not an invalid event name. Empty elements inside a list
+or a nonempty comma-separated string remain invalid. The unchanged Archer
+`skillTap` action with Dexterity 16 and a deterministic d20 result of 10 again
+totals 13; its proficiency popup still targets `acrobatics_proficiency`.
+
+Editable popups retain their opening source event for Save instead of reading
+the browser's transient global event. A UI regression checks Cancel, reopen,
+Save and preservation of a concurrent unrelated HP edit.
+
+Current pinned-package warning totals are 273 / 272 / 409 for 5e / 5e2024 /
+PF2e. Compared with the pre-merge expectations 311 / 310 / 459, the dispatcher
+removed two obsolete button-event diagnostics at each of 19 / 19 / 25 source
+button nodes. These counts were checked against the original package trees;
+this correction does not suppress additional diagnostics or establish that
+resource-owned events can execute.
+
+New backups now actually declare v4; v1–v3 readers remain supported, including
+previously emitted v3 backups with character override layers.
+
+### Pipeline scope
+
 The pinned 5e 0.6.0 system (`reported-system.rpg`) contains 21 character mechanics:
 3 `setStat`, 4 `showPopUp`, 6 `when`, 4 `sequence`, 2 `showMessage`, 2 `roll`.
 Event-carrying fields in real source are `on_tap_event`/`on_long_tap_event` on
@@ -95,9 +162,9 @@ or backup restore. Backup format upgraded to v4 (reads v1–v4); `Character.over
 is optional and validated on restore.
 
 Tests: `character-events.test.tsx`, `sheet-actions.test.tsx`,
-`e2e/sheet-interactions.spec.ts`. The existing `tests/package.test.ts` diagnostic
-counts for 5e/5e2024/PF2e remain 333/332/491; the new event dispatcher adds
-no structural warnings.
+`e2e/sheet-interactions.spec.ts`. The current `tests/package.test.ts` diagnostic
+counts and their source-verified changes are recorded in the merge corrections
+above.
 [showPopUp](https://docs.rpg-companion.app/Effects/showPopUp).
 
 Stat tap/long-press actions accept one static root handler, first-true `when`
@@ -144,18 +211,64 @@ Tests: `tests/sheet-actions.test.tsx` and desktop/mobile guided-setup acceptance
 | Formulas and sheet components | Partial | Only registered, documented handlers/fields/scopes; see the [matrix](#compatibility-matrix) |
 | Source forms and selectors | Partial | Real scoped Save/Cancel, enumeration options and local-resource selection; see [views](VIEWS.md) |
 | Manual character/resource editing | Supported subset | Typed base values and exact-import references, not official creation-rule validation |
-| Class/race/background/ancestry/heritage JSON catalogs | Partial | Compact immutable templates, local compiled system once, explicit private assignment; incompatible entries stay nonassignable |
+| Class/race/background/ancestry/heritage JSON catalogs | Partial | Compact immutable templates, locally composed or explicitly reused system, private manual assignment; incompatible entries stay nonassignable |
 | Resource links | Supported discovery, partial catalog semantics | Direct JSON, GitHub root/file/folder, web `index.json`; same strict root types and caps, no HTML crawl or CORS proxy |
 | Remove an installed system | Supported subset | Exact-version confirmation; removes related resources/rolls, blocks character/encounter pins and stale concurrent creation |
 | Combat | Partial | Explicit bounded initialization, initiative and turns, not general events; see [combat](COMBAT.md) |
 | General events, lifecycle effects, equipment and progression | Unsupported | No inferred bonuses, effect stacking/reversal or automatic leveling |
-| Split authoring trees and RPGScript | Unsupported compilation | Metadata discovery does not merge sources or provide a browser compiler |
+| Split authoring trees and RPGScript | Verified 5e/5e2024 source subset | Local data-AST compilation from one pinned tree; unknown syntax blocks preparation; PF2e source error described below |
 | Book/class/race resource archives | Unsupported | A system import does not install a compendium |
 
-Repository metadata can identify systems without compiling their sources.
-The user-approved workflow uses a local compiled system once because the
-official CDN blocks cross-origin browser reads. Catalog JSON comes from a
-pinned GitHub commit. See [the import flow](GITHUB_IMPORT.md#source-repositories-and-automatic-catalogs).
+The default repository workflow composes JSON and RPGScript locally, then
+loads catalog JSON from the same pinned GitHub commit. No compiled upload or
+CORS-blocked CDN is required. Explicit local-system reuse remains optional.
+See [the import flow](GITHUB_IMPORT.md#source-repositories-and-automatic-catalogs).
+
+### Browser source compiler, 2026-11-17
+
+User-approved scope: JSON and RPGScript directly from the repository, without a
+backend, bundled game content, external executable or CORS proxy. The compiler
+lowers declarations, typed constructors, formulas, conditionals, named macros,
+relative/transitive macro imports, interpolation and lambda scopes into data
+trees. It never executes RPGScript. Own macro definitions override imports.
+Lexical file order, directory indexes and resource/stat ID merges follow the
+documented split-source format; an RPGScript index overrides a JSON index.
+Only macro declarations are imported from dependency files.
+
+Evidence: revision `8788e3b18099e4a1b3510f02869d97f1488586b4`,
+`systems/{5e,5e2024}/system/` and `systems/_stdlib/`, checked against the
+unchanged official 0.9.1 packages. Independent comparisons cover every
+character/resource stat formula and default, sheet/search/creation views,
+mechanics, combat definitions, and resource display/edit/list views.
+For example, `resources[id=spell].stats[id=resolved_spellcasting_class_source_id]`
+requires flattened unparenthesized `else if` clauses, while grouped conditionals
+remain nested. Missing root view IDs use the declaration name; explicit IDs win,
+including `resources/encounter_template/edit_view.rpgs`.
+`Combatant.is_defeated` is a formula in the inspected publisher output even
+though the older extension schema omits it.
+
+Small original probes independently compiled with the official extension's
+executable verify constructor tags, default root IDs, arithmetic/grouping,
+conditionals, lambda keys, literal event payloads and index precedence.
+The distributed compiler is original TypeScript; only stripped field/type
+metadata comes from extension 1.3.0 under its explicit MIT license, retained in
+`docs/licenses/rpgscript-extension-MIT.txt`.
+
+PF2e at that revision has an unmatched closing parenthesis at
+`systems/pf2e/system/resources/weapon/stats.rpgs:928:3`, in `damage_bonus`.
+The inspected official executable exits successfully on an isolated unmodified
+copy but drops the trailing attachment, specialization and character damage
+terms. PolySheet instead blocks this source import with the exact location.
+It does not repair the game rule or reproduce the silent truncation. Existing
+valid compiled PF2e imports remain supported under their previous partial policy.
+
+Generated exports embed every fetched original in `polysheet_source`, not a
+claim that the generated document was uploaded verbatim. Exact JSON/BOM/line
+endings survive export and v4 backup integrity validation. The 1,000-file/8 MiB
+source cap and existing generated-system caps still apply. Compilation parity
+for the inspected trees is not complete gameplay compatibility: normal rule
+diagnostics remain visible. Tests: `rpgscript.test.ts`,
+`source-repository.test.ts`, `system-import.test.tsx` and browser source imports.
 
 For omitted `sortBy.order`, PolySheet deliberately uses ascending order with a
 visible warning. The user approved this policy; upstream default behavior remains
