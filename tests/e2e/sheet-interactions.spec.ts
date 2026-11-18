@@ -3,10 +3,12 @@ import { test, expect, type Page } from '@playwright/test';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { it } from '../../src/ui/it';
+import { chooseManualGame } from './helpers';
+import { verifyItemQuantity } from './resource-card-actions';
 
 async function setupValues(page: Page, existing = false, constitution = '14') {
   const dialog = page.getByRole('dialog');
-  if (!existing) await dialog.getByRole('combobox', { name: it.chooseSystem, exact: true }).selectOption({ index: 1 });
+  if (!existing) await chooseManualGame(dialog.getByRole('combobox', { name: it.chooseSystem, exact: true }));
   if (!existing) await dialog.getByLabel('Nome del personaggio').fill('Mira · configurata');
   await dialog.getByRole('combobox', { name: existing ? it.classChoice : it.setupClass, exact: true }).selectOption({ label: 'Fighter' });
   await dialog.locator('select[name="setup-race"]').selectOption({ label: 'Human' });
@@ -35,7 +37,7 @@ async function setupSnapshot(page: Page) {
   });
 }
 
-async function expectSetupGeometry(page: Page) {
+async function expectSetupGeometry(page: Page, action = 'Crea personaggio') {
   const dialog = page.getByRole('dialog');
   const footer = await dialog.locator('.modal-actions').boundingBox();
   for (const scrollTop of [100000, 0]) {
@@ -45,7 +47,7 @@ async function expectSetupGeometry(page: Page) {
     expect((await dialog.locator('.modal-actions').boundingBox())!.y).toBe(footer!.y);
     expect(await dialog.locator('.source-form').evaluate(element => element.scrollHeight <= element.clientHeight + 1)).toBe(true);
   }
-  await dialog.getByRole('button', { name: 'Crea personaggio', exact: true }).click({ trial: true });
+  await dialog.locator('.modal-actions').getByRole('button', { name: action, exact: true }).click({ trial: true });
 }
 
 async function expectConfigured(page: Page) {
@@ -69,7 +71,7 @@ test('real 5e guided setup recovers an incomplete sheet, cancels cleanly, edits 
   await page.getByRole('button', { name: 'Conferma importazione', exact: true }).click();
   await navigate(page, /^Personaggi \d+$/);
   await page.getByRole('button', { name: 'Nuovo personaggio', exact: true }).first().click();
-  await page.getByRole('combobox', { name: it.chooseSystem, exact: true }).selectOption({ index: 1 });
+  await chooseManualGame(page.getByRole('combobox', { name: it.chooseSystem, exact: true }));
   await page.getByLabel('Nome del personaggio').fill('Mira · incompleta');
   await page.getByRole('button', { name: 'Crea personaggio', exact: true }).click();
   await expect(page.locator('[data-view-error]').filter({ hasText: 'max_hp: classes_hp_mods: max richiede una lista non vuota' }).first()).toBeVisible();
@@ -147,24 +149,34 @@ test('real 5e guided setup recovers an incomplete sheet, cancels cleanly, edits 
   expect(created.values.base_hp).toBe(10);
   expect(created.values.current_hp).toBe(12);
   expect(created.values.equipment).toHaveLength(1);
+  await verifyItemQuantity(page);
+  const beforeAdvancement = (await setupSnapshot(page)).characters.find(character => character.id === created.id);
   await page.getByRole('button', { name: it.progression, exact: true }).click();
   const advancement = page.getByRole('dialog', { name: it.progression, exact: true });
   await expect(advancement.getByRole('button', { name: it.progression, exact: true })).toBeDisabled();
   await expect(advancement.getByText(it.progressionChoices, { exact: true })).toBeVisible();
+  await expect(advancement.getByText('Action Surge', { exact: true })).toBeVisible();
   await page.screenshot({ path: resolve(`.reference/ui-review/${info.project.name}-progression.png`) });
   await advancement.getByRole('button', { name: it.cancel, exact: true }).click();
-  expect((await setupSnapshot(page)).characters.find(character => character.id === created.id)).toEqual(created);
+  expect((await setupSnapshot(page)).characters.find(character => character.id === created.id)).toEqual(beforeAdvancement);
   await page.getByRole('button', { name: it.progression, exact: true }).click();
   await advancement.getByLabel(it.progressionAcknowledge, { exact: true }).check();
   await advancement.getByRole('button', { name: it.progression, exact: true }).click();
   await expect(advancement.getByRole('status')).toContainText(it.progressionSaved);
+  await expect(advancement.getByText('Action Surge', { exact: true })).toBeVisible();
+  await expectSetupGeometry(page, it.close);
+  await page.screenshot({ path: resolve(`.reference/ui-review/${info.project.name}-progression-result.png`) });
   await advancement.getByRole('button', { name: it.close, exact: true }).last().click();
+  await expect(page.getByText('Human Fighter 2', { exact: true })).toBeVisible();
+  await page.locator('summary').filter({ hasText: /^Fighter$/ }).click();
+  await expect(page.getByText('Action Surge', { exact: true })).toBeVisible();
   const advanced = (await setupSnapshot(page)).characters.find(character => character.id === created.id)!;
   expect(advanced.values.current_hp).toBe(12);
   expect(Number(advanced.values.base_hp)).toBeGreaterThan(10);
   await page.reload();
   expect((await setupSnapshot(page)).characters.find(character => character.id === created.id)).toEqual(advanced);
   await page.getByRole('button', { name: /Mira · configurata/ }).first().click();
+  await expect(page.getByText('Human Fighter 2', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: it.progression, exact: true }).click();
   await advancement.getByLabel(it.progressionMulticlass, { exact: true }).check();
   await advancement.getByRole('combobox', { name: it.classChoice, exact: true }).selectOption({ label: 'Wizard' });
@@ -303,7 +315,7 @@ test('beginner D&D setup explains and applies point buy, dice and standard score
   await navigate(page, /^Personaggi \d+$/);
   await page.getByRole('button', { name: 'Nuovo personaggio', exact: true }).first().click();
   const dialog = page.getByRole('dialog');
-  await dialog.getByRole('combobox', { name: it.chooseSystem, exact: true }).selectOption({ index: 1 });
+  await chooseManualGame(dialog.getByRole('combobox', { name: it.chooseSystem, exact: true }));
   await dialog.getByLabel('Nome del personaggio').fill('Primo eroe');
   await dialog.getByLabel(it.abilityMethod).selectOption('point');
   for (const name of it.abilityNames) await dialog.getByLabel(name, { exact: true }).selectOption('15');
@@ -324,7 +336,7 @@ test('beginner D&D setup explains and applies point buy, dice and standard score
   await dialog.getByRole('button', { name: 'Annulla', exact: true }).click();
   expect((await setupSnapshot(page)).characters).toHaveLength(0);
   await page.getByRole('button', { name: 'Nuovo personaggio', exact: true }).first().click();
-  await dialog.getByRole('combobox', { name: it.chooseSystem, exact: true }).selectOption({ index: 1 });
+  await chooseManualGame(dialog.getByRole('combobox', { name: it.chooseSystem, exact: true }));
   await dialog.getByLabel('Nome del personaggio').fill('Primo eroe');
   await dialog.getByLabel(it.abilityMethod).selectOption('standard');
   for (let i = 0; i < 6; i++) await dialog.getByLabel(it.abilityNames[i], { exact: true }).selectOption(String(i));
@@ -348,7 +360,7 @@ test('real 5e HP and paged Monster selection retain atomic save, cancel and offl
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await navigate(page, /^Personaggi \d+$/);
   await page.getByRole('button', { name: 'Nuovo personaggio', exact: true }).first().click();
-  await page.getByRole('combobox', { name: it.chooseSystem, exact: true }).selectOption({ index: 1 });
+  await chooseManualGame(page.getByRole('combobox', { name: it.chooseSystem, exact: true }));
   await page.getByLabel('Nome del personaggio').fill('Mira · verifica HP');
   await page.getByRole('button', { name: 'Crea personaggio', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Mira · verifica HP', exact: true })).toBeVisible();
@@ -412,8 +424,8 @@ test('real 5e HP and paged Monster selection retain atomic save, cancel and offl
     const picker = page.getByRole('dialog', { name: 'Aggiungi risorsa · Monster', exact: true });
     await expect(picker.getByRole('button', { name: /^Monster \d/ })).toHaveCount(50);
     await picker.getByRole('button', { name: 'Pagina successiva' }).click();
-    // IndexedDB returns primary keys lexicographically: monster-1042 is entry 51.
-    await expect(picker.getByRole('button', { name: 'Monster 01042', exact: true })).toBeVisible();
+    // The picker sorts by name: Monster 00050 opens page 2.
+    await expect(picker.getByRole('button', { name: 'Monster 00050', exact: true })).toBeVisible();
     await expect(picker.getByRole('searchbox')).toBeFocused();
     const heading = await picker.locator('.modal-heading').boundingBox();
     await picker.locator('.modal-body').evaluate(element => { element.scrollTop = element.scrollHeight; });
@@ -437,8 +449,8 @@ test('real 5e HP and paged Monster selection retain atomic save, cancel and offl
   await page.reload();
   await page.getByRole('button', { name: /Mira · verifica HP/ }).click();
   await expect(page.getByRole('button', { name: 'Modifica Current HP', exact: true })).toHaveText('5');
-  // This source explicitly disables the Details action and displays the entered name inline.
-  await expect(page.locator('.source-resource-item p').filter({ hasText: /^Compagno di Mira$/ })).toBeVisible();
+  // This source explicitly disables Details; its declared inline name input retains the saved value.
+  await expect(page.locator('.source-resource-item').getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Compagno di Mira');
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: resolve(`.reference/ui-review/${info.project.name}-5e-sheet.png`) });
   const data = await page.evaluate(async () => {

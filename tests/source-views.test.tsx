@@ -88,14 +88,14 @@ it('keeps source button and menu events visible instead of executing them', () =
   const { container } = render(<RenderView input={{ id: 'roll-button', type: 'button', text: constant('Tira'), event: { name: 'roll' } }}
     context={{ stats: [], values: {} }} />);
   expect(screen.getByRole('button', { name: 'Tira' })).toBeDisabled();
-  expect(container).toHaveTextContent('Evento importato non eseguito da PolySheet');
+  expect(container).toHaveTextContent('Azione non ancora disponibile in PolySheet');
   const { container: menu } = render(<RenderView input={{ id: 'mode-menu', type: 'menuButton', options: 'modes', allowed_options: list(constant('fast')) }}
     context={{ stats: [], values: {}, enumerations }} />);
   fireEvent.click(screen.getByRole('button', { name: 'Menu della sorgente' }));
   expect(screen.getByRole('menuitem', { name: 'Rapida' })).toBeInTheDocument();
   expect(screen.queryByRole('menuitem', { name: 'Sicura' })).toBeNull();
   fireEvent.click(screen.getByRole('menuitem', { name: 'Rapida' }));
-  expect(menu).toHaveTextContent('Evento importato non eseguito da PolySheet');
+  expect(menu).toHaveTextContent('Azione non ancora disponibile in PolySheet');
 });
 
 it('uses upstream scalar identity for source resource options and reopens the selected choice', () => {
@@ -128,4 +128,16 @@ it('lists referenced resource instances without offering creation in display mod
   }} />);
   expect(screen.getByText('Prima nota')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Aggiungi risorsa' })).toBeNull();
+});
+
+it('fills a single-choice select that has exactly one option only inside a draft form', () => {
+  const stats = [{ id: 'armor', name: 'Armatura', type: 'base', value_type: 'string', default_value: null }];
+  const node = { id: 'armor-select', type: 'select', stat: 'armor', options: 'armors' };
+  const enumerations = [{ id: 'armors', name: 'Armature', types: [{ id: 'heavy', name: 'Pesante' }] }];
+  const onInput = vi.fn(), onChange = vi.fn();
+  const { unmount } = render(<RenderView input={node} context={{ stats, values: {}, drafts: {}, onInput, onChange, enumerations }} />);
+  expect(onInput).toHaveBeenCalledWith('armor-select', 'armor', 'heavy');
+  unmount();
+  render(<RenderView input={node} context={{ stats, values: {}, onChange, enumerations }} />);
+  expect(onChange).not.toHaveBeenCalled();
 });

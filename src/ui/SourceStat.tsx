@@ -36,7 +36,11 @@ export function SourceStat({ node: v, context: ctx, evaluate: e }: {
   const adjustment = v.edit_bottom_sheet_title != null && v.on_tap_event == null && !details
     && !!edit && ['integer', 'decimal'].includes(edit.value_type) && typeof editValue === 'number' && v.change_amount !== 0 && !!ctx.onCommit;
   const title = adjustment ? textValue(e(v.edit_bottom_sheet_title)) : v.sheet_title != null ? textValue(e(v.sheet_title)) : name;
-  return <div className={`stat-block ${v.style === 'list' ? 'stat-list' : ''}`}>
+  // A source adjustment sheet (add/subtract) is the editing path; a second inline input would compete with it.
+  const inline = !!ctx.onChange && !!edit && v.change_amount !== 0 && !adjustment;
+  // When the input edits the shown stat itself, the input is the value: no second copy above it.
+  const single = inline && edit!.id === stat.id && !(details || tap || longTap || adjustment) && v.always_show_sign !== true;
+  return <div className={['stat-block', v.style === 'list' ? 'stat-list' : '', single ? 'stat-inline-edit' : ''].filter(Boolean).join(' ')}>
     <span className="stat-label" style={{ color: viewColor(v.name_color, e) }}>{name}</span>
     {details || tap || longTap || adjustment ? <button type="button" className="stat-detail-trigger" disabled={ctx.eventBusy}
       onPointerDown={event => {
@@ -57,7 +61,7 @@ export function SourceStat({ node: v, context: ctx, evaluate: e }: {
     {longTap && <button type="button" className="icon-button stat-more" disabled={ctx.eventBusy}
       aria-label={`${it.longTapAction} · ${name}`} title={`${it.longTapAction} · ${name}`}
       onClick={() => ctx.onEvent?.(v.on_long_tap_event)}><MoreHorizontal size={16} aria-hidden="true" /></button>}
-    {ctx.onChange && edit && v.change_amount !== 0 && <ScalarInput key={ctx.drafts ? v.id : `${edit.id}:${String(ctx.values[edit.id])}`} stat={edit}
+    {inline && edit && <ScalarInput key={ctx.drafts ? v.id : `${edit.id}:${String(ctx.values[edit.id])}`} stat={edit}
       value={inputValue(v, ctx, edit)} label={`${it.edit} ${edit.name}`}
       step={typeof v.change_amount === 'number' ? v.change_amount : undefined}
       min={minimum} max={maximum}

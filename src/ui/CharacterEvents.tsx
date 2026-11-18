@@ -10,6 +10,7 @@ import { it } from './it';
 import { SourceForm } from './SourceForm';
 import { runCharacterEvent, saveCharacterEvent } from '../persistence/character-events';
 import { canSourceEvent } from './view-support';
+import { resourceEventSupported } from '../engine/resource-events';
 
 export { canSourceEvent };
 
@@ -36,10 +37,11 @@ export function useCharacterEvents(system: StoredSystem, character: Character) {
   const canEvent = (event: unknown) => {
     try { characterEventPlan(system.definition, event); return true; } catch { return false; }
   };
-  function onEvent(event: unknown) {
+  const canResourceEvent = (definitionId: string, event: unknown) => resourceEventSupported(system.definition, definitionId, event);
+  function onEvent(event: unknown, targetResource?: string) {
     if (lock.current) return;
     lock.current = true; setBusy(true); setError('');
-    void runCharacterEvent(character.id, event).then(snapshot => setDisplay({ ...snapshot, event }))
+    void runCharacterEvent(character.id, event, undefined, targetResource).then(snapshot => setDisplay({ ...snapshot, event }))
       .catch(cause => setError(cause instanceof Error ? cause.message : String(cause)))
       .finally(() => { lock.current = false; setBusy(false); });
   }
@@ -68,13 +70,16 @@ export function useCharacterEvents(system: StoredSystem, character: Character) {
         : <RenderView input={result.input} context={context} />
         : <>
           {result.messages.length > 0 ? <MessageList messages={result.messages} /> : result.kind === 'effects'
-            ? <p className="muted">{it.eventAppliedHelp}</p> : <p className="muted">{it.eventRollHelp}</p>}
+            && <p className="muted">{it.eventAppliedHelp}</p>}
           {result.reverted.length > 0 && <p className="muted">{it.eventReverted} {result.reverted.join(', ')}</p>}
-          {result.kind === 'roll' && result.rolls.map((row, index) => <section key={index}>
-            <h3>{row.text}</h3>{row.results.map((roll, i) => <p key={i}>{roll.expression}: {roll.dice.join(', ')} → <strong>{roll.total}</strong></p>)}
-            <p>{it.eventTotal}: <strong>{row.results.reduce((sum, roll) => sum + roll.total, 0)}</strong></p>
+          {result.kind === 'roll' && result.rolls.map((row, index) => <section key={index} className="event-roll">
+            <h3>{row.text}</h3>
+            <output className="event-roll-total" aria-label={`${it.eventTotal} ${row.text}`}>{row.results.reduce((sum, roll) => sum + roll.total, 0)}</output>
+            {row.results.map((roll, i) => <p key={i} className="muted event-roll-detail">{roll.expression}{roll.dice.length ? ` · [${roll.dice.join(', ')}]` : ''}{row.results.length > 1 && roll.dice.length ? ` = ${roll.total}` : ''}</p>)}
           </section>)}
+          {result.kind === 'roll' && result.messages.length === 0 && <p className="muted event-roll-note">{it.eventRollHelp}</p>}
         </>}
     </Modal>;
-  return { canEvent, onEvent, eventBusy: busy, dialog };
+  return { canEvent, onEvent: (event: unknown) => onEvent(event), canResourceEvent,
+    onResourceEvent: (resourceId: string, event: unknown) => onEvent(event, resourceId), eventBusy: busy, dialog };
 }

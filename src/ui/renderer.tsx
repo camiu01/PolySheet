@@ -26,6 +26,16 @@ export interface RenderContext extends EvaluationEnvironment {
   canEvent?: (event: unknown) => boolean;
   onEvent?: (event: unknown) => void;
   eventBusy?: boolean;
+  /** Set on a resource card whose `canEvent`/`onEvent` target that resource's own mechanics. */
+  eventScope?: 'resource';
+  /** Sheet-level gates handed down so nested resource cards can build their own event scope. */
+  canResourceEvent?: (definitionId: string, event: unknown) => boolean;
+  onResourceEvent?: (resourceId: string, event: unknown) => void;
+  /** Persist a base input on the owning resource card, using the sheet's save/error status. */
+  onResourceChange?: (resourceId: string, statId: string, value: unknown) => void;
+  onResourceOverride?: (resourceId: string, statId: string, value: number) => void;
+  /** Set on a resource card: writes a calculated value of that instance (source ticker on charges). */
+  onOverride?: (statId: string, value: number) => void;
   stats: Stat[];
   values: Record<string, unknown>;
   onChange?: (id: string, value: unknown) => void;

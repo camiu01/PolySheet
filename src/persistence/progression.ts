@@ -1,5 +1,5 @@
 /** @file Atomic, source-derived manual advancement; no general persistent-effect dispatcher. */
-import { type ProgressionRequest, planProgression, progressionClasses, progressionEvaluator } from '../engine/progression';
+import { type ProgressionRequest, hitPointModes, planProgression, progressionClasses, progressionEvaluator, progressionSnapshot, progressionSummary } from '../engine/progression';
 import { db, initialValues, setCharacterValue } from './db';
 import { type ResourceInstance } from '../domain/model';
 import { prepareAssignment, assignPrepared } from './catalog';
@@ -36,7 +36,13 @@ export async function advanceCharacter(characterId: string, expectedRevision: nu
     const system = character && await database.systems.get(character.systemKey);
     if (!character || !system || character.revision !== expectedRevision) throw new Error(it.progressionStale);
     let resources = await database.resources.where('systemKey').equals(system.key).toArray();
+    if (request.hitPointMode !== undefined && request.hitPointMode !== character.values.hit_point_mode) {
+      if (!hitPointModes(system).some(mode => mode.id === request.hitPointMode)) throw new Error(it.progressionUnsupported);
+      await setCharacterValue(characterId, 'hit_point_mode', request.hitPointMode, database);
+      character = (await database.characters.get(characterId))!;
+    }
     const before = progressionClasses(system, character, resources);
+    const snapshot = progressionSnapshot(system, character, resources, prepared ? undefined : request.wrapperId);
     const level = progressionEvaluator(system, character, resources).get('level');
     if (typeof level !== 'number' || level < 1) throw new Error(it.progressionUnsupported);
     let wrapperId = request.wrapperId;
@@ -59,6 +65,8 @@ export async function advanceCharacter(characterId: string, expectedRevision: nu
     await saveResource(plan.wrapper, database);
     await setCharacterValue(characterId, 'base_hp', plan.values.base_hp, database);
     await setCharacterValue(characterId, 'temp_last_level_up_class_id', plan.values.temp_last_level_up_class_id, database);
-    return { level: plan.level, maxHp: plan.maxHp, baseHpGain: plan.baseHpGain };
+    const saved = (await database.characters.get(characterId))!;
+    const after = progressionSnapshot(system, saved, await database.resources.where('systemKey').equals(system.key).toArray(), wrapperId);
+    return { level: plan.level, maxHp: plan.maxHp, baseHpGain: plan.baseHpGain, summary: progressionSummary(snapshot, after) };
   });
 }

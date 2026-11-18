@@ -38,8 +38,7 @@ export function Resources({ systems, system, characters, run }: SystemPageProps 
   return <>
     <PageHeading title={it.resources} description={it.resourceSubtitle}
       action={<button className="button primary" disabled={!defs.length} onClick={() => { setDefinitionId(defs[0]?.id ?? ''); setEditing('new'); }}><Plus size={18} />{it.newResource}</button>} />
-    <Selector systems={systems} system={system} /><Warning>{it.resourceHelp}</Warning>
-    {system && <CatalogImport key={system.key} system={system} run={run} />}
+    <Selector systems={systems} system={system} />
     {!system ? <Empty title={it.noSystemSelected} /> : resources.length ? <div className="resource-grid">{resources.filter(r => !r.catalogGroup || r.catalogGroup === r.id).map(r => {
       const d = defs.find(d => d.id === r.definitionId);
       return <article key={r.id} className="resource-card"><div className="card-title-row"><span className="eyebrow">{d?.name}</span><button className="icon-button danger-text" aria-label={`${it.delete} ${r.name}`} onClick={() => setDeleting(r)}><Trash2 size={17} /></button></div>
@@ -54,6 +53,8 @@ export function Resources({ systems, system, characters, run }: SystemPageProps 
           <button className="button secondary" onClick={() => void run(() => attachResource(selectedCharacter, r.id))}>{it.attach}</button></div>}
       </article>;
     })}</div> : <Empty title={it.noResources}>{it.resourceHelp}</Empty>}
+    {system && <details className="catalog-import-disclosure"><summary>{it.importCatalog}</summary>
+      <CatalogImport key={system.key} system={system} run={run} /></details>}
     {editing && system && <Modal title={editing === 'new' ? it.newResource : it.edit} onClose={() => !resourceBusy && setEditing(null)}>
       {definition && <ResourceEditor key={chosenId} system={system} definition={definition} editing={editing} resources={resources}
         onSelect={setDefinitionId} onDone={() => setEditing(null)} onBusyChange={setResourceBusy} run={run} />}
@@ -69,17 +70,21 @@ export function DicePage({ systems, system, preferences, run }: SystemPageProps 
   const rolls = useLiveQuery(() => system ? db.rolls.where('systemKey').equals(system.key).toArray() : [], [system?.key]) ?? [];
   const sorted = [...rolls].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const latest = sorted[0];
+  function roll(formula: string) {
+    void run(async () => {
+      if (!system) throw new Error(it.noSystemSelected);
+      const result = rollDice(formula, system.definition.dice?.map(d => d.faces));
+      await saveRoll({ id: crypto.randomUUID(), systemKey: system.key, formula: formula.trim(), ...result, createdAt: new Date().toISOString() }, preferences.historyLimit);
+    });
+  }
   return <>
     <PageHeading title={it.dice} description={it.diceSubtitle} /><Selector systems={systems} system={system} />
     <div className="dice-layout"><section className="dice-panel"><Dices size={36} /><h2>{it.roll}</h2><p className="muted">{it.manualDice}</p>
       {system && !system.definition.dice && <Warning>{it.noDice}</Warning>}
-      <form onSubmit={e => { e.preventDefault(); void run(async () => {
-        if (!system) throw new Error(it.noSystemSelected);
-        const result = rollDice(expression, system.definition.dice?.map(d => d.faces));
-        await saveRoll({ id: crypto.randomUUID(), systemKey: system.key, formula: expression.trim(), ...result, createdAt: new Date().toISOString() }, preferences.historyLimit);
-      }); }}>
+      <form onSubmit={e => { e.preventDefault(); roll(expression); }}>
         <label className="field"><span>{it.formula}</span><input value={expression} onChange={e => setExpression(e.target.value)} maxLength={100} placeholder="2d6 + 3" /></label>
-        <div className="die-buttons">{(system?.definition.dice ?? []).map(d => <button className="button die-button" key={d.id} type="button" onClick={() => setExpression(`1d${d.faces}`)}>{d.name}</button>)}</div>
+        <div className="die-buttons">{(system?.definition.dice ?? []).map(d => <button className="button die-button" key={d.id} type="button" disabled={!system}
+          aria-label={`${it.roll} ${d.name}`} onClick={() => { setExpression(`1d${d.faces}`); roll(`1d${d.faces}`); }}>{d.name}</button>)}</div>
         <button className="button primary" disabled={!system}><Dices size={18} />{it.roll}</button>
       </form>
       {latest && <div className="dice-result" aria-live="polite"><span className="eyebrow">{it.result}</span><output>{latest.total}</output><span>{latest.formula} · [{latest.results.join(', ')}]</span></div>}

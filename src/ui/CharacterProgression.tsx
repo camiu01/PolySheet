@@ -1,7 +1,8 @@
 /** @file Explicit level/HP assistance, with unexecuted source choices kept visible. */
 import { useRef, useState } from 'react';
 import type { Character, ResourceInstance, StoredSystem } from '../domain/model';
-import { progressionArchetypes, progressionClasses, progressionContract, progressionEvaluator } from '../engine/progression';
+import { hitPointModes, progressionArchetypes, progressionClasses, progressionContract, progressionEvaluator, progressionPreview,
+  type ProgressionSummary } from '../engine/progression';
 import { advanceCharacter, previewNewClass } from '../persistence/progression';
 import { Modal, Warning } from './shared';
 import { it } from './it';
@@ -19,13 +20,15 @@ export function CharacterProgression({ character, system, resources, onClose }: 
   const [preview, setPreview] = useState<Awaited<ReturnType<typeof previewNewClass>>>();
   const [manual, setManual] = useState(false), [acknowledged, setAcknowledged] = useState(false);
   const [busy, setBusy] = useState(false), [loading, setLoading] = useState(false);
-  const [error, setError] = useState(''), [result, setResult] = useState('');
+  const [error, setError] = useState(''), [result, setResult] = useState<{ text: string; summary: ProgressionSummary }>();
+  const [hpMode, setHpMode] = useState<string>();
   const lock = useRef(false), selection = useRef(0);
   const close = () => { if (!lock.current) { selection.current++; onClose(); } };
   try {
     const contract = progressionContract(system), classes = progressionClasses(system, snapshot, resources);
     const evaluator = progressionEvaluator(system, snapshot, resources);
-    const level = evaluator.get('level'), mode = evaluator.get('hit_point_mode');
+    const level = evaluator.get('level'), imported = evaluator.get('hit_point_mode'), modes = hitPointModes(system);
+    const mode = hpMode ?? imported;
     if (typeof level !== 'number' || typeof mode !== 'string' || !classes.length) throw new Error(it.progressionUnsupported);
     const selected = classes.find(choice => choice.record.id === wrapperId) ?? classes[0];
     const total = target ?? level + 1;
@@ -43,8 +46,9 @@ export function CharacterProgression({ character, system, resources, onClose }: 
       finally { if (selection.current === token) setLoading(false); }
     }
     return <Modal title={it.progression} onClose={close}>
-      {result ? <><p role="status">{result}</p><Warning>{it.progressionChoices}</Warning>
-        <div className="modal-actions"><button className="button primary" onClick={close}>{it.close}</button></div></>
+      {result ? <div className="source-form">
+        <div className="source-form-fields"><p role="status" className="progression-saved">{result.text}</p><ProgressionResult summary={result.summary} /></div>
+        <div className="modal-actions"><button className="button primary" onClick={close}>{it.close}</button></div></div>
         : <form className="source-form" onSubmit={event => {
           event.preventDefault();
           if (lock.current || loading || !acknowledged || multiclass && (!manual || !preview)) return;
@@ -52,14 +56,20 @@ export function CharacterProgression({ character, system, resources, onClose }: 
           void advanceCharacter(snapshot.id, snapshot.revision, {
             wrapperId: selected.record.id, expectedClassLevel: selected.level, targetLevel: total,
             archetypeId: archetype || null, acknowledgeChoices: acknowledged,
+            ...(hpMode !== undefined && hpMode !== imported ? { hitPointMode: hpMode } : {}),
             ...(multiclass ? { newClassId: template, manualPrerequisites: manual } : {})
-          }).then(saved => setResult(`${it.progressionSaved} ${it.classLevel}: ${saved.level} · HP max: ${saved.maxHp} · +${saved.baseHpGain} HP base`))
+          }).then(saved => setResult({ text: `${it.progressionSaved} ${it.classLevel}: ${saved.level} · PF max ${saved.maxHp} (+${saved.baseHpGain})`, summary: saved.summary }))
             .catch(cause => setError(cause instanceof Error ? cause.message : String(cause)))
             .finally(() => { lock.current = false; setBusy(false); });
         }}>
           <div className="source-form-fields"><fieldset className="source-form-controls" disabled={busy}>
             <p className="muted">{it.progressionHelp}</p>
-            <p>{it.progressionCurrent}: <strong>{level}</strong> · {it.progressionHpMode}: <strong>{mode}</strong></p>
+            <p>{it.progressionCurrent}: <strong>{level}</strong></p>
+            {modes.some(option => option.id === mode) ? <label className="field"><span>{it.progressionHpMode}</span>
+              <select value={mode} onChange={event => setHpMode(event.target.value)}>
+                {modes.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}
+              </select><small className="muted">{it.progressionHpModeHelp}</small></label>
+              : <p>{it.progressionHpMode}: <strong>{mode}</strong></p>}
             <label className="field"><span>{it.progressionTarget}</span><input type="number" min={level + 1} max={contract.maxLevel}
               required step={1} value={Number.isNaN(total) ? '' : total} onChange={event => setTarget(event.target.value === '' ? NaN : event.target.valueAsNumber)} /></label>
             <label className="check-field"><input type="checkbox" checked={multiclass} onChange={event => {
@@ -76,7 +86,9 @@ export function CharacterProgression({ character, system, resources, onClose }: 
             {options?.required && <label className="field"><span>{it.progressionArchetype}</span><select required value={archetype} onChange={event => setArchetype(event.target.value)}>
               <option value="">{it.choose}</option>{options.options.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}
             </select></label>}
-            <p className="muted">{it.progressionRoll}</p>
+            {mode === 'roll' && <p className="muted">{it.progressionRoll}</p>}
+            {!multiclass && <ProgressionGains classLevel={selected.level + total - level}
+              read={() => progressionPreview(system, snapshot, resources, selected.record.id, selected.level + total - level)} />}
             <h3>{it.progressionChecklist}</h3><Warning>{it.progressionChoices}</Warning>
             <label className="check-field"><input type="checkbox" checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)} />{it.progressionAcknowledge}</label>
           </fieldset></div>
@@ -90,4 +102,32 @@ export function CharacterProgression({ character, system, resources, onClose }: 
     return <Modal title={it.progression} onClose={close}><p role="alert">{cause instanceof Error ? cause.message : String(cause)}</p>
       <button className="button secondary" onClick={close}>{it.close}</button></Modal>;
   }
+}
+
+/** Class features the selected level adds, read from the imported class before confirming. */
+function ProgressionGains({ classLevel, read }: { classLevel: number; read: () => ProgressionSummary }) {
+  if (!Number.isSafeInteger(classLevel)) return null;
+  const { features, choices } = read();
+  return <section className="progression-summary">
+    <h3>{it.progressionGains(classLevel)}</h3>
+    {features.length ? <ul>{features.map(name => <li key={name}>{name}{choices.includes(name) && <small className="muted"> · {it.progressionOpenChoices}</small>}</li>)}</ul>
+      : <p className="muted">{it.progressionNoGains}</p>}
+  </section>;
+}
+
+/** What the confirmed advancement changed on the sheet. */
+function ProgressionResult({ summary }: { summary: ProgressionSummary }) {
+  const shown = (value: unknown) => typeof value === 'number' || typeof value === 'string' ? String(value) : '—';
+  return <div className="progression-summary">
+    <section><h3>{it.progressionImproved}</h3>
+      {summary.improved.length ? <ul>{summary.improved.map((row, index) => <li key={index}>
+        <span>{row.name}</span> <strong>{shown(row.before)} → {shown(row.after)}</strong></li>)}</ul>
+        : <p className="muted">{it.progressionNothingImproved}</p>}</section>
+    {summary.features.length > 0 && <section><h3>{it.progressionNewFeatures}</h3>
+      <ul>{summary.features.map(name => <li key={name}>{name}</li>)}</ul></section>}
+    {summary.choices.length > 0 && <section><h3>{it.progressionOpenChoices}</h3>
+      <ul>{summary.choices.map(name => <li key={name}>{name}</li>)}</ul></section>}
+    <section><h3>{it.progressionRecovered}</h3><p className="muted">{it.progressionNothingRecovered}</p></section>
+    <Warning>{it.progressionChoices}</Warning>
+  </div>;
 }

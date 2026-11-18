@@ -190,7 +190,7 @@ it('seeds auto_add_first even when manual add/remove is disabled (PF2e classes)'
   expect(await screen.findByRole('textbox', { name: /Etichetta/ })).toBeEnabled();
   expect(screen.queryByRole('button', { name: copy.addResource })).toBeNull();
   expect(screen.queryByText(copy.resourceListReadOnly)).toBeNull();
-  expect(screen.queryByRole('button', { name: new RegExp(copy.detach) })).toBeNull();
+  expect(screen.queryByRole('button', { name: new RegExp(`${copy.detach}|${copy.removeEntry}`) })).toBeNull();
 });
 
 it('renders the switcher checkbox style as an accessible switch', async () => {
@@ -209,4 +209,19 @@ it('preselects the only installed real game so creation starts immediately', asy
   render(<CharacterCreator systems={[system]} onSystemChange={vi.fn()} run={async work => { await work(); }} onDone={vi.fn()} onClose={vi.fn()} />);
   expect(screen.getByRole('combobox', { name: copy.chooseSystem })).toHaveValue(system.key);
   await waitFor(() => expect(document.querySelector('.creation-steps [aria-current="step"]')).not.toBeNull());
+});
+
+it('turns a page hook failing on an unanswered value into an actionable message', async () => {
+  const pages = structuredClone(flowSystem.character_creation_flow) as Record<string, unknown>[];
+  pages[0].on_page_close = { type: 'setStat', stat: 'appunti', new_value: stat('fantasma'), aggregation_type: 'set' };
+  const system = await prepareSystem(JSON.stringify({ ...flowSystem, character_creation_flow: pages }), 'Original MIT fixture');
+  await installSystem(system);
+  render(<CharacterCreator systems={[system]} character={undefined} onSystemChange={vi.fn()}
+    run={async work => { await work(); }} onDone={vi.fn()} onClose={vi.fn()} />);
+  fireEvent.change(screen.getByRole('combobox', { name: copy.chooseSystem }), { target: { value: system.key } });
+  const name = await screen.findByLabelText('Nome');
+  fireEvent.change(name, { target: { value: 'Mira' } });
+  fireEvent.click(screen.getByRole('button', { name: copy.next }));
+  expect(await screen.findByText(new RegExp(copy.creationChoicesIncomplete.slice(0, 30)))).toBeVisible();
+  expect(screen.getByText(/fantasma/)).toBeVisible();
 });

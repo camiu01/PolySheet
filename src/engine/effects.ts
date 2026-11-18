@@ -1,11 +1,12 @@
 /**
  * @file Bounded validation and execution of the documented character effect subset.
- * @remarks Events, `$view` drafts, resource-owned mechanics and asynchronous
- * effects are outside this scope and fail explicitly instead of becoming no-ops.
+ * @remarks `$view` drafts and asynchronous effects are outside this scope and
+ * fail explicitly instead of becoming no-ops. Resource-owned mechanics run only
+ * for constant event names scoped with `eventName.for_resource`.
  * @see https://docs.rpg-companion.app/Effects/sequence
  * @see https://docs.rpg-companion.app/Mechanic/
  */
-import { jsonValue, matchesType, object, type AggregationType, type CharacterOverrides, type ResourceInstance, type Stat, type SystemDefinition } from '../domain/model';
+import { jsonValue, matchesType, object, type AggregationType, type Json, type CharacterOverrides, type ResourceInstance, type SystemDefinition } from '../domain/model';
 import { aggregationTypes, applyOverride } from './overrides';
 
 export interface EventMessage { text: string; type: 'info' | 'warning' | 'error' | 'success' }
@@ -27,9 +28,23 @@ export interface EffectContext {
   mechanicId: string;
   ancestors: string[];
   budget: { nodes: number; rolls: number };
+  /** Rolls prepared so far; a roll inside a sequence is collected and the sequence continues. */
+  pendingRolls?: PreparedRoll[];
   evaluate(value: unknown): unknown;
   dispatch(event: unknown): EffectTerminal | undefined;
+  /** Run the mechanics of one resource for a scoped event name. */
+  dispatchResource?(target: unknown, name: string): EffectTerminal | undefined;
+  /** Write a base stat of an owned resource reached through `$variable.stat` or `resourceStat.stat`. */
+  writeResource?(target: unknown, statId: string, value: unknown, mode: ResourceWriteMode): void;
+  /** Writers of a resource scope (its own base stats and `$character`); absent for the character. */
+  scope?: {
+    write(statId: string, value: Json, mode: ResourceWriteMode): void;
+    character(type: unknown, statId: string, aggregation: AggregationType, value: Json): void;
+  };
 }
+
+/** Resource instances have no override layer: `setStat` replaces and `addToStat` adds to the base value. */
+export type ResourceWriteMode = 'set' | 'add';
 
 const messageTypes = ['info', 'warning', 'error', 'success'];
 
@@ -58,6 +73,14 @@ function aggregationType(effect: Record<string, unknown>): AggregationType {
 
 function assertRollList(effect: Record<string, unknown>) {
   const list = object(effect.rolls);
+  if (list.type === 'map') {
+    // A computed list: one rollable per item of the mapped collection (5e weapon damage dice).
+    fields(list, ['type', 'components', 'mapper']);
+    const rollable = object(list.mapper);
+    fields(rollable, ['type', 'formulas', 'text']);
+    if (list.components == null || rollable.type !== 'rollable' || !rollable.formulas || !rollable.text) throw new Error('Tiro non supportato.');
+    return;
+  }
   fields(list, ['type', 'components']);
   if (list.type !== 'list' || !Array.isArray(list.components) || !list.components.length || list.components.length > 10)
     throw new Error('Lista tiri non supportata.');
@@ -88,6 +111,27 @@ function assertForwardNames(effect: Record<string, unknown>) {
     throw new Error('Inoltro dinamico non supportato.');
 }
 
+/**
+ * Accept a static list of constant names or `eventName` nodes; a computed list
+ * (`map`, `stat`) would make the dispatched events depend on runtime data.
+ */
+function assertFireNames(effect: Record<string, unknown>) {
+  const list = object(effect.event_names);
+  if (list.type !== 'list' || !Array.isArray(list.components) || !list.components.length || list.components.length > 20)
+    throw new Error('Nomi evento dinamici non supportati.');
+  fields(list, ['type', 'components']);
+  for (const item of list.components) {
+    const node = object(item);
+    if (node.type === 'constant') {
+      fields(node, ['type', 'value', 'value_type', 'sub_value_type']);
+      if (node.value_type !== 'string' || typeof node.value !== 'string') throw new Error('Nome evento non valido.');
+    } else if (node.type === 'eventName') {
+      fields(node, ['type', 'event_name', 'for_resource']);
+      if (typeof node.event_name !== 'string') throw new Error('Nome evento non valido.');
+    } else throw new Error('Nomi evento dinamici non supportati.');
+  }
+}
+
 function assertPopUp(effect: Record<string, unknown>) {
   fields(effect, ['type', 'pop_up_view', 'pop_up_title', 'pop_up_type', 'display_cancel_button',
     'display_save_button', 'should_persist_on_save']);
@@ -109,8 +153,17 @@ function assertPopUp(effect: Record<string, unknown>) {
 }
 
 /** Validate every branch before any action; nested terminals need asynchronous UI and stay unsupported. */
+/** `when` branches that failed validation in a deferring scope, with the reason; reaching one aborts the command. */
+const deferredBranches = new WeakMap<object, string>();
+
+/**
+ * Preflight one effect tree.
+ * @param budget With `defer`, an unsupported `when` branch is recorded instead of rejecting the tree:
+ * resource handlers carry branches for other instance types (5e `effect` `use_spell`), and their
+ * writes are applied only after the whole command succeeds, so failing on reach stays atomic.
+ */
 export function validateEffect(effect: Record<string, unknown>, definition: SystemDefinition,
-  ancestors: string[], budget: { nodes: number }, nested = false) {
+  ancestors: string[], budget: { nodes: number; defer?: boolean }, nested = false) {
   if (++budget.nodes > 2000) throw new Error('Evento troppo complesso.');
   switch (effect.type) {
     case 'sequence': {
@@ -127,7 +180,10 @@ export function validateEffect(effect: Record<string, unknown>, definition: Syst
       for (const clause of effect.clauses) {
         const branch = object(clause);
         fields(branch, ['condition', 'effect']);
-        validateEffect(object(branch.effect), definition, [...ancestors, '<when>'], budget, nested);
+        const target = object(branch.effect);
+        if (!budget.defer) { validateEffect(target, definition, [...ancestors, '<when>'], budget, nested); continue; }
+        try { validateEffect(target, definition, [...ancestors, '<when>'], budget, nested); }
+        catch (error) { deferredBranches.set(target, error instanceof Error ? error.message : String(error)); }
       }
       return;
     }
@@ -142,9 +198,9 @@ export function validateEffect(effect: Record<string, unknown>, definition: Syst
     }
     case 'fireEvent': {
       fields(effect, ['type', 'event', 'event_names']);
-      if (effect.event == null && effect.event_names == null) throw new Error('Evento da emettere mancante.');
-      if (effect.event_names != null) throw new Error('Nomi evento dinamici non supportati.');
-      assertEvent(effect.event);
+      if ((effect.event == null) === (effect.event_names == null)) throw new Error('Evento da emettere mancante.');
+      if (effect.event_names != null) assertFireNames(effect);
+      else assertEvent(effect.event);
       return;
     }
     case 'forwardEvent':
@@ -160,6 +216,15 @@ export function validateEffect(effect: Record<string, unknown>, definition: Syst
       validateEffect(object(effect.apply), definition, ancestors, budget, true);
       return;
     }
+    case 'delayed':
+      // Accepted only so sibling branches can run; reaching it aborts the whole command (see executeEffect),
+      // except a delayed `dismissResource`, which is UI pacing only.
+      fields(effect, ['type', 'millis', 'effect']);
+      validateEffect(object(effect.effect), definition, ancestors, budget, true);
+      return;
+    case 'dismissResource':
+      fields(effect, ['type']);
+      return;
     case 'showMessage':
       fields(effect, ['type', 'message', 'message_type']);
       if (effect.message == null) throw new Error('Messaggio mancante.');
@@ -170,7 +235,6 @@ export function validateEffect(effect: Record<string, unknown>, definition: Syst
       fields(effect, ['type', 'rolls', 'on_result_effect']);
       if (effect.on_result_effect != null) throw new Error('Effetto successivo al tiro non supportato.');
       assertRollList(effect);
-      if (nested) throw new Error('Tiro dentro una sequenza non supportato.');
       return;
     case 'showPopUp':
       assertPopUp(effect);
@@ -181,29 +245,49 @@ export function validateEffect(effect: Record<string, unknown>, definition: Syst
   }
 }
 
-function targetStat(effect: Record<string, unknown>, ctx: EffectContext): Stat {
-  const raw = effect.stat != null ? effect.stat : ctx.evaluate(effect.meta_stat);
-  if (typeof raw !== 'string' || !raw || raw.length > 200) throw new Error('Destinazione dell’effetto non valida.');
-  if (raw.includes('.') || raw.startsWith('$')) throw new Error('Destinazione annidata non supportata.');
-  const stat = ctx.definition.character_stats.find(candidate => candidate.id === raw);
-  if (!stat) throw new Error(`Statistica mancante: ${raw}`);
-  return stat;
+function resourceWriteMode(type: unknown, aggregation: AggregationType): ResourceWriteMode {
+  // Without an override layer only unambiguous base writes are possible: a replacement or an addition.
+  if (type === 'setStat' && aggregation === 'set') return 'set';
+  if (type === 'addToStat' && (aggregation === 'set' || aggregation === 'sum')) return 'add';
+  throw new Error('Sulle risorse sono supportati solo setStat (set) e addToStat.');
 }
 
-function applyStatEffect(effect: Record<string, unknown>, ctx: EffectContext) {
-  const stat = targetStat(effect, ctx);
-  const override = effect.type === 'setStat'
-    ? { aggregation: aggregationType(effect), value: jsonValue(ctx.evaluate(effect.new_value)) }
-    : { aggregation: aggregationType(effect), value: jsonValue(ctx.evaluate(effect.value)) };
-  if (!matchesType(override.value, stat.value_type, stat.sub_value_type))
+/** Write one character stat as a reversible override owned by the current character mechanic. */
+export function writeCharacterStat(ctx: EffectContext, type: unknown, statId: string, aggregation: AggregationType, value: Json) {
+  if (statId.includes('.') || statId.startsWith('$')) throw new Error('Destinazione annidata non supportata.');
+  const stat = ctx.definition.character_stats.find(candidate => candidate.id === statId);
+  if (!stat) throw new Error(`Statistica mancante: ${statId}`);
+  if (!matchesType(value, stat.value_type, stat.sub_value_type))
     throw new Error(`Valore non valido per ${stat.id} (${stat.value_type}).`);
-  if (effect.type === 'addToStat') {
-    if (!['integer', 'decimal'].includes(stat.value_type) || typeof override.value !== 'number')
+  const override = { aggregation, value };
+  if (type === 'addToStat') {
+    if (!['integer', 'decimal'].includes(stat.value_type) || typeof value !== 'number')
       throw new Error('I modificatori richiedono una statistica numerica.');
     if (ctx.overrides[ctx.mechanicId]?.modifiers?.[stat.id])
       throw new Error('Riesecuzione di addToStat non verificata: modifica la statistica base.');
     ctx.overrides = applyOverride(ctx.overrides, ctx.mechanicId, 'modifiers', stat.id, override);
   } else ctx.overrides = applyOverride(ctx.overrides, ctx.mechanicId, 'values', stat.id, override);
+}
+
+/**
+ * Route one stat write: a character stat, a base stat of the resource scope,
+ * `$character.stat` from a resource scope, `$variable.stat` on a bound owned resource,
+ * or `resourceStat.stat` through a resource-valued stat of the resource scope.
+ */
+function applyStatEffect(effect: Record<string, unknown>, ctx: EffectContext) {
+  const raw = effect.stat != null ? effect.stat : ctx.evaluate(effect.meta_stat);
+  if (typeof raw !== 'string' || !raw || raw.length > 200) throw new Error('Destinazione dell’effetto non valida.');
+  const aggregation = aggregationType(effect);
+  const value = jsonValue(ctx.evaluate(effect.type === 'setStat' ? effect.new_value : effect.value));
+  const nested = /^(\$?[\w-]{1,100})\.([\w-]{1,200})$/.exec(raw);
+  if (nested && nested[1] === '$character' && ctx.scope) return ctx.scope.character(effect.type, nested[2], aggregation, value);
+  if (nested && ctx.writeResource && nested[1].startsWith('$') && Object.hasOwn(ctx.variables, nested[1]))
+    return ctx.writeResource(ctx.variables[nested[1]], nested[2], value, resourceWriteMode(effect.type, aggregation));
+  if (nested && ctx.writeResource && ctx.scope && !nested[1].startsWith('$'))
+    return ctx.writeResource(ctx.evaluate({ type: 'stat', stat: nested[1] }), nested[2], value, resourceWriteMode(effect.type, aggregation));
+  if (!ctx.scope) return writeCharacterStat(ctx, effect.type, raw, aggregation, value);
+  if (raw.includes('.') || raw.startsWith('$')) throw new Error('Destinazione annidata non supportata.');
+  ctx.scope.write(raw, value, resourceWriteMode(effect.type, aggregation));
 }
 
 function runForEach(effect: Record<string, unknown>, ctx: EffectContext, depth: number) {
@@ -223,6 +307,21 @@ function runForEach(effect: Record<string, unknown>, ctx: EffectContext, depth: 
   return undefined;
 }
 
+/** Fire each listed name in order; an `eventName` with a resource targets that resource's mechanics. */
+function fireNames(effect: Record<string, unknown>, ctx: EffectContext): EffectTerminal | undefined {
+  for (const item of object(effect.event_names).components as unknown[]) {
+    const node = object(item);
+    const name = node.type === 'constant' ? node.value as string : node.event_name as string;
+    let terminal: EffectTerminal | undefined;
+    if (node.type === 'eventName' && node.for_resource != null) {
+      if (!ctx.dispatchResource) throw new Error('Eventi di risorsa non supportati in questo contesto.');
+      terminal = ctx.dispatchResource(ctx.evaluate(node.for_resource), name);
+    } else terminal = ctx.dispatch({ name, payload: {} });
+    if (terminal) return terminal;
+  }
+  return undefined;
+}
+
 /** Execute one validated effect, mutating only the command state. */
 export function executeEffect(effect: Record<string, unknown>, ctx: EffectContext, depth = 0): EffectTerminal | undefined {
   if (++ctx.budget.nodes > 2000 || depth > 32) throw new Error('Evento troppo complesso.');
@@ -237,15 +336,19 @@ export function executeEffect(effect: Record<string, unknown>, ctx: EffectContex
       for (const clause of effect.clauses as unknown[]) {
         const branch = object(clause), condition = ctx.evaluate(branch.condition);
         if (typeof condition !== 'boolean') throw new Error('Condizione evento non booleana.');
-        if (condition) return executeEffect(object(branch.effect), ctx, depth + 1);
+        if (!condition) continue;
+        const target = object(branch.effect), unsupported = deferredBranches.get(target);
+        if (unsupported) throw new Error(unsupported);
+        return executeEffect(target, ctx, depth + 1);
       }
-      throw new Error('Nessuna condizione evento soddisfatta.');
+      // A `when` without a matching clause does nothing: sources guard one-off work this way (PF2e `characterLoaded`).
+      return;
     case 'setStat':
     case 'addToStat':
       applyStatEffect(effect, ctx);
       return;
     case 'fireEvent':
-      return ctx.dispatch(effect.event);
+      return effect.event_names == null ? ctx.dispatch(effect.event) : fireNames(effect, ctx);
     case 'forwardEvent': {
       const names = ctx.evaluate(effect.new_event_names);
       if (!Array.isArray(names) || names.length !== 1 || typeof names[0] !== 'string')
@@ -254,6 +357,12 @@ export function executeEffect(effect: Record<string, unknown>, ctx: EffectContex
     }
     case 'forEach':
       return runForEach(effect, ctx, depth);
+    case 'delayed':
+      if (object(effect.effect).type === 'dismissResource') return undefined;
+      throw new Error('Effetto ritardato non supportato.');
+    case 'dismissResource':
+      // Closing the sheet that shows the resource is left to the user; nothing in the data changes.
+      return undefined;
     case 'showMessage': {
       const text = ctx.evaluate(effect.message);
       if (typeof text !== 'string' || !text || text.length > 2000) throw new Error('Messaggio non valido.');
@@ -262,8 +371,13 @@ export function executeEffect(effect: Record<string, unknown>, ctx: EffectContex
       ctx.messages.push({ text, type: type as EventMessage['type'] });
       return;
     }
-    case 'roll':
-      return { kind: 'roll', rolls: preparedRolls(effect, ctx) };
+    case 'roll': {
+      const rolls = preparedRolls(effect, ctx);
+      if (!ctx.pendingRolls) return { kind: 'roll', rolls };
+      if (ctx.pendingRolls.length + rolls.length > 20) throw new Error('Troppi tiri per evento.');
+      ctx.pendingRolls.push(...rolls);
+      return undefined;
+    }
     case 'showPopUp':
       return { kind: 'popup', effect };
     default:
@@ -272,12 +386,22 @@ export function executeEffect(effect: Record<string, unknown>, ctx: EffectContex
 }
 
 function preparedRolls(effect: Record<string, unknown>, ctx: EffectContext): PreparedRoll[] {
-  return (object(effect.rolls).components as unknown[]).map(item => {
-    const rollable = object(item);
-    const formulas = ctx.evaluate(rollable.formulas), text = ctx.evaluate(rollable.text);
-    if (typeof text !== 'string' || !Array.isArray(formulas) || !formulas.length || formulas.length > 10
-      || formulas.some(formula => typeof formula !== 'string'))
-      throw new Error('Formule o etichetta tiro non valide.');
-    return { text, formulas: formulas as string[] };
-  });
+  const list = object(effect.rolls);
+  if (list.type === 'map') {
+    const items = ctx.evaluate(list.components);
+    if (!Array.isArray(items) || items.length > 10) throw new Error('Lista tiri non valida.');
+    const previous = Object.hasOwn(ctx.variables, '$mapValue') ? { value: ctx.variables.$mapValue } : undefined;
+    try {
+      return items.map(item => { ctx.variables.$mapValue = item; return preparedRoll(object(list.mapper), ctx); });
+    } finally { if (previous) ctx.variables.$mapValue = previous.value; else delete ctx.variables.$mapValue; }
+  }
+  return (list.components as unknown[]).map(item => preparedRoll(object(item), ctx));
+}
+
+function preparedRoll(rollable: Record<string, unknown>, ctx: EffectContext): PreparedRoll {
+  const formulas = ctx.evaluate(rollable.formulas), text = ctx.evaluate(rollable.text);
+  if (typeof text !== 'string' || !Array.isArray(formulas) || !formulas.length || formulas.length > 10
+    || formulas.some(formula => typeof formula !== 'string'))
+    throw new Error('Formule o etichetta tiro non valide.');
+  return { text, formulas: formulas as string[] };
 }

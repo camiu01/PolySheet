@@ -54,6 +54,8 @@ it('previews the example and cancels without installing a system', async () => {
   fireEvent.click(screen.getByRole('button', { name: copy.demoAction }));
   await screen.findByRole('dialog', { name: copy.importPreview });
   expect(screen.getByText(copy.importReviewHelp)).toBeVisible();
+  expect(screen.getByText((_, element) => element?.tagName === 'P'
+    && element.textContent === '7 statistiche · 3 sezioni · 1 tipo di risorsa')).toBeVisible();
   expect(await db.systems.count()).toBe(before);
   fireEvent.click(screen.getByRole('button', { name: copy.cancel }));
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());

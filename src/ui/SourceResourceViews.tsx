@@ -3,14 +3,15 @@
  * @remarks Instance creation and owner assignment happen in one owner transaction.
  */
 import { useEffect, useRef, useState } from 'react';
-import { createEvaluator } from '../engine/formulas';
+import { Trash2 } from 'lucide-react';
+import { createEvaluator, resourceParent } from '../engine/formulas';
 import { initialValues } from '../persistence/db';
 import { commitResourceView } from '../persistence/views';
 import { jsonValue, type ResourceDefinition, type ResourceInstance, type View } from '../domain/model';
 import { RenderView, type RenderContext } from './renderer';
 import { SourceForm } from './SourceForm';
 import { Modal } from './shared';
-import { inputValue, resourceReferenceIds, textValue } from './view-support';
+import { inputValue, resourceEventScope, resourceReferenceIds, textValue } from './view-support';
 import { it } from './it';
 
 /** Resolve one local instance by id and exact definition (or any declared type when `anyType`), or fail visibly. */
@@ -31,7 +32,7 @@ function stagedContext(ctx: RenderContext, definition: ResourceDefinition, recor
 		systemKey: record.systemKey, stats: definition.stats, values: record.values,
 		resources: ctx.resources, resourceDefinitions: ctx.resourceDefinitions, enumerations: ctx.enumerations,
 		createdAt: record.createdAt, instanceId: record.sourceId ?? record.id, character: ctx.character,
-		stagedIds: ctx.stagedIds, hideValidation: ctx.hideValidation,
+		stagedIds: ctx.stagedIds, hideValidation: ctx.hideValidation, parent: ctx.parent,
 		onCommit: async (patch, created = []) => {
 			const changes = typeof patch === 'function' ? patch(record.values) : patch;
 			const values = { ...record.values, ...Object.fromEntries(Object.entries(changes).map(([id, value]) => [id, jsonValue(value)])) };
@@ -40,11 +41,12 @@ function stagedContext(ctx: RenderContext, definition: ResourceDefinition, recor
 	};
 }
 
-/** Render one resource through the view type declared by the source node. */
-function ResourceBody({ node: v, definition, record, context, onError }: {
+/** Render the latest resource snapshot through the view type declared by the source node. */
+function ResourceBody({ node: v, definition, record: snapshot, context, onError }: {
 	node: View; definition: ResourceDefinition; record: ResourceInstance; context: RenderContext;
 	onError?: (cause: unknown) => void;
 }) {
+	const record = context.resources?.find(item => item.id === snapshot.id) ?? snapshot;
 	const viewType = String(v.view_type ?? 'display');
 	const source = viewType === 'display' ? definition.display_view
 		: viewType === 'list' ? definition.list_view
@@ -59,10 +61,11 @@ function ResourceBody({ node: v, definition, record, context, onError }: {
 		systemKey: record.systemKey, stats: definition.stats, values: record.values,
 		resources: context.resources, resourceDefinitions: context.resourceDefinitions,
 		enumerations: context.enumerations, createdAt: record.createdAt, instanceId: record.sourceId ?? record.id,
-		character: context.character,
+		character: context.character, overrides: record.overrides, parent: context.parent,
+		...resourceEventScope(context, record),
 		onChange: writable ? (statId, value) => {
 			void commitResourceView(record.id, { [statId]: value }).catch(cause => onError?.(cause));
-		} : undefined
+		} : resourceEventScope(context, record).onChange
 	}} />;
 }
 
@@ -76,10 +79,12 @@ export function SourceResourceView({ node: v, context: ctx }: { node: View; cont
 	const id = resourceReferenceIds(value)[0];
 	if (!id || Array.isArray(value)) {
 		if (v.create_if_empty === true) return <p className="unsupported-note">{it.createIfEmptyUnsupported}</p>;
-		return <p className="muted">{it.noResourceValue}</p>;
+		// Inside a form or another resource's card an empty embedded display is not actionable;
+		// the character sheet's own fields still say they are empty.
+		return ctx.drafts || ctx.stats !== ctx.character?.stats ? null : <p className="muted">{it.noResourceValue}</p>;
 	}
 	return <>
-		<ResourceBody node={v} definition={definition} record={instance(ctx, definition, id)} context={ctx}
+		<ResourceBody node={v} definition={definition} record={instance(ctx, definition, id)} context={{ ...ctx, parent: resourceParent(value) }}
 			onError={cause => setError(cause instanceof Error ? cause.message : String(cause))} />
 		{error && <p role="alert" className="error-text">{error}</p>}
 	</>;
@@ -91,7 +96,9 @@ function ArrayItem({ node: v, definition, record, context, editable, popUp, onSe
 	editable: boolean; popUp: boolean; onSelect: (record: ResourceInstance) => void;
 	onRemove: (record: ResourceInstance) => void; onError: (cause: unknown) => void;
 }) {
-	const removeButton = <button type="button" className="link-button" onClick={() => onRemove(record)}>{it.detach} · {record.name}</button>;
+	// The entry name stays in the accessible name only; visibly "Rimuovi" sits inside the entry it removes.
+	const removeButton = <button type="button" className="link-button danger-text" onClick={() => onRemove(record)}>
+		<Trash2 size={15} aria-hidden="true" />{it.removeEntry}<span className="sr-only"> · {record.name}</span></button>;
 	return <article className="source-resource-item">
 		{popUp ? <>
 			<button type="button" className="link-button" onClick={() => onSelect(record)}>
@@ -135,7 +142,12 @@ export function SourceResourceArray({ node: v, context: ctx }: { node: View; con
 	const definition = ctx.resourceDefinitions?.find(d => d.id === v.resource_id);
 	if (!definition) throw new Error(it.noResourceType);
 	const field = ctx.stats.find(s => s.id === v.stat && s.type === 'base');
-	const records = resourceReferenceIds(referenceValue(ctx, v)).map(id => instance(ctx, definition, id, true));
+	const value = referenceValue(ctx, v);
+	const references = Array.isArray(value) ? value : [value];
+	const records = resourceReferenceIds(value).map(id => instance(ctx, definition, id, true));
+	const itemContext = (record: ResourceInstance): RenderContext => ({
+		...ctx, parent: resourceParent(references.find(ref => resourceReferenceIds(ref)[0] === record.id))
+	});
 	// Official 5e arrays mix sibling types (weapon proficiencies in a choice-text array); each renders with its own definition.
 	const definitionOf = (record: ResourceInstance) => ctx.resourceDefinitions?.find(d => d.id === record.definitionId) ?? definition;
 	const editable = v.view_type === 'edit' && !!field && !!ctx.onCommit;
@@ -183,8 +195,8 @@ export function SourceResourceArray({ node: v, context: ctx }: { node: View; con
 		: null;
 	return <div className={`source-resource-array ${v.hide_line === true ? 'no-line' : ''}`}>
 		<div className="source-array-header">{v.left_view != null && <RenderView input={v.left_view} context={ctx} />}{create}</div>
-		{!records.length && <p className="muted">{it.noResourceValue}</p>}
-		{records.map(record => <ArrayItem key={record.id} node={v} definition={definitionOf(record)} record={record} context={ctx}
+		{!records.length && !ctx.drafts && ctx.stats === ctx.character?.stats && <p className="muted">{it.noResourceValue}</p>}
+		{records.map(record => <ArrayItem key={record.id} node={v} definition={definitionOf(record)} record={record} context={itemContext(record)}
 			editable={addRemove} popUp={popUp} onRemove={remove} onError={fail}
 			onSelect={next => { setSelected(next); setEditing(false); }} />)}
 		{error && <p role="alert" className="error-text">{error}</p>}
@@ -192,13 +204,13 @@ export function SourceResourceArray({ node: v, context: ctx }: { node: View; con
 		{!popUp && v.view_type === 'edit' && ctx.drafts !== undefined && records.some(r => !isStaged(ctx, r)) && <p className="unsupported-note">{it.resourceEditOutsideForm}</p>}
 		{selected && <Modal title={selected.name} bottomSheet={v.pop_up_type === 'bottomSheet'} onClose={() => { if (!busy) { setSelected(null); setEditing(false); } }}>
 			{editing && definitionOf(selected).edit_view ? <SourceForm input={definitionOf(selected).edit_view} context={isStaged(ctx, selected)
-				? stagedContext(ctx, definitionOf(selected), selected) : {
+				? stagedContext(itemContext(selected), definitionOf(selected), selected) : {
 				systemKey: selected.systemKey, stats: definitionOf(selected).stats, values: selected.values,
 				resources: ctx.resources, resourceDefinitions: ctx.resourceDefinitions, enumerations: ctx.enumerations,
-				character: ctx.character,
+				character: ctx.character, parent: itemContext(selected).parent,
 				onCommit: (patch, additions) => commitResourceView(selected.id, patch, additions)
 			}} onBusyChange={setBusy} onDone={() => { setSelected(null); setEditing(false); }} />
-				: <><ResourceBody node={{ ...v, view_type: 'display' }} definition={definitionOf(selected)} record={selected} context={ctx} />
+				: <><ResourceBody node={{ ...v, view_type: 'display' }} definition={definitionOf(selected)} record={selected} context={itemContext(selected)} />
 					{definitionOf(selected).edit_view && <button type="button" className="button secondary" onClick={() => setEditing(true)}>{it.edit}</button>}</>}
 		</Modal>}
 		{creating && <ArrayCreateModal definition={definition} context={ctx} onBusyChange={setBusy}
@@ -211,14 +223,15 @@ export function SourceResourceArray({ node: v, context: ctx }: { node: View; con
 function evaluateItem(ctx: RenderContext, definition: ResourceDefinition, record: ResourceInstance, value: unknown) {
 	return createEvaluator(definition.stats, record.values, undefined, {
 		resources: ctx.resources, resourceDefinitions: ctx.resourceDefinitions, createdAt: record.createdAt, instanceId: record.sourceId ?? record.id,
-		enumerations: ctx.enumerations, character: ctx.character
+		enumerations: ctx.enumerations, character: ctx.character, parent: ctx.parent
 	}).evaluate(value);
 }
 
 /** Direct inputs prefer drafts; declared paths resolve through the bounded scoped evaluator. */
 function referenceValue(ctx: RenderContext, v: View): unknown {
 	const field = ctx.stats.find(s => s.id === v.stat);
-	if (field?.type === 'base') return inputValue(v, ctx, field);
+	if (field?.type === 'base') return createEvaluator(ctx.stats,
+		{ ...(ctx.previewValues ?? ctx.values), [field.id]: inputValue(v, ctx, field) }, undefined, ctx).get(field.id);
 	if (typeof v.stat !== 'string') throw new Error('Percorso della risorsa richiesto');
 	return createEvaluator(ctx.stats, ctx.previewValues ?? ctx.values, undefined, ctx).get(v.stat);
 }

@@ -21,6 +21,43 @@ rejects the format or leaves the action visibly unexecuted. A preview with zero
 errors may still have hundreds of warnings and produce runtime errors on
 unpopulated resource references. No diagnostic count is a compatibility certificate.
 
+## Resource parent ownership, 2026-11-18
+
+Evidence: official 5e 0.9.1 package SHA-256
+`5de5642ad7281d7a99566a518d916e43c24f0c2046c4c40b8042e5074ac3ea3b`,
+and source revision `8788e3b18099e4a1b3510f02869d97f1488586b4`:
+`systems/5e/system/resources/class/stats.rpgs:214-228,270-271`.
+`resources[id=class].stats[id=current_class_details]` reads its owning
+`class_details` wrapper through `$parent`; an archetype first reads its parent
+class's `current_class_details`. Without this scope, class `level` defaults
+to 1 even after the wrapper's saved `class_level` advances.
+
+The public [stat](https://docs.rpg-companion.app/Stat/Formulas/stat) and
+[resource](https://docs.rpg-companion.app/System/Resource) pages establish
+resource traversal and optional paths, but do not specify a complete
+`$parent` contract. The tested policy follows the pinned class formulas:
+typed references retain their declaring scope through calculated collections,
+sorting and lambdas. Forwarding a reference does not reparent it to the
+lookup caller. The same record under two owners has distinct cached values;
+ancestor references reuse their scope so cycles still fail within existing
+budgets. Unassigned references have no inferred parent.
+
+`resource`, `resourceArray` and `resourceSection` carry that owner into their
+rendered resource scopes. `$view` remains local; reading an owner's draft
+requires an explicit `$parent.$view` path. Parent metadata is weakly held,
+absent from JSON/structured clones, and never added to saved records or
+source originals. Reopening derives it from the current reference path.
+
+Independent expectations, covered by `resource-parent.test.ts`,
+`resource-context.test.tsx` and the pinned `progression.test.ts`: shared child
+levels 2/5 remain isolated; Fighter 2 exposes Action Surge; a selected level-3
+archetype resolves its level and wrapper; Fighter 3/Wizard 1 retains Fighter
+level 3; Fighter 20 has four attacks per action. Browser acceptance checks
+Action Surge in the preview, result and main sheet, plus level text after
+reload. This does not establish every system's special context variables,
+automatic effect lifecycle, or parent recovery for a standalone ID-only
+resource event with no retained reference path.
+
 ## Nullable resources and selection filters, 2026-11-16
 
 The 5e race definition's `weapons` calculation tests
@@ -153,13 +190,87 @@ combined with deterministic `sum`/`max`/`min` aggregation; `set`/`none` clashes
 require an upstream user prompt and stay a visible error. A manual base edit
 clears value overrides for that field; modifiers remain additive.
 
-Unsupported: `$view`-dependent scopes, resource-owned mechanics, `showResource`,
-`dismissResource`, `delayed`, `copyResource`, dotted/meta stat targets beyond
-direct ids, `on_result_effect`, asynchronous branches, nested popups/rolls in
-sequences. These paths fail explicitly with a diagnostic, never as silent no-ops.
+Resource-scoped events (2026-11-18): `fireEvent.event_names` accepts a static
+`list` of constant names or `eventName` nodes; computed lists (`map`, `stat`)
+stay errors. An `eventName` with `for_resource` runs the single matching
+mechanic of that resource instance; a resource without a handler is unchanged,
+because sources fire these names at every class or archetype (PF2e
+`resource_daily_preparations`). Handlers may only touch instances reachable
+from the character's own values, never catalog roots. Resource writes are
+`setStat` with `set` aggregation on base stats (the instance has no override
+layer); `$character.stat` writes become overrides of the character mechanic
+that fired the event, so reverting it reverts both; `$variable.stat` writes the
+owned resource bound to a loop variable. Writes are applied only after the
+whole command succeeds. A `when` with no matching clause is a no-op (PF2e
+`characterLoaded` guards rely on it). `delayed` is accepted structurally but
+reaching it aborts the command. Assumptions not verified upstream: scoped names
+reach only the target resource, unscoped names only character mechanics, and
+resource writes replace base values.
+
+Resource card actions (2026-11-18): a source `button`/stat event inside a
+resource card on the character sheet runs that resource's single matching
+mechanic (`toggle_equip`, `toggle_attunement`, `togglePrepareSpell`, weapon
+`attack`/`damage`, `castSpell`). Inside a resource handler an unscoped event
+reaches the same resource first, then the character (5e: weapon `shoot_ammo`
+is weapon-local, item `remove_empty_items` is a character mechanic). Rolls
+inside a sequence are collected and the sequence continues; a `map` of
+`rollable` and flat modifier formulas ("-1") are accepted. `addToStat` on a
+resource adds to its base value; `stat.sub` writes through a resource-valued
+stat. `dismissResource` (also delayed) is UI pacing and changes nothing; the
+open sheet stays open. Card buttons stay disabled, with "Azione non ancora
+disponibile in PolySheet.", when the handler needs a `$view.` input absent
+from its own display card, requires an unsupported popup or is otherwise
+invalid. The charge and card-input increment below supersedes the earlier
+Second Wind restriction. These scoping rules are inferred from the 5e source,
+not verified upstream.
+
+Unsupported: arbitrary `$view`-dependent scopes, resource mechanics outside scoped
+`eventName` dispatch or resource card actions, popups fired from a resource
+handler, `showResource`, `dismissResource`, executing `delayed` (except `dismissResource`), `copyResource`,
+dotted/meta stat targets other than `$character.stat` and `$variable.stat`,
+`on_result_effect`, asynchronous branches, nested popups/rolls in sequences. These paths fail explicitly with a diagnostic, never as silent no-ops.
 Commands are serialized, bounded and never execute during rendering, reopening
 or backup restore. Backup format upgraded to v4 (reads v1–v4); `Character.overrides`
 is optional and validated on restore.
+
+#### Card Amount, charges and rest subscriptions, 2026-11-18
+
+Evidence: the unchanged official 5e 0.9.1 package, SHA-256
+`5de5642ad7281d7a99566a518d916e43c24f0c2046c4c40b8042e5074ac3ea3b`,
+and source revision `8788e3b18099e4a1b3510f02869d97f1488586b4`,
+`systems/5e/system/resources/item/{display_view,stats}.rpgs` and
+`mechanics/item_{add,subtract}_quantity.rpgs` within that item directory.
+The card input `item_quantity` edits `edit_quantity` (default 1).
+Resource actions derive their `$view` from those declared card inputs and
+persisted instance values, not character fields or arbitrary form scopes.
+ADD/REMOVE therefore apply Amount, and the character's `remove_empty_items`
+handler removes zero-quantity references from effective equipment. Unlinking
+does not delete the resource record. Desktop/mobile production acceptance
+checks the independent sequence 1 → 2 → 5 → 2 → 1 → 0, then reloads and
+checks that the item stays absent.
+
+Browser verification exposed an additional UI gap: display cards had no
+base-input writer, hiding Amount, and open detail cards retained their initial
+resource snapshot. Cards now use the sheet's resource save/error path and
+render the latest instance after each save or action. Both `resourceSection`
+and popup `resourceArray` paths have always-on regression coverage.
+
+In `resources[id=effect]`, calculated event subscriptions distinguish own
+`eventName` values (USE) from plain global names (`short_rest`). Numeric writes
+to calculated resource stats persist as instance `overrides`, separate from
+base values; charge tickers can explicitly edit these overrides. This supports
+the charge-consumption part of Second Wind, not an inferred healing roll.
+Character events broadcast to owned instances subscribed by global name.
+Each failing subscriber rolls back its pending writes and reports a warning;
+it does not block successful subscribers. Tests cover this dispatch/isolation
+and original 5e USE consumption. There is no application rest menu yet:
+short-rest dispatch is an engine test, not a verified user-facing rest flow.
+Manual charge buttons remain the available refill control.
+
+Tests: `resource-events.test.ts`, `resource-card-inputs.test.tsx`, and
+`e2e/sheet-interactions.spec.ts` with `e2e/resource-card-actions.ts`.
+No source bytes, database schema or backup version were changed in this
+follow-up; resource overrides use the existing v4 backup envelope.
 
 Tests: `character-events.test.tsx`, `sheet-actions.test.tsx`,
 `e2e/sheet-interactions.spec.ts`. The current `tests/package.test.ts` diagnostic
@@ -510,6 +621,18 @@ The selected class advances to a requested total level; a new multiclass gets
 a private graph, source duplicate-class rejection and explicit manual
 prerequisite acknowledgement. Subclass options/thresholds come from the class.
 Current HP stays unchanged. Subclass selection is applied at its threshold.
+
+The dialog now allows an explicit source-defined Roll/Average/Max choice and
+saves that method with the advancement. Before confirmation it previews new
+class features (Fighter level 2: Action Surge); afterward it compares readable
+sheet stats (CON 14, Average: maximum HP 12 → 20), lists features/remaining
+choices and explicitly states that current HP, hit dice and slots are not
+restored. Unevaluable stats are omitted, not filled with invented values.
+
+The missing parent scope reported at the earlier checkpoint is fixed for
+resource-stat traversal and its resource views; see
+[resource parent ownership](#resource-parent-ownership-2026-11-18).
+The advancement summary no longer injects a global `$parent` workaround.
 
 This assistant intentionally commits permanent manual base edits, not
 `addToStat` modifier overrides. It does not execute `on_level_up_confirm`,

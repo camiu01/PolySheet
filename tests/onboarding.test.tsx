@@ -2,6 +2,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeAll, expect, it, vi } from 'vitest';
 import { CharacterCreator } from '../src/ui/CharacterCreator';
+import { Characters } from '../src/ui/Characters';
 import { GameChoices } from '../src/ui/GameChoices';
 import { prepareSystem } from '../src/importing/system';
 import { demoOriginal } from '../src/demo';
@@ -42,4 +43,54 @@ it('offers only verified D&D imports and explains unavailable games without prom
   expect(screen.getByText(copy.pathfinderUnavailable, { exact: false })).toBeVisible();
   rerender(<GameChoices onChoose={onChoose} busy />);
   for (const button of screen.getAllByRole('button')) expect(button).toBeDisabled();
+});
+
+it('gives an empty roster a single route to the game library', () => {
+  useUi.getState().navigate('characters');
+  render(<Characters systems={[]} characters={[]} run={async work => { await work(); }} />);
+  expect(screen.getByRole('heading', { name: copy.emptyCharacters })).toBeVisible();
+  expect(screen.queryByText(copy.chooseRules)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: copy.importSystem }));
+  expect(useUi.getState().page).toBe('systems');
+});
+
+it('shows search and game filters only when there is something to narrow down', async () => {
+  const demo = await prepareSystem(demoOriginal, 'Original MIT demo');
+  const other = { ...demo, key: 'other', definition: { ...demo.definition, id: 'original-other', name: 'Altro gioco' } };
+  const character = (id: string, systemKey: string) => ({ id, systemKey, name: `Eroe ${id}`, values: {}, resourceIds: [],
+    createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z', revision: 1 });
+  const run = async (work: () => Promise<unknown>) => { await work(); };
+  const { rerender } = render(<Characters systems={[demo]} characters={[character('a', demo.key)]} run={run} />);
+  expect(screen.queryByLabelText(copy.search)).toBeNull();
+  expect(screen.queryByText(copy.recentCharacter)).toBeNull();
+  expect(screen.getByText(copy.chooseRules)).toBeVisible();
+  const mixed = [character('a', demo.key), character('b', 'other'), character('c', 'other'), character('d', 'other')];
+  rerender(<Characters systems={[demo, other]} characters={mixed} run={run} />);
+  expect(screen.getByLabelText(copy.search)).toBeVisible();
+  expect(screen.getByText(copy.recentCharacter)).toBeVisible();
+  expect(screen.queryByText(copy.chooseRules)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Altro gioco 3' }));
+  expect(document.querySelectorAll('.character-card')).toHaveLength(3);
+});
+
+it('leads an installed game to its characters instead of preparing it again', () => {
+  const onChoose = vi.fn(), onUse = vi.fn();
+  render(<GameChoices busy={false} onChoose={onChoose} installed={['5e']} onUse={onUse} />);
+  fireEvent.click(screen.getByRole('button', { name: `${copy.useGame} · ${copy.game2014}` }));
+  expect(onUse).toHaveBeenCalledWith('5e');
+  expect(screen.getByRole('button', { name: `${copy.gamePrepare} · ${copy.game2024}` })).toBeEnabled();
+  expect(onChoose).not.toHaveBeenCalled();
+});
+
+it('preselects the game chosen last, but never the demo', async () => {
+  const demo = await prepareSystem(demoOriginal, 'Original MIT demo');
+  const other = { ...demo, key: 'other', definition: { ...demo.definition, id: 'original-other', name: 'Altro gioco' } };
+  const props = { onSystemChange: vi.fn(), run: async (work: () => Promise<unknown>) => { await work(); }, onDone: vi.fn(), onClose: vi.fn() };
+  useUi.getState().selectSystem('other');
+  const { unmount } = render(<CharacterCreator systems={[demo, other]} character={undefined} {...props} />);
+  expect(screen.getByRole('combobox', { name: copy.chooseSystem })).toHaveValue('other');
+  unmount();
+  useUi.getState().selectSystem(demo.key);
+  render(<CharacterCreator systems={[demo, other]} character={undefined} {...props} />);
+  expect(screen.getByRole('combobox', { name: copy.chooseSystem })).toHaveValue('');
 });

@@ -18,18 +18,42 @@ export interface InputContext {
 	onInput?: (viewId: string, statId: string, value: unknown) => void;
 }
 
-/** Character-only event gate shared by source controls; resource views never dispatch. */
+/** Event gate shared by source controls: the character sheet, or a resource card with its own scope. */
 export function canSourceEvent(context: {
 	drafts?: Record<string, unknown>;
 	stats: Stat[];
 	character?: { stats: Stat[] };
+	eventScope?: 'resource';
 	canEvent?: (event: unknown) => boolean;
 	onEvent?: (event: unknown) => void;
 }, event: unknown) {
-	return event != null && !context.drafts && context.stats === context.character?.stats
+	return event != null && !context.drafts && (context.stats === context.character?.stats || context.eventScope === 'resource')
 		&& context.canEvent?.(event) === true && !!context.onEvent;
 }
 
+
+/**
+ * Event scope of one resource card: its buttons run that resource's own mechanics.
+ * Catalog originals and draft sessions never dispatch.
+ * Base inputs use the sheet's resource writer, never its character writer.
+ */
+export function resourceEventScope(context: {
+	drafts?: Record<string, unknown>; eventBusy?: boolean;
+	canResourceEvent?: (definitionId: string, event: unknown) => boolean;
+	onResourceEvent?: (resourceId: string, event: unknown) => void;
+	onResourceChange?: (resourceId: string, statId: string, value: unknown) => void;
+	onResourceOverride?: (resourceId: string, statId: string, value: number) => void;
+}, record: { id: string; definitionId: string; catalogSource?: unknown }) {
+	const { canResourceEvent, onResourceEvent, onResourceOverride, onResourceChange } = context;
+	if (!canResourceEvent || !onResourceEvent || context.drafts !== undefined || record.catalogSource) return {};
+	return {
+		eventScope: 'resource' as const, eventBusy: context.eventBusy, canResourceEvent, onResourceEvent, onResourceOverride, onResourceChange,
+		onChange: onResourceChange && ((statId: string, value: unknown) => onResourceChange(record.id, statId, value)),
+		onOverride: onResourceOverride && ((statId: string, value: number) => onResourceOverride(record.id, statId, value)),
+		canEvent: (event: unknown) => canResourceEvent(record.definitionId, event),
+		onEvent: (event: unknown) => onResourceEvent(record.id, event)
+	};
+}
 
 /** Explicit source icon names mapped to local glyphs; artwork is not copied. */
 export const sourceIcons: Record<string, typeof Shield> = {

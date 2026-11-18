@@ -3,6 +3,262 @@
 [Documentation index](README.md) · [How to run checks](DEVELOPMENT.md) ·
 [Historical records](VERIFICATION_HISTORY.md) · [12:37 checkpoint](VERIFICATION_2026-11-16_1237.md)
 
+## Resource parent scope and progression polish, 2026-11-18
+
+- Reproduced the original official 5e case before the fix: after advancing
+  Fighter to 2, `$details.class.level` returned 1 instead of 2. The new
+  real-source assertion failed with that exact mismatch.
+- References now retain their declaring resource owner through calculated
+  collections and resource views. Removed the progression-only global parent
+  workaround. Tests cover shared children under levels 2/5, repeated cached
+  reads, optional/missing contexts, explicit parent drafts, cyclic references,
+  evaluation limits, non-serialized metadata and live parent updates in all
+  three resource view types.
+- Pinned real-source progression verifies Fighter 2/Action Surge, nested
+  level-3 archetype/wrapper access, Fighter 3/Wizard 1 isolation, and Fighter
+  20/four attacks per action. Existing stale-write, atomic rollback, HP,
+  immutable-original and repeated-advancement assertions still pass.
+- Impeccable refinement preserves the existing grimoire tokens and centered
+  dialog: separated summary sections, semantic success color, wrapping of
+  imported labels, and the shared scroll-body/fixed-footer layout after save.
+  Independent rendered inspection covered 1280px, 820px and a true emulated
+  390 × 844 mobile viewport. At level 20 the mobile body measured 869px of
+  content in a 612px scrollport; scrolling left the footer fixed at y=734,
+  inside the 358 × 796 centered dialog, with no horizontal overflow.
+- Chrome DevTools, existing isolated QA character on port 4184: the previously
+  saved Fighter 2 now displays Action Surge without re-advancing; advanced
+  to Champion 3 and then 20 through the actual controls. The summary includes
+  Improved Critical and later four attacks; reload retains Human Fighter 20.
+  Escape dismisses the dialog. This intentionally incomplete QA character
+  still has visible missing-background errors; transient missing-resource
+  console errors were also observed during sheet loading, so this was not a
+  console-clean claim.
+- The Impeccable detector exited 1 on the existing stylesheet's pinned Jakarta
+  font and design-scale/color advisories; no unrelated redesign or detector
+  suppression was applied. The stored-critique lookup returned exit 1 without
+  a snapshot; the pass used independent rendered inspection. Chrome screenshot
+  file saving was denied by workspace-root policy; inspection used returned
+  images, while Playwright saves its captures under `.reference/ui-review/`.
+- `npm run check`: **347 passed, 1 skipped, 43 files**. An initial TypeScript
+  error in the new test's inferred heterogeneous resource array was corrected
+  with the existing `ResourceInstance[]` type before this final passing run.
+  The skip needs the absent user-uploaded `.reference/reported-system.rpg`.
+- `npm run build`: passed, with the existing Zod annotation and >500 kB chunk
+  warnings. `npm audit --omit=dev`: **0 vulnerabilities**.
+- Final production Playwright: `PLAYWRIGHT_PORT=4183`,
+  `PLAYWRIGHT_BASE_PATH=/PolySheet/`,
+  `npm run test:e2e -- --max-failures=1`: **96 passed, 2 skipped, 5.6 minutes**.
+  Desktop and Pixel 7 both verify Action Surge in preview/result/main sheet,
+  fixed result-footer geometry, reload level text and existing offline,
+  backup, item-action and multiclass paths. Inspected the saved desktop/mobile
+  `progression-result.png` captures. Both skips need the absent user-uploaded
+  HP/AC fixture.
+- Compatibility anchor and documentation paths checked; `git diff --check`
+  passed. No routing, asset, worker or deployment changes, so root `/` was
+  not rerun as a production acceptance target. The isolated dev preview on
+  4184 was stopped; the user's preview on 4173 was left untouched.
+  No dependencies, commits or publication.
+
+## Amount, charges and advancement follow-up, 2026-11-18 (earlier checkpoint)
+
+- Resumed the reported work without changing the unresolved general `$parent`
+  scope or adding a rest menu. Updated the current boundaries in
+  [COMPATIBILITY.md](COMPATIBILITY.md#card-amount-charges-and-rest-subscriptions-2026-11-18).
+- Browser regression found Amount absent/read-only on item detail cards.
+  Connected declared base inputs to the sheet's resource writer and save/error
+  status; open detail cards now read the latest resource snapshot.
+  Always-on tests cover resource-only input routing, catalog/draft refusal
+  and repeated updates through `resourceSection` and popup `resourceArray`.
+- Production Playwright, original official 5e 0.9.1 with Fighter/Human:
+  ADD/REMOVE checks quantity 1 → 2 → 5 → 2 → 1 → 0, Amount 1 and 3, zero
+  unlinking and reload persistence on desktop and Pixel 7 emulation. The
+  existing guided-setup case also retains cancel, advancement and offline
+  checks. New helper: `tests/e2e/resource-card-actions.ts`.
+- Chrome DevTools, isolated browser context and production preview on port
+  4184: imported the pinned public 5e source/catalogs through the application,
+  created a manual Human Fighter and item, then checked quantities
+  1 → 2 → 5 → 2 → 0 with Amount 1/3/2. The open card showed each update;
+  zero removed the roster entry and it remained absent after reload.
+  Local file upload was denied by the tool's workspace-root policy, so this
+  check used the application's public-source import instead. An initial import
+  attempt used a stale lazy-chunk URL after rebuilding the preview; reloading
+  the page allowed the unchanged import flow to complete.
+- `npm run check`: 341 passed, 1 skipped, 42 files. The skipped test needs
+  the absent user-uploaded `.reference/reported-system.rpg`.
+- `npm run build`: passed. Existing Zod pure-comment annotation warnings and
+  the minified chunk-size warning remain. `npm audit --omit=dev`: 0 vulnerabilities.
+- Final production Playwright run: `PLAYWRIGHT_PORT=4183`,
+  `PLAYWRIGHT_BASE_PATH=/PolySheet/`, `npm run test:e2e -- --max-failures=1`:
+  **96 passed, 2 skipped, 5.4 minutes**, desktop and Pixel 7 emulation.
+  Both skips are the absent user-uploaded HP/AC recovery fixture. This run
+  includes the final resource-array writer fix and companion-input assertion.
+- Documentation paths and the new compatibility anchor checked;
+  `git diff --check` passed. The isolated Chrome preview on port 4184 was
+  stopped after verification; the user's port 4173 preview was not touched.
+- Intermediate validation failures were corrected: the new jsdom test needed
+  the repository's dialog stubs and a supported popup enum; browser helpers
+  needed the actual archive label (`Item`), dismissal of action-result dialogs
+  and a fresh pre-advancement snapshot after item commands. The first full
+  browser run stopped at the companion-name assertion, whose source-declared
+  inline input is now editable; it now checks the persisted textbox value
+  instead of requiring a read-only paragraph.
+- Second Wind charge consumption and manual restoration were reported as
+  browser-verified in the handoff. This follow-up reran engine tests for USE
+  and global recharge subscriptions; it did not repeat Second Wind in Chrome
+  or establish a user-facing rest workflow.
+- Root `/` is not rerun: no routing, asset, worker or deployment behavior was
+  changed. No new dependency, commit or publication.
+
+## Resource card actions, 2026-11-18 (earlier checkpoint)
+
+- User report: "Evento importato non eseguito da PolySheet" under source
+  buttons. Original input: official 5e 0.9.1 (pinned public source) with a
+  Human Fighter.
+- Static check on the original: weapon `attack`/`damage`, item/armor
+  `toggle_equip`, `toggle_attunement`, spell `castSpell`/`togglePrepareSpell`
+  and monster `attack` validate; item `add_quantity`/`subtract_quantity`
+  need `$view.item_quantity` and stay disabled; Second Wind `use` needs
+  calculated subscriptions/aggregation and stays disabled.
+- Browser: Light Crossbow SHOOT rolled "to hit" (1d20 + 1) and DAMAGE rolled
+  1d8 with the separate "-1" term; the note now reads "Azione non ancora
+  disponibile in PolySheet." only on actions that cannot run.
+- Also: in resource grids a non-card item (5e "Attacks per action") spans its
+  own row, so cards no longer wrap beside it at narrow widths (checked at
+  760 px).
+- Tests: `tests/resource-events.test.ts` (card toggle, collected roll with
+  local `shoot` and character `shared`, mapped damage with flat term,
+  ownership refusal, `$view.` gate); copy updated in source-view,
+  resource-editor and e2e assertions.
+- `npm run check`: 336 passed, 1 skipped, 41 files.
+- `npm run build` passed. Playwright `/PolySheet/`: 96 passed, 2 skipped (the fixture-gated HP/AC recovery test, desktop and mobile).
+
+## D&D 5e UX pass, 2026-11-18
+
+- Dev preview: prepared D&D 5e (2014) from the pinned public source (208
+  catalog templates, 142 diagnostics), confirmed the import, then created a
+  Human Fighter (Acolyte) through the four guided pages and opened the sheet
+  (0 view errors, no horizontal overflow at 1280 px or 375 px). The app window
+  was hidden for part of the session, so later checks used DOM inspection
+  instead of screenshots.
+- Fixed: the six ability inputs and point-buy blocks wrapped 4+2 / 5+1 (even
+  grid now); the character name field was ~180 px wide; catalog pickers were
+  unsorted and labeled duplicates with raw file names (now alphabetical, with
+  upstream book codes such as MOM, EB, VRGR, UA); a page hook reading an
+  unanswered single-option choice showed only "Statistica base mancante:
+  _proficiency" (now an Italian instruction plus the detail); starting
+  equipment used native multi-selects (now checkboxes); empty embedded
+  resource displays inside forms printed "Nessuna risorsa collegata"; HP and
+  charge tickers had 30 px tap targets; installed games were still offered as
+  "Scegli questo GDR" (now "Vai ai personaggi"); the creator ignored the game
+  just chosen in the library (now preselected, never the demo); game download
+  progress no longer mentions JSON/RPGScript.
+- Follow-up from user screenshots: library card now has a labeled
+  "Compatibilità" link, a full-width "Vai ai personaggi", secondary actions
+  together and 40 px before the next panel (confirmed by the user); creation
+  rows align controls on one baseline (race, "SEE DETAILS", subrace); the
+  point-buy section spans the form (6 columns) instead of a 133 px column; the
+  empty array note no longer appears in forms; array removal reads "Rimuovi"
+  (entry name kept in the accessible name); a single-choice select with exactly
+  one option is filled with it inside draft forms (5e granted proficiencies),
+  so only real choices stay empty.
+- Second round from user screenshots: form rows align on one baseline (field
+  margins removed inside rows, uniform-field grid limited to rows whose items
+  are all fields or stat blocks); catalog choice buttons are at least 220 px;
+  empty source section headings no longer leave a 60 px band (point buy);
+  class entries are start-aligned inside forms; the form's trailing value grid
+  has 16 px spacing; sheet card actions read "Dettagli" / "Scollega" with the
+  entry name only in the accessible name; bordered list cards regain padding
+  and keep actions at the bottom; empty nested resource displays inside
+  another resource's card are hidden (Fighting Style, Darkvision); roll
+  results show the total large with the dice as a detail line and a shorter
+  note; empty pickers point to the Risorse page; stats with a source
+  adjustment sheet (coins) no longer also show an inline input.
+- Not changed (source semantics): the source's "Average" HP mode gave 6 HP at
+  level 1; chosen Chain Mail does not change AC until equipped.
+- Tests: `tests/duplicate-catalog-labels.test.tsx` (book codes, order),
+  `tests/creation-flow.test.tsx` (actionable hook error),
+  `tests/onboarding.test.tsx` (installed game row, creator preselection).
+- `npm run check`: 334 passed, 1 skipped, 41 files (adds `tests/source-views.test.tsx` sole-option case).
+- A full run once hit a 5 s timeout in `tests/rpgscript.test.ts` under load
+  (5.9 s); alone it passed, and the full rerun was clean.
+- `npm run build` passed. Playwright `/PolySheet/`: intermediate runs needed
+  test updates for the name-sorted picker (`Monster 00050` opens page 2) and
+  the labeled "Compatibilità" link on system cards; final run 96 passed,
+  2 skipped. Root `/` not rerun (no routing, asset or worker changes).
+
+## UX pass across all pages, 2026-11-18
+
+- Walked Personaggi, scheda Sentieri, I miei GDR, Risorse, Dadi,
+  Combattimento, Compatibilità and Impostazioni in the dev preview at desktop
+  and 375 px, dark and light.
+- Fixed: roster search only from 4 characters, game filters only with 2+ games,
+  "ultima scheda" highlight only with 2+ characters, compatibility chip on
+  character cards only when support is partial, demo "A quale GDR" card only
+  while every character is a demo, duplicate arrow on cards removed; library
+  shows installed games first and hides the demo offer once Sentieri is
+  installed; Pathfinder 2e note now points to uploading the official `.rpg`;
+  Risorse shows the user's resources first, explains them once and folds the
+  catalog importer into a disclosure; tapping a die rolls it; editable stats
+  show one large editable number instead of value plus a second input (edit
+  round-trip checked in the browser: Vigore 2→4 updated Slancio to 5, then
+  restored); plainer dice and backup copy.
+- `tests/onboarding.test.tsx`: roster chrome thresholds. `tests/e2e/app.spec.ts`:
+  two characters of one game show no search or filters.
+- `npm run check`: 329 passed, 1 skipped, 41 files.
+- `npm run build` passed. Playwright `/PolySheet/`: first run failed on the
+  catalog-link tests (URL field now inside the closed disclosure); added
+  `openCatalogImport` to `tests/e2e/helpers.ts`, then 96 passed, 2 skipped.
+
+## PF2e daily preparations and resource-scoped events, 2026-11-18
+
+- Original input: official PF2e 0.3.0 `.rpg` (`.reference/official-releases-2026-11-16`)
+  with unchanged `class_*__pc1_` instances. Before: `daily_preparations` after
+  creation failed with "Nomi evento dinamici non supportati".
+- Implemented: static `fireEvent.event_names` lists, scoped `eventName`
+  dispatch to resource mechanics, owned-only resource base writes,
+  `$character.stat` and `$variable.stat` destinations, `when` without a match
+  as a no-op, structural `delayed` (aborts if reached). Scope and assumptions
+  in COMPATIBILITY.md.
+- Probe on the original: Fighter, Cleric, Witch, Bard, Druid, Ranger, Rogue
+  and Kineticist all complete; level-1 HP (10/8/6/8/8/10/8/8) and first-rank
+  slots (casters 2, Cleric 6 incl. font, martials 0) match PF2e level 1.
+- `tests/resource-events.test.ts`: 4 tests (synthetic dispatch, refusals,
+  no-handler/no-match, PF2e original for five classes).
+- `npm run check`: 328 passed, 1 skipped, 41 files. A first run reported one
+  transient unhandled error in `creation-flow.test.tsx` (form read after
+  unmount); the file passed twice alone and the full rerun was clean.
+- `npm run build` passed. Playwright on `/PolySheet/` (port 4183,
+  `MSYS_NO_PATHCONV=1`): 96 passed, 2 skipped. Root `/` not rerun (no routing,
+  asset or worker changes). PF2e creation was not driven in the browser; the
+  post-creation event path is covered by the persistence test above.
+
+## Sheet and disclosure polish, 2026-11-18
+
+- Design skills `impeccable` (launcher context run) and `ui-ux-pro-max` applied
+  to the library, import preview, creation dialog and Sentieri sheet.
+- Fixed: source section headings now share the content inset (16 px desktop,
+  12 px phone); source multiline text fields fill the section instead of a
+  centered 170 px column; native disclosure triangles replaced by the drawn
+  chevron used elsewhere; count labels use the singular ("1 tipo di risorsa").
+- Stat blocks drop their keyline and keep the tonal layer (surface-soft in the
+  light theme, where the input token equals the surface). The empty roster has
+  one route to the library and a scroll icon; other empty states no longer
+  show the meaningless arrow mark or an empty paragraph.
+- Catalog pickers label entries that share a name (two `Satyr` races) with the
+  differing tail of their real import source; unsourced or identical sources
+  get no label.
+- E2E helpers updated for behavior from the previous creation-flow commit, which
+  had broken the suite: a single real game is preselected (no placeholder
+  option) and systems with creation pages open the guided flow, so manual-setup
+  tests switch with "Usa la creazione manuale" (`tests/e2e/helpers.ts`). Import
+  tests use the remaining empty-roster action.
+- Browser checked at 1280 px and 375 px, no horizontal page scroll.
+  `npm run check`: 324 passed, one skipped, 40 files. `npm run build` passed;
+  `npm audit --omit=dev`: 0 vulnerabilities. Playwright on port 4183 with
+  base `/PolySheet/` (Git Bash needs `MSYS_NO_PATHCONV=1`): 96 passed, two
+  skipped, desktop and mobile (the four failing import tests rerun separately
+  after the fix). Root `/` not rerun: no routing, asset or worker changes.
+
 ## Creation flow usability pass, 2026-11-17
 
 - Design skills `impeccable` (pbakaus/impeccable @ d41d986) and

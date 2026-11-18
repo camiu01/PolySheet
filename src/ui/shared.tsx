@@ -1,7 +1,7 @@
 /** @file Accessible shared UI and bounded browser file/download utilities. */
 import { useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ArrowUpRight, AlertTriangle } from 'lucide-react';
+import { X, AlertTriangle } from 'lucide-react';
 import type { StoredSystem } from '../domain/model';
 import { decodeUtf8 } from '../importing/system';
 import { it } from './it';
@@ -31,8 +31,9 @@ export function CompatibilityBadge({ system }: { system: StoredSystem }) {
 export function Warning({ children }: { children: ReactNode }) {
   return <div className="notice notice-warning"><AlertTriangle size={18} /><div>{children}</div></div>;
 }
-export function Empty({ title, children, action }: { title: string; children?: ReactNode; action?: ReactNode }) {
-  return <div className="empty"><div className="empty-mark"><ArrowUpRight size={28} /></div><h2>{title}</h2><p className="muted">{children}</p>{action}</div>;
+/** Empty state; the mark is shown only when a meaningful icon is supplied. */
+export function Empty({ title, children, action, icon }: { title: string; children?: ReactNode; action?: ReactNode; icon?: ReactNode }) {
+  return <div className="empty">{icon && <div className="empty-mark" aria-hidden="true">{icon}</div>}<h2>{title}</h2>{children && <p className="muted">{children}</p>}{action}</div>;
 }
 /** Download local JSON without sending any content to a remote service. */
 export function download(text: string, name: string) {

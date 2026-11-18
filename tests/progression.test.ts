@@ -8,7 +8,7 @@ import { prepareCatalogTemplate } from '../src/importing/catalog';
 import { configureCharacter, installCatalogs } from '../src/persistence/catalog';
 import { installSystem, SheetDatabase } from '../src/persistence/db';
 import { advanceCharacter } from '../src/persistence/progression';
-import { progressionClasses, progressionEvaluator, progressionArchetypes, progressionContract } from '../src/engine/progression';
+import { hitPointModes, progressionClasses, progressionEvaluator, progressionArchetypes, progressionContract, progressionPreview } from '../src/engine/progression';
 import { catalogSystem } from './fixtures/catalog';
 
 it('recognizes imported advancement branches and ceiling without a bundled game fixture', async () => {
@@ -47,11 +47,23 @@ it.skipIf(!existsSync(fixture))('advances imported Fighter repeatedly, preserves
     const originals = resources.filter(record => record.catalogSource);
     const wrapper = progressionClasses(system, character, resources)[0];
     const request = { wrapperId: wrapper.record.id, expectedClassLevel: 1, targetLevel: 2, archetypeId: null, acknowledgeChoices: true };
-    expect(await advanceCharacter(character.id, character.revision, request, database)).toEqual({ level: 2, maxHp: 20, baseHpGain: 6 });
+    expect(progressionPreview(system, character, resources, wrapper.record.id, 2).features).toEqual(['Action Surge']);
+    expect(hitPointModes(system).map(mode => mode.id)).toEqual(['roll', 'average', 'max']);
+    const advanced = await advanceCharacter(character.id, character.revision, request, database);
+    expect(advanced).toMatchObject({ level: 2, maxHp: 20, baseHpGain: 6 });
+    expect(advanced.summary.features).toEqual(['Action Surge']);
+    // The summary is read back from the imported formulas: max HP is reported, current HP is not restored.
+    expect(advanced.summary.improved).toContainEqual({ name: 'Maximum HP', before: 12, after: 20 });
+    expect(advanced.summary.improved.some(row => /current/i.test(row.name))).toBe(false);
     await expect(advanceCharacter(character.id, character.revision, request, database)).rejects.toThrow('scheda è cambiata');
     character = (await database.characters.get(character.id))!;
     expect(character.values.current_hp).toBe(12);
     resources = await database.resources.toArray();
+    const classScope = progressionEvaluator(system, character, resources, { $details: { resourceId: wrapper.record.id } });
+    expect(classScope.get('$details.class.level')).toBe(2);
+    const featureNames = classScope.evaluate({ type: 'map', components: { type: 'stat', stat: '$details.features' },
+      map_value_key: '$feature', mapper: { type: 'stat', stat: '$feature.name' } });
+    expect(featureNames).toContain('Action Surge');
     const choices = progressionArchetypes(system, character, resources, wrapper.record.id, 3);
     expect(choices.required).toBe(true);
     const before = await database.resources.toArray();
@@ -60,6 +72,10 @@ it.skipIf(!existsSync(fixture))('advances imported Fighter repeatedly, preserves
     expect((await advanceCharacter(character.id, character.revision, { ...request, expectedClassLevel: 2, targetLevel: 3,
       archetypeId: choices.options[0].id }, database)).maxHp).toBe(28);
     character = (await database.characters.get(character.id))!;
+    resources = await database.resources.toArray();
+    const subclassScope = progressionEvaluator(system, character, resources, { $details: { resourceId: wrapper.record.id } });
+    expect(subclassScope.get('$details.class.selected_archetype.level')).toBe(3);
+    expect(subclassScope.get('$details.class.selected_archetype.current_class_details.class_level')).toBe(3);
     const snapshot = await database.resources.toArray();
     await expect(advanceCharacter(character.id, character.revision, { ...request, targetLevel: 4,
       newClassId: ids[0], manualPrerequisites: true }, database)).rejects.toThrow('già livelli');
@@ -71,6 +87,8 @@ it.skipIf(!existsSync(fixture))('advances imported Fighter repeatedly, preserves
     character = (await database.characters.get(character.id))!;
     resources = await database.resources.toArray();
     expect(progressionEvaluator(system, character, resources).get('level')).toBe(4);
+    expect(progressionEvaluator(system, character, resources, { $details: { resourceId: wrapper.record.id } })
+      .get('$details.class.level')).toBe(3);
     expect(character.values.current_hp).toBe(12);
     expect(resources.filter(record => record.catalogSource)).toEqual(originals);
     for (const [mode, expected] of [['max', 24], ['roll', 18]] as const) {
@@ -85,12 +103,22 @@ it.skipIf(!existsSync(fixture))('advances imported Fighter repeatedly, preserves
       expect((await advanceCharacter(fresh.id, fresh.revision, input, database, () => { draws++; return 4; })).maxHp).toBe(expected);
       expect(draws).toBe(mode === 'roll' ? 1 : 0);
     }
+    // Switching the method in the dialog saves it and the imported HP branch follows it (average → max: 24).
+    const switched = await configureCharacter(system, 'Switch', { constitution_score: 14, hit_point_mode: 'average' },
+      { classes: ids[0] }, undefined, database, true);
+    const switchedWrapper = progressionClasses(system, switched, await database.resources.toArray())[0];
+    await expect(advanceCharacter(switched.id, switched.revision, { ...request, wrapperId: switchedWrapper.record.id, hitPointMode: 'nope' }, database))
+      .rejects.toThrow();
+    expect((await advanceCharacter(switched.id, switched.revision, { ...request, wrapperId: switchedWrapper.record.id, hitPointMode: 'max' }, database)).maxHp).toBe(24);
+    expect((await database.characters.get(switched.id))!.values.hit_point_mode).toBe('max');
     const high = await configureCharacter(system, 'Target ceiling', { constitution_score: 14, hit_point_mode: 'max' },
       { classes: ids[0] }, undefined, database, true);
     const highResources = await database.resources.toArray();
     const highClass = progressionClasses(system, high, highResources)[0];
     const highArchetypes = progressionArchetypes(system, high, highResources, highClass.record.id, 20);
     expect(await advanceCharacter(high.id, high.revision, { ...request, wrapperId: highClass.record.id,
-      targetLevel: 20, archetypeId: highArchetypes.options[0].id }, database)).toEqual({ level: 20, maxHp: 240, baseHpGain: 190 });
+      targetLevel: 20, archetypeId: highArchetypes.options[0].id }, database)).toMatchObject({ level: 20, maxHp: 240, baseHpGain: 190 });
+    expect(progressionEvaluator(system, (await database.characters.get(high.id))!, await database.resources.toArray(),
+      { $details: { resourceId: highClass.record.id } }).get('$details.attacks_per_action')).toBe(4);
   } finally { await database.delete(); }
 }, 20000);

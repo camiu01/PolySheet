@@ -10,6 +10,7 @@ import { gzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
 import { demo, demoOriginal } from '../../src/demo';
 import { base, capabilitySystem, constant, list, stat } from '../fixtures/capabilities';
+import { chooseGame, openCatalogImport } from './helpers';
 import { viewSystem } from '../fixtures/views';
 import { it as copy } from '../../src/ui/it';
 import { catalogSystem, classOriginal, raceOriginal, backgroundOriginal, subraceOriginal } from '../fixtures/catalog';
@@ -32,8 +33,15 @@ async function importJson(page: Page, text: string, confirm = true) {
 async function create(page: Page, name: string, systemKey?: string) {
   await navigate(page, 'Personaggi');
   await page.getByRole('button', { name: 'Nuovo personaggio', exact: true }).first().click();
-  await page.getByRole('combobox', { name: copy.chooseSystem, exact: true }).selectOption(systemKey ?? { index: 1 });
-  await expect(page.getByText('Creazione manuale', { exact: true })).toBeVisible();
+  const game = page.getByRole('combobox', { name: copy.chooseSystem, exact: true });
+  if (systemKey) await game.selectOption(systemKey);
+  else await chooseGame(game);
+  // Systems with source creation pages open the guided flow; these tests exercise manual setup.
+  const manual = page.getByText(copy.manual, { exact: true });
+  const useManual = page.getByRole('button', { name: copy.useManualSetup, exact: true });
+  await expect(manual.or(useManual)).toBeVisible();
+  if (await useManual.isVisible()) await useManual.click();
+  await expect(manual).toBeVisible();
   await page.getByLabel('Nome del personaggio').fill(name);
   await page.getByRole('button', { name: 'Crea personaggio', exact: true }).click();
   await expect(page.getByRole('heading', { name, exact: true, level: 1 })).toBeVisible();
@@ -127,7 +135,7 @@ test('reported original HP, AC and description recover with manual class and rac
   await expect(page.getByText(/Non supportato: .*bottom_right_button_event/)).toHaveCount(0);
   await page.locator('.source-avatar-section').getByRole('button', { name: 'Menu della sorgente', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Long rest', exact: true }).click();
-  await expect(page.getByText(/Evento importato non eseguito da PolySheet.*trigger_long_rest/)).toBeVisible();
+  await expect(page.getByText(/Azione non ancora disponibile in PolySheet.*trigger_long_rest/)).toBeVisible();
   await navigate(page, 'Risorse');
   for (const [definitionId, archiveName] of [['class', 'Classe manuale'], ['class_details', 'Dettagli classe manuale'], ['race', 'Razza manuale']]) {
     await page.getByRole('button', { name: 'Nuova risorsa locale', exact: true }).click();
@@ -211,7 +219,7 @@ test('avatar corner menu stays inside the viewport and accepts pointer selection
   expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(await page.evaluate(() => window.innerWidth));
   await page.getByRole('menuitem', { name: 'Riposo locale', exact: true }).click();
   await expect(menu).not.toBeVisible();
-  await expect(page.getByText(/Evento importato non eseguito da PolySheet.*rest/)).toBeVisible();
+  await expect(page.getByText(/Azione non ancora disponibile in PolySheet.*rest/)).toBeVisible();
 });
 
 test('production assets, manifest and offline worker retain the deployment subpath', async ({ page, context, baseURL }) => {
@@ -334,7 +342,7 @@ for (const id of ['5e', '5e2024', 'pf2e']) {
     await preview.getByRole('button', { name: 'Conferma importazione' }).click();
     await expect(preview).not.toBeVisible();
     await expect(page.locator('.system-card')).toHaveCount(1);
-    await page.locator('.system-card .icon-button').click();
+    await page.locator('.system-card .card-footer .link-button').click();
     await expect(page.locator('main')).not.toContainText('sortBy senza order');
     await waitForWorker(page);
     await context.setOffline(true);
@@ -1045,6 +1053,7 @@ if (process.env.LIVE_REPOSITORY_IMPORT === '1') {
     await navigate(page, 'Risorse');
     const before = 74;
     await expect(page.locator('.resource-card')).toHaveCount(before);
+    await openCatalogImport(page);
     await page.getByLabel(copy.catalogUrl, { exact: true }).fill(`https://github.com/blastervla/rpg-companion-app-systems/tree/${pinnedCommit}/systems/5e2024/resource_instances`);
     await page.getByRole('button', { name: copy.catalogFromUrl, exact: true }).click();
     await expect(page.getByRole('dialog', { name: copy.catalogPreview, exact: true })).toBeVisible({ timeout: 60000 });
@@ -1156,12 +1165,10 @@ test('grimoire theme, local fonts and responsive navigation preserve every desti
   await captureInterface(page, `${testInfo.project.name}-sheet`);
   await create(page, 'Lupo delle Felci');
   await navigate(page, 'Personaggi');
-  await page.getByRole('button', { name: 'Sentieri 2', exact: true }).click();
+  // Two characters of one game: nothing to narrow down, so no search or system filters.
   await expect(page.locator('.character-card')).toHaveCount(2);
-  await page.getByRole('button', { name: 'Tutti i sistemi 2', exact: true }).click();
-  await page.getByLabel(copy.search, { exact: true }).fill('Mira');
-  await expect(page.locator('.character-card')).toHaveCount(1);
-  await page.getByLabel(copy.search, { exact: true }).fill('');
+  await expect(page.getByLabel(copy.search, { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Sentieri 2', exact: true })).toHaveCount(0);
   await page.evaluate(async () => { await document.fonts.ready; });
   expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toContain('Plus Jakarta Sans');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -1226,6 +1233,7 @@ for (const kind of ['json', 'web-folder', 'github-folder']) {
       : kind === 'web-folder' ? 'https://catalog.polysheet.test/catalog/'
         : 'https://github.com/catalog-owner/library/tree/main/catalog';
     const count = kind === 'json' ? 1 : 2;
+    await openCatalogImport(page);
     await page.getByLabel(copy.catalogUrl, { exact: true }).fill(link);
     await page.getByRole('button', { name: copy.catalogFromUrl, exact: true }).click();
     const preview = page.getByRole('dialog', { name: copy.catalogPreview, exact: true });

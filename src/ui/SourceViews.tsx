@@ -1,7 +1,7 @@
 /** @file Source popup and local resource controls; general events stay unsupported. */
 import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
-import { createEvaluator } from '../engine/formulas';
+import { createEvaluator, resourceParent } from '../engine/formulas';
 import { isResourceReference, jsonValue, object, type ResourceInstance, type View } from '../domain/model';
 import { initialValues } from '../persistence/db';
 import { commitResourceView } from '../persistence/views';
@@ -11,7 +11,7 @@ import { SourceForm } from './SourceForm';
 import { Modal } from './shared';
 import { it } from './it';
 import { FilteredResourcePicker } from './FilteredResourcePicker';
-import { gridColumns } from './view-support';
+import { gridColumns, resourceEventScope } from './view-support';
 
 /** Outside an edit session, selection waits for an explicit form Save. */
 export function DeferredResourceSelect({ node, context }: { node: View; context: RenderContext }) {
@@ -112,14 +112,14 @@ export function SourceResourceSelect({ node: v, context: ctx }: { node: View; co
         };
         void assign(record, v.preserve_ids === true ? [] : [record]).catch(e => setError(String(e))).finally(() => setBusy(false));
       }} />}
-      {!resources.length && <p>{it.noResources}</p>}
+      {!resources.length && <p className="muted">{it.noPickerResources}</p>}
       {v.inline_creation_mode === 'optional' && <button type="button" className="button secondary" onClick={() => setCreating(true)}>{it.newResource}</button>}
     </>}
     {error && <p role="alert">{error}</p>}
   </Modal>}</>;
 }
 
-/** Render local list/display/edit views; unlinking never destroys an instance. */
+/** Render live local list/display/edit views; unlinking never destroys an instance. */
 export function SourceResourceSection({ node: v, context: ctx }: { node: View; context: RenderContext }) {
   const [selected, setSelected] = useState<ResourceInstance | null>(null);
   const [editing, setEditing] = useState(false);
@@ -139,11 +139,15 @@ export function SourceResourceSection({ node: v, context: ctx }: { node: View; c
     });
     const field = String(v.resource_set_stat ?? v.resource_stat);
     const editable = v.read_only !== true && !!ctx.onCommit && ctx.stats.some(s => s.id === field && s.type === 'base');
-    const resourceContext = (r: ResourceInstance): RenderContext => ({
-      systemKey: r.systemKey, stats: definition.stats, values: r.values, resources: ctx.resources,
-      resourceDefinitions: ctx.resourceDefinitions, createdAt: r.createdAt, instanceId: r.sourceId ?? r.id,
-      enumerations: ctx.enumerations, character: ctx.character
-    });
+    const resourceContext = (snapshot: ResourceInstance): RenderContext => {
+      const r = ctx.resources?.find(record => record.id === snapshot.id) ?? snapshot;
+      return {
+        systemKey: r.systemKey, stats: definition.stats, values: r.values, resources: ctx.resources,
+        resourceDefinitions: ctx.resourceDefinitions, createdAt: r.createdAt, instanceId: r.sourceId ?? r.id,
+        enumerations: ctx.enumerations, character: ctx.character, overrides: r.overrides, ...resourceEventScope(ctx, r),
+        parent: resourceParent(refs.find(ref => ref.resourceId === r.id))
+      };
+    };
     const visible = !expanded && typeof v.max_items_in_preview === 'number' ? records.slice(0, Math.max(0, v.max_items_in_preview)) : records;
     function move(fromId: string, toId: string) {
       if (!editable || v.reorganizable !== true || fromId === toId) return;
@@ -168,17 +172,17 @@ export function SourceResourceSection({ node: v, context: ctx }: { node: View; c
         onDrop={e => { e.preventDefault(); move(e.dataTransfer.getData('text/plain'), r.id); }}>
         {definition.list_view ? <RenderView input={definition.list_view} context={resourceContext(r)} /> : <strong>{r.name}</strong>}
         <div className="button-row">
-          {v.tap_displays_resource !== false && <button type="button" className="link-button" onClick={() => { setSelected(r); setEditing(false); }}>{it.details} · {r.name}</button>}
+          {v.tap_displays_resource !== false && <button type="button" className="link-button" onClick={() => { setSelected(r); setEditing(false); }}>{it.details}<span className="sr-only"> · {r.name}</span></button>}
           {editable && <button type="button" className="link-button" onClick={() => {
             void ctx.onCommit?.(latest => {
               const items = latest[field];
               if (!Array.isArray(items)) throw new Error(it.invalidValue);
               return { [field]: items.filter(item => !isResourceReference(item) || item.resourceId !== r.id) };
             }).catch(e => setError(String(e)));
-          }}>{it.detach} · {r.name}</button>}
+          }}>{it.detach}<span className="sr-only"> · {r.name}</span></button>}
           {editable && v.reorganizable === true && <>
-            <button type="button" className="link-button" disabled={index === 0} onClick={() => move(r.id, visible[index - 1].id)}>{it.moveUp} · {r.name}</button>
-            <button type="button" className="link-button" disabled={index === visible.length - 1} onClick={() => move(r.id, visible[index + 1].id)}>{it.moveDown} · {r.name}</button>
+            <button type="button" className="link-button" disabled={index === 0} onClick={() => move(r.id, visible[index - 1].id)}>{it.moveUp}<span className="sr-only"> · {r.name}</span></button>
+            <button type="button" className="link-button" disabled={index === visible.length - 1} onClick={() => move(r.id, visible[index + 1].id)}>{it.moveDown}<span className="sr-only"> · {r.name}</span></button>
           </>}
         </div>
       </article>)}

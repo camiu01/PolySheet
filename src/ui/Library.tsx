@@ -91,29 +91,34 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
         setCatalogs([]); setPreview(await prepareImport(new Uint8Array(await f.arrayBuffer()), f.name));
       }));
     }} />
-    <GameChoices busy={loading} onChoose={id => void run(() => fromGame(id))} />
-    {preparingGame && <p className="notice" role="status">{catalogProgress || it.gamePreparing}</p>}
-    <SystemImportOptions busy={loading} onFile={() => file.current?.click()}
-      onLink={() => { setRepository(null); setShowUrl(true); }}
-      onDemo={() => void run(() => prepare(demoOriginal, 'PolySheet · contenuto originale MIT'))} />
+    {systems.length > 0 && <>
     <div className="section-title"><h2>{systems.length ? it.libraryTitle : it.noSystems}</h2><span className="muted">{systems.length} {systems.length === 1 ? it.savedVersion : it.savedVersions}</span></div>
     <div className="system-grid">
       {systems.map(s => <article className="system-card" key={s.key}>
         <div className="system-card-top"><span className="system-emblem">{s.definition.abbreviation.slice(0, 4)}</span><CompatibilityBadge system={s} /></div>
         <h3>{s.definition.name}</h3><span className="muted">v{s.definition.version} <span className="mono">{s.digest.slice(0, 6)}</span></span>
         {s.definition.id === 'polysheet-sentieri' && <p className="badge badge-warning">{it.demoBadge}</p>}
-        <div className="system-counts"><span>{s.definition.character_stats.length} {it.stats}</span><span>{s.definition.character_sheet_sections.length} {it.sections}</span></div>
-        <div className="card-footer"><span className="offline-label"><i />{it.stored}</span><button className="icon-button" aria-label={`${it.details} ${s.definition.name}`} onClick={() => { selectSystem(s.key); navigate('diagnostics'); }}><ArrowRight size={20} /></button></div>
-        <button className="button secondary" onClick={() => { selectSystem(s.key); navigate('characters'); }}>{it.useGame}</button>
-        <button className="link-button" onClick={() => void run(async () => {
+        <div className="system-counts"><span>{s.definition.character_stats.length} {s.definition.character_stats.length === 1 ? it.stat : it.stats}</span><span>{s.definition.character_sheet_sections.length} {s.definition.character_sheet_sections.length === 1 ? it.section : it.sections}</span></div>
+        <div className="card-footer"><span className="offline-label"><i />{it.stored}</span><button className="link-button" aria-label={`${it.details} ${s.definition.name}`} onClick={() => { selectSystem(s.key); navigate('diagnostics'); }}>{it.diagnostics}<ArrowRight size={15} aria-hidden="true" /></button></div>
+        <button className="button primary system-card-main" onClick={() => { selectSystem(s.key); navigate('characters'); }}>{it.useGame}</button>
+        <div className="system-card-actions"><button className="link-button" onClick={() => void run(async () => {
           const name = s.definition.id.replace(/[^\w-]/g, '_');
           if (s.artifact) downloadBlob(new Blob([artifactBytes(s.artifact.base64)], { type: 'application/gzip' }), `${name}.rpg`);
           else download(s.original, `${name}.rpg.json`);
         })}><FileJson size={15} />{s.artifact ? it.exportPackage : s.definition.polysheet_source ? it.repositoryExportSources : it.exportSystem}</button>
         <button className="link-button danger-text" aria-label={`${it.removeSystem} ${s.definition.name} · ${s.digest.slice(0, 6)}`}
-          disabled={loading} onClick={() => setDeleting(s)}><Trash2 size={15} />{it.removeSystem}</button>
+          disabled={loading} onClick={() => setDeleting(s)}><Trash2 size={15} />{it.removeSystem}</button></div>
       </article>)}
     </div>
+    </>}
+    <GameChoices busy={loading} onChoose={id => void run(() => fromGame(id))}
+      installed={systems.map(s => s.definition.id)}
+      onUse={id => { const latest = systems.find(s => s.definition.id === id); if (latest) { selectSystem(latest.key); navigate('characters'); } }} />
+    {preparingGame && <p className="notice" role="status">{catalogProgress || it.gamePreparing}</p>}
+    <SystemImportOptions busy={loading} onFile={() => file.current?.click()}
+      onLink={() => { setRepository(null); setShowUrl(true); }}
+      onDemo={systems.some(s => s.definition.id === 'polysheet-sentieri') ? undefined
+        : () => void run(() => prepare(demoOriginal, 'PolySheet · contenuto originale MIT'))} />
     <div className="footnote"><BookOpen size={18} /><div><strong>{it.versions}</strong><p>{it.versionHelp}</p></div></div>
     {deleting && <Modal title={it.removeSystemTitle} onClose={() => !busy.current && setDeleting(null)}>
       <h3>{deleting.definition.name} · v{deleting.definition.version}</h3>
@@ -202,7 +207,7 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
       <p className="import-review-help">{it.importReviewHelp}</p>
       <h3>{preview.definition.name} <small className="muted">v{preview.definition.version}</small></h3>
       {preview.definition.id === 'polysheet-sentieri' && <Warning>{it.demoDescription}</Warning>}
-      <p>{preview.definition.character_stats.length} {it.stats} · {preview.definition.character_sheet_sections.length} {it.sections} · {preview.definition.resources.length} {it.resourceTypes}</p>
+      <p>{preview.definition.character_stats.length} {preview.definition.character_stats.length === 1 ? it.stat : it.stats} · {preview.definition.character_sheet_sections.length} {preview.definition.character_sheet_sections.length === 1 ? it.section : it.sections} · {preview.definition.resources.length} {preview.definition.resources.length === 1 ? it.resourceTypeCount : it.resourceTypes}</p>
       <CompatibilityBadge system={preview} />
       {Boolean(preview.definition.polysheet_source) && <p>{it.repositorySourceNotice}</p>}
       {systems.some(s => s.definition.id === preview.definition.id) && <p className="muted">{it.versionHelp}</p>}

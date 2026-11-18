@@ -1,13 +1,14 @@
 /** @file Manual character creation and source-generated character sheets. */
 import { memo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ArrowLeft, ArrowUpRight, BookOpen, Check, ListChecks, Plus, Search, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, BookOpen, Check, ListChecks, Plus, ScrollText, Search, Trash2 } from 'lucide-react';
 import { isResourceReference, object, type Character, type StoredSystem, type View } from '../domain/model';
 import { db, detachResource, setCharacterValue } from '../persistence/db';
 import { CompatibilityBadge, Empty, Modal, PageHeading, Warning, type Run } from './shared';
 import { it } from './it';
 import { useUi } from './store';
-import { commitCharacterView } from '../persistence/views';
+import { commitCharacterView, commitResourceView } from '../persistence/views';
+import { setResourceOverride } from '../persistence/resources';
 import { manualFieldGroup, sessionViews } from '../engine/view-session';
 import { SourceForm } from './SourceForm';
 import { CharacterCatalog } from './CharacterCatalog';
@@ -37,32 +38,36 @@ export function Characters({ systems, characters, run }: { systems: StoredSystem
   const [filter, setFilter] = useState('');
   const filtered = characters.filter(c => (!filter || c.systemKey === filter)
     && c.name.toLocaleLowerCase('it').includes(search.toLocaleLowerCase('it')));
+  // Search and system filters only earn their space once there is something to narrow down.
+  const rosterSystems = systems.filter(s => characters.some(c => c.systemKey === s.key));
+  const searchable = characters.length >= 4 || !!search;
+  const highlightRecent = characters.length > 1 && !search && !filter;
+  const onlyDemo = characters.every(c => systems.find(s => s.key === c.systemKey)?.definition.id === 'polysheet-sentieri');
   return <>
     <PageHeading title={it.allCharacters} description={it.characterSubtitle}
       action={<button className="button primary" onClick={() => systems.length ? setCreating(true) : navigate('systems')}><Plus size={18} />{it.newCharacter}</button>} />
-    <div className="character-toolbar"><div className="tab-label"><span className="tab-dot" />{it.allCharactersTab} <span className="count">{characters.length}</span></div>
-      <label className="search"><Search size={17} /><input aria-label={it.search} placeholder={it.search} value={search} onChange={e => setSearch(e.target.value)} /></label></div>
-    {characters.length > 0 && <div className="roster-filters" role="group" aria-label={it.chooseSystem}>
+    {searchable && <div className="character-toolbar"><div className="tab-label"><span className="tab-dot" />{it.allCharactersTab} <span className="count">{characters.length}</span></div>
+      <label className="search"><Search size={17} /><input aria-label={it.search} placeholder={it.search} value={search} onChange={e => setSearch(e.target.value)} /></label></div>}
+    {rosterSystems.length > 1 && <div className="roster-filters" role="group" aria-label={it.chooseSystem}>
       <button aria-pressed={!filter} onClick={() => setFilter('')}>{it.allSystems} <span>{characters.length}</span></button>
-      {systems.filter(s => characters.some(c => c.systemKey === s.key)).map(s => <button key={s.key}
+      {rosterSystems.map(s => <button key={s.key}
         aria-pressed={filter === s.key} onClick={() => setFilter(s.key)}>{s.definition.name} <span>{characters.filter(c => c.systemKey === s.key).length}</span></button>)}
     </div>}
-    {characters.length === 0 ? <>
-      <Empty title={it.emptyCharacters} action={<button className="button secondary" onClick={() => navigate('systems')}><BookOpen size={17} />{it.importSystem}</button>}>{it.emptyCharactersHelp}</Empty>
-      <div className="getting-started"><BookOpen size={24} /><div><strong>{it.chooseRules}</strong><p className="muted">{it.chooseRulesHelp}</p></div><button className="icon-button" aria-label={it.systems} onClick={() => navigate('systems')}><ArrowUpRight /></button></div>
-    </> : filtered.length ? <div className="character-grid">{filtered.map((c, index) => {
+    {characters.length === 0 ? <Empty title={it.emptyCharacters} icon={<ScrollText size={26} />}
+      action={<button className="button secondary" onClick={() => navigate('systems')}><BookOpen size={17} />{it.importSystem}</button>}>{it.emptyCharactersHelp}</Empty>
+      : filtered.length ? <div className="character-grid">{filtered.map((c, index) => {
       const s = systems.find(s => s.key === c.systemKey);
-      return <button className={`character-card ${!search && !filter && index === 0 ? 'character-recent' : ''}`} key={c.id} onClick={() => openCharacter(c.id)}>
-        {!search && !filter && index === 0 && <span className="recent-label">{it.recentCharacter}</span>}
+      return <button className={`character-card ${highlightRecent && index === 0 ? 'character-recent' : ''}`} key={c.id} onClick={() => openCharacter(c.id)}>
+        {highlightRecent && index === 0 && <span className="recent-label">{it.recentCharacter}</span>}
         <div className="character-art" aria-hidden="true"><div className="character-monogram">{c.name.slice(0, 2).toLocaleUpperCase('it')}</div><span className="character-system">{s?.definition.abbreviation ?? '?'}</span></div>
-        <div className="character-card-body"><div className="card-title-row"><h2>{c.name}</h2><ArrowUpRight size={19} /></div><p className="muted">{s?.definition.name} · v{s?.definition.version}</p>
+        <div className="character-card-body"><div className="card-title-row"><h2>{c.name}</h2></div><p className="muted">{s?.definition.name} · v{s?.definition.version}</p>
           {s?.definition.id === 'polysheet-sentieri' && <p className="badge badge-warning">{it.demoBadge}</p>}
           <div className="character-card-meta"><span><i />{it.saved}</span><small>{new Date(c.updatedAt).toLocaleDateString('it')}</small></div>
-          <div className="card-open-row">{s && <CompatibilityBadge system={s} />}<span>{it.openSheet}<ArrowUpRight size={15} /></span></div></div>
+          <div className="card-open-row">{s && s.diagnostics.length > 0 && <CompatibilityBadge system={s} />}<span>{it.openSheet}<ArrowUpRight size={15} /></span></div></div>
       </button>;
     })}<button className="add-character-card" onClick={() => setCreating(true)}><Plus size={28} /><span>{it.newCharacter}</span><small>{it.anotherStory}</small></button></div> : <Empty title={it.noResults} />}
     <div className="privacy-strip"><Check size={16} /><span>{it.local}.</span><span className="muted">{it.noAccount}</span></div>
-    {characters.length > 0 && <div className="getting-started"><BookOpen size={24} /><div><strong>{it.chooseRules}</strong><p className="muted">{it.chooseRulesHelp}</p></div><button className="button secondary" onClick={() => navigate('systems')}>{it.systems}</button></div>}
+    {characters.length > 0 && onlyDemo && <div className="getting-started"><BookOpen size={24} /><div><strong>{it.chooseRules}</strong><p className="muted">{it.chooseRulesHelp}</p></div><button className="button secondary" onClick={() => navigate('systems')}>{it.systems}</button></div>}
     {creating && <CharacterCreator systems={systems} onSystemChange={selectSystem} run={run}
       onClose={() => setCreating(false)} onDone={id => { setCreating(false); openCharacter(id); }} />}
   </>;
@@ -81,6 +86,9 @@ export const CharacterSheet = memo(function CharacterSheet({ character, system, 
   const change = (id: string, value: unknown) => { void run(() => setCharacterValue(character.id, id, value)); };
   const context = {
     canEvent: events.canEvent, onEvent: events.onEvent, eventBusy: events.eventBusy,
+    canResourceEvent: events.canResourceEvent, onResourceEvent: events.onResourceEvent,
+    onResourceChange: (resourceId: string, statId: string, value: unknown) => { void run(() => commitResourceView(resourceId, { [statId]: value })); },
+    onResourceOverride: (resourceId: string, statId: string, value: number) => { void run(() => setResourceOverride(resourceId, statId, value)); },
     character: new RuntimeResource(`character:${character.id}`, system.definition.character_stats,
       character.values, character.createdAt, {}, overrides.values, undefined, overrides.modifiers),
     stats: system.definition.character_stats, values: character.values,

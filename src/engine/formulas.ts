@@ -16,9 +16,16 @@ export class RuntimeResource {
     readonly modifiers: Record<string, unknown> = {}
   ) {}
 }
+const referenceParents = new WeakMap<object, RuntimeResource>();
+/** Trusted, non-persisted owner of a reference returned by an evaluator. */
+export function resourceParent(value: unknown): RuntimeResource | undefined {
+  return value && typeof value === 'object' ? referenceParents.get(value) : undefined;
+}
 export interface EvaluationEnvironment {
   /** Explicit owning-character snapshot; absent for unassigned resource previews. */
   character?: RuntimeResource;
+  /** Actual resource owner, retained when a referenced resource becomes a view root. */
+  parent?: RuntimeResource;
   createdAt?: string;
   /** Upstream identity of a resource evaluated as the root scope, exposed as `id`. */
   instanceId?: string;
@@ -419,12 +426,18 @@ for (const [type, compare] of [
  * @remarks Resource and lambda scopes share budgets and cycle detection. No `$view`
  * state or object prototypes are exposed. Missing optional path segments return null.
  * Resource membership is captured once; its lookup index is built only on demand.
+ * References retain their declaring owner through calculated collections. Parent
+ * metadata is trusted, weakly held and never serialized; caches are owner-local.
  */
 // Official PF2e creation formulas (feat/archetype graphs) need ~10^4–10^5 cached steps and stat
 // chains deeper than 64 nested nodes; 256 stays far below the JavaScript stack limit.
 export function createEvaluator(stats: Stat[], values: Record<string, unknown> = {}, limits = { steps: 100000, depth: 256 }, environment: EvaluationEnvironment = {}) {
-  const root = new RuntimeResource('root', stats, values, environment.createdAt, environment.variables, environment.overrides, environment.instanceId, environment.modifiers);
+  const root = new RuntimeResource('root', stats, values, environment.createdAt,
+    { ...environment.variables, ...(environment.parent ? { $parent: environment.parent } : {}) },
+    environment.overrides, environment.instanceId, environment.modifiers);
   const scopes = new Map<string, RuntimeResource>();
+  const scopeIds = new WeakMap<RuntimeResource, number>();
+  const scopeRecords = new WeakMap<RuntimeResource, string>();
   const resourceRecords = environment.resources?.slice();
   let resources: Map<string, ResourceInstance> | undefined;
   const frames: Record<string, unknown>[] = [];
@@ -456,14 +469,29 @@ export function createEvaluator(stats: Stat[], values: Record<string, unknown> =
   function resolveResource(value: unknown) {
     if (value instanceof RuntimeResource) return value;
     if (!isResourceReference(value)) return undefined;
-    if (scopes.has(value.resourceId)) return scopes.get(value.resourceId);
+    const parent = resourceParent(value);
+    for (let ancestor = parent; ancestor; ancestor = ancestor.variables.$parent instanceof RuntimeResource ? ancestor.variables.$parent : undefined) {
+      if (scopeRecords.get(ancestor) === value.resourceId) return ancestor;
+    }
+    if (parent && !scopeIds.has(parent)) scopeIds.set(parent, scopeIdsCounter++);
+    const key = `${parent ? scopeIds.get(parent) : 'none'}:${value.resourceId}`;
+    if (scopes.has(key)) return scopes.get(key);
     resources ??= new Map(resourceRecords?.map(r => [r.id, r]));
     const record = resources.get(value.resourceId);
     const definition = environment.resourceDefinitions?.find(d => d.id === record?.definitionId);
     if (!record || !definition) throw new MissingStat(`Risorsa mancante: ${value.resourceId}`);
-    const scope = new RuntimeResource(`resource:${record.id}`, definition.stats, record.values, record.createdAt, {}, {}, record.sourceId ?? record.id);
-    scopes.set(record.id, scope);
+    const scope = new RuntimeResource(`resource:${record.id}`, definition.stats, record.values, record.createdAt,
+      parent ? { $parent: parent } : {}, record.overrides ?? {}, record.sourceId ?? record.id);
+    scopeRecords.set(scope, record.id);
+    scopes.set(key, scope);
     return scope;
+  }
+  let scopeIdsCounter = 0;
+  function bindReference(value: unknown, scope: RuntimeResource): unknown {
+    if (!isResourceReference(value) || resourceParent(value)) return value;
+    const reference = { resourceId: value.resourceId };
+    referenceParents.set(reference, scope);
+    return reference;
   }
   function evaluate(value: unknown, scope = root): unknown {
     return bounded(() => {
@@ -525,14 +553,15 @@ export function createEvaluator(stats: Stat[], values: Record<string, unknown> =
     return bounded(() => {
       if (Object.hasOwn(scope.variables, id)) return presence ? true : scope.variables[id];
       // `$view` is local to the scope that owns the form; nested resources never see their parent's drafts.
-      if (id !== '$view' && Object.hasOwn(environment.variables ?? {}, id)) return presence ? true : environment.variables?.[id];
+      if (id !== '$view' && id !== '$parent' && Object.hasOwn(environment.variables ?? {}, id)) return presence ? true : environment.variables?.[id];
       if (id === '$character' && environment.character) return presence ? true : environment.character;
       const s = scope.stats.find(s => s.id === id);
       if (!s && id === 'id' && scope.instanceId) return presence ? true : scope.instanceId;
       if (!s && id === 'created_at' && scope.createdAt) return presence ? true : scope.createdAt;
       if (!s) throw new MissingStat(`Statistica mancante: ${id}`);
       if (presence) return true;
-      const key = `${scope.key}:${id}`;
+      if (!scopeIds.has(scope)) scopeIds.set(scope, scopeIdsCounter++);
+      const key = `${scope.key}:${scopeIds.get(scope)}:${id}`;
       if (!bypass && cache.has(key)) return cache.get(key);
       if (active.includes(key)) throw new Error(`Dipendenza circolare: ${[...active, key].join(' → ')}`);
       active.push(key);
@@ -557,6 +586,9 @@ export function createEvaluator(stats: Stat[], values: Record<string, unknown> =
         const resourceArray = s.value_type === 'array' && s.sub_value_type === 'resource' && Array.isArray(result)
           && result.every(v => v instanceof RuntimeResource || isResourceReference(v));
         if (!resourceResult && !resourceArray && !matchesType(result, s.value_type, s.sub_value_type)) throw new Error(`Valore non valido per ${s.value_type}`);
+        if (s.value_type === 'resource') result = bindReference(result, scope);
+        if (s.value_type === 'array' && s.sub_value_type === 'resource' && Array.isArray(result))
+          result = result.map(value => bindReference(value, scope));
         if (!bypass) cache.set(key, result);
         return result;
       } catch (error) {

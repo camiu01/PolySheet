@@ -299,7 +299,8 @@ complete external content-archive support. See [GitHub import](docs/GITHUB_IMPOR
   `toNum`, `toSignedString` and `replace`. Enumeration labels resolve inherited
   entries and fail for unknown ids; `toNum` rejects non-decimal text and
   `replace` is literal, all-occurrence and bounded.
-- [ ] Verify and implement `eventName`, which needs a real event scope.
+- [ ] Verify `eventName` upstream semantics; only the static `fireEvent.event_names`
+  list form is implemented, not `eventName` as a general formula (`map` mappers).
 - [ ] Verify and implement `split`; the public page documents a plain separator
   while the pinned source passes a regular expression, so semantics are unverified.
 - [ ] Verify and implement `copyResource`, including identity, references and
@@ -377,8 +378,10 @@ with create/remove, `pop_up_type`, `left_view`, `hide_line`, `auto_add_first`;
   141 local catalog roots (Human Dromaar Fighter saved in ~2 s).
 - [ ] PF2e feats: the 1,089 `feat` instances are not importable catalog roots,
   so ancestry/class feat slots stay empty.
-- [ ] PF2e `daily_preparations` after creation is refused by the character
-  dispatcher ("Nomi evento dinamici non supportati"); current HP shows 18/19.
+- [x] PF2e `daily_preparations` after creation: resource-scoped `eventName`
+  dispatch, owned resource writes and `$character.stat` overrides (verified on
+  Fighter, Rogue, Witch, Bard and Druid). Upstream scoping semantics remain
+  assumptions documented in COMPATIBILITY.md.
 - [ ] Backup bound: 32 MiB is exceeded by 5e + PF2e catalogs plus a few
   characters (each copies its whole class graph). Needs a decision before
   raising the limit or sharing immutable graph members.
@@ -386,7 +389,7 @@ with create/remove, `pop_up_type`, `left_view`, `hide_line`, `auto_add_first`;
   (new network endpoint: CSP and threat-model review required).
 - [ ] Confirm upstream `$updated_stats` semantics (assumed: base stats changed
   by the confirmed page).
-- [ ] Label duplicate catalog names by source (e.g. two `Satyr` races).
+- [x] Label duplicate catalog names by source (e.g. two `Satyr` races).
 - [ ] Implement `on_page_open`, `on_page_close`, `pre_edit` and `post_edit` with
   verified draft, confirmation, cancellation and repeated-operation behavior.
 - [ ] Integrate race, class, background, abilities and related resource choices

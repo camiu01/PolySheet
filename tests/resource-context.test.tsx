@@ -13,6 +13,24 @@ beforeAll(() => {
   HTMLDialogElement.prototype.close = function () { this.removeAttribute('open'); };
 });
 
+it.each(['resource', 'resourceArray', 'resourceSection'])('retains $parent in %s views and refreshes its latest values', type => {
+  const label = { id: 'parent-label', type: 'text', text: stat('$parent.level') };
+  const definition: ResourceDefinition = { id: 'child', name: 'Child', stats: [], list_view: label, display_view: label };
+  const record = { id: 'child', systemKey: 'sys', definitionId: 'child', name: 'Child', values: {} };
+  const array = type !== 'resource';
+  const context = {
+    stats: [base('level', 'integer', 2), base('children', array ? 'array' : 'resource',
+      array ? [{ resourceId: record.id }] : { resourceId: record.id }, array ? 'resource' : undefined)],
+    values: { level: 2 }, resources: [record], resourceDefinitions: [definition]
+  };
+  const input = { id: 'children-view', type, stat: 'children', resource_stat: 'children', resource_id: 'child' };
+  const result = render(<RenderView input={input} context={context} />);
+  expect(screen.getByText('2', { exact: true })).toBeInTheDocument();
+  result.rerender(<RenderView input={input} context={{ ...context, values: { level: 5 } }} />);
+  expect(screen.getByText('5', { exact: true })).toBeInTheDocument();
+  expect(screen.queryByText('2', { exact: true })).toBeNull();
+});
+
 it('resolves only an explicitly supplied character snapshot, with separate caches and strict missing contexts', () => {
   const stats = [base('attack', 'integer', 5)];
   const character = new RuntimeResource('owner-a', stats, { attack: 5 });

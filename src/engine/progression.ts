@@ -12,6 +12,18 @@ export interface ProgressionRequest {
   archetypeId: string | null;
   acknowledgeChoices: boolean;
   expectedClassLevel?: number;
+  /** New value of the imported `hit_point_mode` choice, saved before the HP formulas run. */
+  hitPointMode?: string;
+}
+
+/** The imported HP methods (5e `hit_point_modes`: roll, average, max); empty when the system has none. */
+export function hitPointModes(system: StoredSystem) {
+  const enumeration = system.definition.enumerated_types.find(item => !!item && typeof item === 'object' && object(item).id === 'hit_point_modes');
+  const types = enumeration ? object(enumeration).types : undefined;
+  return (Array.isArray(types) ? types : []).flatMap(item => {
+    const entry = item && typeof item === 'object' ? object(item) : {};
+    return typeof entry.id === 'string' && typeof entry.name === 'string' ? [{ id: entry.id, name: entry.name }] : [];
+  });
 }
 
 function nodes(input: unknown, predicate: (node: Record<string, unknown>) => boolean, depth = 0): Record<string, unknown>[] {
@@ -151,4 +163,65 @@ export function planProgression(system: StoredSystem, character: Character, reso
   const level = integer(evaluator.get('level')), maxHp = integer(evaluator.get('max_hp'));
   if (level !== request.targetLevel || maxHp < 1) throw new Error(it.progressionUnsupported);
   return { values, wrapper, level, maxHp, baseHpGain: integer(values.base_hp) - integer(character.values.base_hp) };
+}
+
+/** What one advancement changed, read from the imported formulas before and after the command. */
+export interface ProgressionSummary {
+  /** Scalar character stats shown on the sheet whose value changed. */
+  improved: { name: string; before: unknown; after: unknown }[];
+  /** Class features available after the command that were not before (5e `class_details.features`). */
+  features: string[];
+  /** New or updated features that now offer selectable choices. */
+  choices: string[];
+}
+
+/** Values the summary compares; a stat that cannot be evaluated in either state is left out of the comparison. */
+export function progressionSnapshot(system: StoredSystem, character: Character, resources: ResourceInstance[], wrapperId?: string,
+  withStats = true) {
+  const ids = new Set<string>();
+  nodes(system.definition.character_sheet_sections, node => node.type === 'stat' && typeof node.stat === 'string')
+    .forEach(node => ids.add(node.stat as string));
+  const evaluator = progressionEvaluator(system, character, resources);
+  const stats = new Map<string, { name: string; value: unknown }>();
+  for (const stat of system.definition.character_stats) {
+    if (!withStats || !ids.has(stat.id) || !['integer', 'decimal', 'string'].includes(stat.value_type)) continue;
+    const value = readOrSkip(() => evaluator.get(stat.id));
+    if (value !== undefined) stats.set(stat.id, { name: stat.name, value });
+  }
+  const features = new Map<string, boolean>();
+  if (wrapperId && resources.some(record => record.id === wrapperId)) {
+    const context = { $details: { resourceId: wrapperId } };
+    const scope = progressionEvaluator(system, character, resources, context);
+    const list = readOrSkip(() => scope.get('$details.features'));
+    (Array.isArray(list) ? list : []).forEach(feature => {
+      const item = progressionEvaluator(system, character, resources, { ...context, $feature: feature });
+      const name = readOrSkip(() => item.get('$feature.name'));
+      if (typeof name === 'string') features.set(name, readOrSkip(() => item.get('$feature.can_choose_new_selectable_features_in_current_level')) === true);
+    });
+  }
+  return { stats, features };
+}
+
+/** Display-only reads: an imported formula that fails for this character is not shown, never guessed. */
+function readOrSkip(read: () => unknown) {
+  try { return read(); } catch { return undefined; }
+}
+
+/** Compare two snapshots of the same character. */
+export function progressionSummary(before: ReturnType<typeof progressionSnapshot>, after: ReturnType<typeof progressionSnapshot>): ProgressionSummary {
+  const improved = [...after.stats].flatMap(([id, next]) => {
+    const previous = before.stats.get(id);
+    return previous && previous.value !== next.value && next.value !== null && next.value !== ''
+      ? [{ name: next.name, before: previous.value, after: next.value }] : [];
+  });
+  const features = [...after.features.keys()].filter(name => !before.features.has(name));
+  const choices = [...after.features].filter(([name, open]) => open && (!before.features.get(name))).map(([name]) => name);
+  return { improved, features, choices };
+}
+
+/** Features and choices the selected class gains at `classLevel`; no dice, so HP is not previewed. */
+export function progressionPreview(system: StoredSystem, character: Character, resources: ResourceInstance[], wrapperId: string, classLevel: number) {
+  const staged = resources.map(record => record.id === wrapperId ? { ...record, values: { ...record.values, class_level: classLevel } } : record);
+  return progressionSummary(progressionSnapshot(system, character, resources, wrapperId, false),
+    progressionSnapshot(system, character, staged, wrapperId, false));
 }

@@ -5,7 +5,7 @@
 import { z } from 'zod';
 import { boundedJson, prepareSystem } from '../importing/system';
 import { artifactBytes, prepareImport } from '../importing/package';
-import { matchesType, object, type Combat, type ResourceInstance } from '../domain/model';
+import { matchesType, object, type Character, type Combat, type ResourceInstance } from '../domain/model';
 import { checkReferences } from '../domain/references';
 import { eligibleCombatants, initiativeOrder } from '../engine/combat';
 import { db, type SheetDatabase } from './db';
@@ -35,6 +35,7 @@ const schema = z.object({
     id, systemKey: id, definitionId: id, name: z.string().max(500), values: record, createdAt: date.optional(),
     sourceId: id.optional(), catalogGroup: id.optional(),
     catalogIssue: z.string().max(100000).optional(),
+    overrides: record.optional(),
     catalogSource: z.object({ original: z.string(), source: z.string().max(2000), digest: z.string().regex(/^[a-f0-9]{64}$/) }).strict().optional()
   })).max(10000),
   combats: z.array(z.object({
@@ -122,10 +123,16 @@ export async function validateBackup(text: string) {
       if (['string', 'integer', 'decimal', 'bool', 'array', 'resource', 'photo'].includes(stat.value_type) && !matchesType(value, stat.value_type, stat.sub_value_type))
         throw new Error(`${entry.id}.${key}: tipo non valido`);
     }
-    if ('overrides' in entry && entry.overrides) {
-      const stats = 'definitionId' in entry ? system.definition.resources.find(r => r.id === entry.definitionId)?.stats : system.definition.character_stats;
-      if (!stats) throw new Error('Definizione risorsa mancante per override');
-      for (const [_mechanicId, layers] of Object.entries(entry.overrides)) {
+    if ('definitionId' in entry && entry.overrides) {
+      // Resource instances keep one flat layer of calculated-stat values set by their own mechanics.
+      for (const [statId, value] of Object.entries(entry.overrides)) {
+        const stat = stats.find(s => s.id === statId);
+        if (!stat || stat.type !== 'calculated' || !matchesType(value, stat.value_type, stat.sub_value_type))
+          throw new Error(`Valore override non valido per ${statId}`);
+      }
+    } else if ('overrides' in entry && entry.overrides) {
+      const stats = system.definition.character_stats;
+      for (const [_mechanicId, layers] of Object.entries((entry as Character).overrides!)) {
         if (!layers || typeof layers !== 'object') throw new Error('Struttura override non valida');
         for (const layer of ['values', 'modifiers'] as const) {
           if (layers[layer]) {

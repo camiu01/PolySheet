@@ -96,3 +96,20 @@ export async function deleteResource(id: string, database = db) {
     }
   });
 }
+
+/**
+ * Set one calculated-stat override of a local, non-catalog instance: a source ticker on a
+ * calculated value (5e effect `current_charges`), the same layer the instance's own mechanics write.
+ */
+export async function setResourceOverride(id: string, statId: string, value: number, database = db) {
+  await database.transaction('rw', database.resources, database.systems, async () => {
+    const record = await database.resources.get(id);
+    const system = record && await database.systems.get(record.systemKey);
+    const stat = system?.definition.resources.find(d => d.id === record!.definitionId)?.stats.find(s => s.id === statId);
+    const group = record?.catalogGroup ? await database.resources.get(record.catalogGroup) : undefined;
+    if (!record || record.catalogSource || group?.catalogSource) throw new Error(it.catalogImmutable);
+    if (!stat || stat.type !== 'calculated' || !['integer', 'decimal'].includes(stat.value_type) || !matchesType(value, stat.value_type))
+      throw new Error(it.invalidValue);
+    await database.resources.put({ ...record, overrides: { ...record.overrides, [statId]: value } });
+  });
+}

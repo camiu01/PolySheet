@@ -90,7 +90,12 @@ export function CreationFlow({ system, run, onDone, onClose }: {
         onCommit: async (patch, created = []) => {
           const changes = typeof patch === 'function' ? patch({ ...draft.values }) : patch;
           let next: CreationDraft = { ...draft, values: { ...draft.values, ...changes }, staged: mergeStaged(draft.staged, created) };
-          next = hook('on_page_close', index, hook('post_edit', index, next, Object.keys(changes)));
+          try { next = hook('on_page_close', index, hook('post_edit', index, next, Object.keys(changes))); }
+          catch (cause) {
+            // A source hook reading an unanswered choice fails on the missing value; say what to do, keep the detail.
+            const message = cause instanceof Error ? cause.message : String(cause);
+            throw /mancante/i.test(message) ? new Error(`${it.creationChoicesIncomplete} (${message})`) : cause;
+          }
           if (index === pages.length - 1) return finish(next);
           open(index + 1, next);
         }

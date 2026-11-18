@@ -20,8 +20,11 @@ export function CharacterCreator({ systems, onSystemChange, character, run, onDo
   systems: StoredSystem[]; onSystemChange: (key: string) => void;
   character?: Character; run: Run; onDone: (id: string) => void; onClose: () => void;
 }) {
-  // A single installed real game is preselected; the demo still requires a deliberate choice.
-  const [chosenKey, setChosenKey] = useState(() => systems.length === 1 && systems[0].definition.id !== 'polysheet-sentieri' ? systems[0].key : '');
+  // The game last chosen elsewhere, or a single installed real game, is preselected; the demo still requires a deliberate choice.
+  const [chosenKey, setChosenKey] = useState(() => {
+    const real = systems.filter(s => s.definition.id !== 'polysheet-sentieri');
+    return real.find(s => s.key === useUi.getState().systemKey)?.key ?? (systems.length === 1 && real.length === 1 ? real[0].key : '');
+  });
   const system = systems.find(s => s.key === (character?.systemKey ?? chosenKey));
   const chooseSystem = (key: string) => { setChosenKey(key); onSystemChange(key); };
   const [busy, setBusy] = useState(false);

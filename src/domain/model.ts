@@ -128,6 +128,8 @@ export interface ResourceInstance {
   catalogSource?: { original: string; source: string; digest: string };
   /** A retained original that cannot be assigned without unsupported source semantics. */
   catalogIssue?: string;
+  /** Calculated-stat values set by this instance's own mechanics (5e effect charges); never base values. */
+  overrides?: Record<string, Json>;
 }
 /** Internal, version-pinned encounter. Initialization overrides are not base values. */
 export interface Combat {

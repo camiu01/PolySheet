@@ -83,10 +83,44 @@ visible error. A manual base edit clears value overrides for that field;
 modifiers remain additive. Terminal effects (`showPopUp`, `roll`) execute at
 most one per command. Reversion removes the mechanic's override entry.
 
-Unsupported: `$view`-dependent scopes, resource-owned mechanics, `showResource`,
-`dismissResource`, `delayed`, `copyResource`, dotted/meta stat targets beyond
-direct ids, `on_result_effect`, asynchronous branches, nested popups/rolls in
-sequences. These paths fail explicitly with a diagnostic, never as silent no-ops.
+Resource-scoped events (2026-11-18): `fireEvent.event_names` accepts a static
+`list` of constant names or `eventName` nodes; computed lists (`map`, `stat`)
+stay errors. An `eventName` with `for_resource` runs the single matching
+mechanic of that resource instance; a resource without a handler is unchanged,
+because sources fire these names at every class or archetype (PF2e
+`resource_daily_preparations`). Handlers may only touch instances reachable
+from the character's own values, never catalog roots. Resource writes are
+`setStat` with `set` aggregation on base stats (the instance has no override
+layer); `$character.stat` writes become overrides of the character mechanic
+that fired the event, so reverting it reverts both; `$variable.stat` writes the
+owned resource bound to a loop variable. Writes are applied only after the
+whole command succeeds. A `when` with no matching clause is a no-op (PF2e
+`characterLoaded` guards rely on it). `delayed` is accepted structurally but
+reaching it aborts the command. Assumptions not verified upstream: scoped names
+reach only the target resource, unscoped names only character mechanics, and
+resource writes replace base values.
+
+Resource card actions (2026-11-18): a source `button`/stat event inside a
+resource card on the character sheet runs that resource's single matching
+mechanic (`toggle_equip`, `toggle_attunement`, `togglePrepareSpell`, weapon
+`attack`/`damage`, `castSpell`). Inside a resource handler an unscoped event
+reaches the same resource first, then the character (5e: weapon `shoot_ammo`
+is weapon-local, item `remove_empty_items` is a character mechanic). Rolls
+inside a sequence are collected and the sequence continues; a `map` of
+`rollable` and flat modifier formulas ("-1") are accepted. `addToStat` on a
+resource adds to its base value; `stat.sub` writes through a resource-valued
+stat. `dismissResource` (also delayed) is UI pacing and changes nothing; the
+open sheet stays open. Card buttons stay disabled, with "Azione non ancora
+disponibile in PolySheet.", when the handler needs a popup form value
+(`$view.`), uses calculated subscriptions or aggregation (5e `effect` use,
+Second Wind), or is otherwise invalid. These scoping rules are inferred from
+the 5e source, not verified upstream.
+
+Unsupported: `$view`-dependent scopes, resource mechanics outside scoped
+`eventName` dispatch or resource card actions, popups fired from a resource
+handler, `showResource`, `dismissResource`, executing `delayed` (except `dismissResource`), `copyResource`,
+dotted/meta stat targets other than `$character.stat` and `$variable.stat`,
+`on_result_effect`, asynchronous branches, nested popups/rolls in sequences. These paths fail explicitly with a diagnostic, never as silent no-ops.
 
 ## Use
 
