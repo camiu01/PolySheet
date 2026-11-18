@@ -1,5 +1,91 @@
 # PolySheet TODO
 
+## UX/UI review follow-up, 2026-11-18
+
+All items below remain **to do**. Implementation was deferred at the user's
+request. Evidence comes from production screenshots at 1440 x 1000 and
+390 x 844 and interaction checks using the UI UX Pro Max checklist.
+Preserve the charcoal/brass design, Italian application copy, original source
+labels, local-first data ownership and visible compatibility limits.
+
+- [ ] **P1 — Make the resource archive searchable and bounded.**
+  The reviewed archive renders 212 cards and a roughly 58,106 px mobile page.
+  Add name search, definition-type and catalog/local filters, result counts,
+  clear filters and 50-record pagination. Classify catalogs by `catalogSource`,
+  not private-copy metadata. Reset filters on system changes, reset/clamp pages
+  after filtering or deletion, and distinguish an empty archive from no matches.
+  Keep complete resource snapshots available to views/editors, even when only
+  one page is rendered. Preserve export, edit, attachment and deletion behavior.
+  Relevant files: `src/ui/Tools.tsx`, `src/ui/LocalResourcePicker.tsx`,
+  `src/ui/it.ts`. Update existing browser assertions that expect 74 mounted
+  cards to check bounded rendering and the full result count instead.
+
+- [ ] **P1 — Make the mobile navigation drawer keyboard-accessible.**
+  Opening currently leaves focus on the trigger; Escape does not close the
+  drawer, and background controls remain keyboard-reachable. Move focus inside,
+  contain Tab/Shift+Tab, isolate the background, provide an accessible close
+  control and restore focus on dismissal. Handle destination selection and
+  resizing to desktop without leaving inert content or a locked scroll.
+  Relevant file: `src/App.tsx`.
+
+- [ ] **P2 — Keep guided creation actions visible.**
+  The initial wizard footer was below the viewport on desktop (y=1318) and
+  mobile (y=1754). Extend the existing constrained form/scrollport layout to
+  `CreationFlow`, so only fields scroll and Back/Next/Cancel remain visible.
+  Preserve centered dialogs, nested draft forms and busy dismissal protection.
+  Relevant files: `src/ui/CreationFlow.tsx`, `src/ui/CharacterCreator.tsx`,
+  `src/styles.css`. Test footer geometry before and after scrolling.
+
+- [ ] **P2 — Prioritize playable sheet information above profile space.**
+  The profile/photo panel, headings and warnings occupy almost the whole first
+  desktop viewport before HP, armor class and initiative. Compact the profile
+  and surrounding spacing without dropping source content, photo actions,
+  source events or compatibility warnings. Do not invent calculated values or
+  reorder arbitrary imported sections by guessed game-specific labels.
+  Relevant files: `src/ui/Characters.tsx`, `src/ui/SheetSections.tsx`,
+  `src/ui/renderer.tsx`, `src/styles.css`.
+
+- [ ] **P2 — Group repeated incomplete-sheet errors without hiding them.**
+  The intentionally incomplete Human Fighter 20, missing Background, renders
+  20 errors for `background.current_level_features`. Retain the existing
+  "Completa ora" recovery action and honest non-calculable field markers;
+  group duplicate technical messages with affected counts and expandable
+  details. Avoid repeated live-region announcements. Verify that configuring
+  the missing origin refreshes both fields and grouped errors.
+  Relevant files: `src/ui/Characters.tsx`, `src/ui/renderer.tsx`.
+  This evidence does not establish failure of a fully configured character.
+
+- [ ] **P2 — Reset scroll and focus on local destination changes.**
+  Navigating between mobile screens retained scroll (observed y=44), leaving
+  headings partly behind the top bar. Put the new destination at its readable
+  beginning and move focus to its heading/main content. Cover sheet entry,
+  navigation buttons, browser Back/Forward and closing the drawer. Keep
+  section-anchor scrolling and deployment base paths working.
+  Relevant files: `src/App.tsx`, `src/ui/navigation.ts`.
+
+- [ ] **P2 — Associate validation with its fields and screen.**
+  Rejected guided creation shows three alerts but no corresponding
+  `aria-invalid`/`aria-describedby`, and focus stays on Next. Use unique
+  per-rendered-instance description IDs, mark the actual editable controls
+  and focus the first actionable invalid field. Include resource selectors,
+  nested drafts and collapsed sections; provide a focusable summary for errors
+  without a mounted control. Preserve local numeric errors and source rules.
+  Show dice syntax errors beside the formula, not as a stale banner on Combat;
+  retain genuine persistence failures rather than silently dismissing them.
+  Relevant files: `src/ui/renderer.tsx`, `src/ui/SourceForm.tsx`,
+  `src/ui/SourceStat.tsx`, `src/ui/SourceValueViews.tsx`,
+  `src/ui/SourceViews.tsx`, `src/ui/SourceResourceViews.tsx`, `src/ui/Tools.tsx`.
+
+- [ ] **Validate the completed UX fixes before marking them done.**
+  Add regressions for all seven items, cancellation/no unintended writes,
+  system/filter changes, repeated navigation and nested source validation.
+  Inspect fresh desktop/mobile screenshots in both themes, keyboard focus,
+  footer geometry and horizontal overflow. Run `npm run check`,
+  `npm run build`, `npm audit --omit=dev`, then isolated production
+  Playwright on port 4183 with `PLAYWRIGHT_BASE_PATH=/PolySheet/`; also test
+  `/` because navigation changes are in scope. Preserve the preview on 4173
+  and record actual results/skips in `docs/VERIFICATION.md`.
+
 ## What remains before this delivery
 
 - [x] Finish and test bounded character tap/long-press handlers and editable
