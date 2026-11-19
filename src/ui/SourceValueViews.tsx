@@ -4,11 +4,11 @@
  * Character buttons dispatch their source event; resource views keep it visible
  * but disabled.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createEvaluator } from '../engine/formulas';
 import { enumerationEntries, type EnumerationEntry } from '../engine/enumerations';
 import type { View } from '../domain/model';
-import { boundedNumber, canSourceEvent, inputValue, resourceReferenceId, saveInput, sourceIcons, textValue, viewColor } from './view-support';
+import { boundedNumber, canSourceEvent, inputValue, resourceReferenceId, saveInput, sourceIcons, textValue, viewBounds, viewColor } from './view-support';
 import { it } from './it';
 import type { RenderContext } from './renderer';
 import { Modal } from './shared';
@@ -59,13 +59,12 @@ export function SourceTicker({ node: v, context: ctx, evaluate }: {
 	const stat = ctx.stats.find(s => s.id === v.stat);
 	if (!stat) throw new Error(`Statistica mancante: ${String(v.stat)}`);
 	if (!['integer', 'decimal'].includes(stat.value_type)) throw new Error('Il contatore richiede una statistica numerica');
-	const editable = stat.type === 'base' && ctx.onChange !== undefined;
-	const raw = editable ? inputValue(v, ctx, stat) : createEvaluator(ctx.stats, ctx.values, undefined, ctx).get(stat.id);
+	// A calculated value on a resource card is edited as that instance's override (5e effect charges).
+	const overridable = stat.type === 'calculated' && ctx.onOverride !== undefined && !ctx.eventBusy;
+	const editable = stat.type === 'base' && ctx.onChange !== undefined || overridable;
+	const raw = stat.type === 'base' && editable ? inputValue(v, ctx, stat) : createEvaluator(ctx.stats, ctx.values, undefined, ctx).get(stat.id);
 	const value = boundedNumber(raw);
-	const minimum = boundedNumber(v.min_value_allowed)
-		?? (v.calculated_min_value_allowed != null ? numberValue(evaluate(v.calculated_min_value_allowed), it.tickerMin) : undefined);
-	const maximum = boundedNumber(v.max_value_allowed)
-		?? (v.calculated_max_value_allowed != null ? numberValue(evaluate(v.calculated_max_value_allowed), it.tickerMax) : undefined);
+	const { minimum, maximum } = viewBounds(v, evaluate);
 	const allowed = v.allowed_values == null ? undefined : numberList(evaluate(v.allowed_values));
 	const amount = boundedNumber(v.change_amount) ?? 1;
 	const label = v.label == null ? '' : textValue(evaluate(v.label));
@@ -79,7 +78,9 @@ export function SourceTicker({ node: v, context: ctx, evaluate }: {
 		if ((minimum !== undefined && next < minimum) || (maximum !== undefined && next > maximum)
 			|| (stat!.value_type === 'integer' && !Number.isSafeInteger(next))) { setError(it.invalidNumber); return false; }
 		setError('');
-		if (next !== value) saveInput(v, ctx, stat!.id, next);
+		if (next !== value) {
+			if (overridable) ctx.onOverride!(stat!.id, next); else saveInput(v, ctx, stat!.id, next);
+		}
 		return true;
 	}
 	function commitText(text: string) {
@@ -153,11 +154,11 @@ export function SourceButton({ node: v, context: ctx, evaluate }: {
 interface SelectOption { id: string; label: string; value: string }
 
 /** Read the display label of one local resource instance. */
-function resourceLabel(record: { name: string; values: Record<string, unknown>; createdAt?: string }, definition: { stats: RenderContext['stats']; display_name?: string | null }, display: unknown, ctx: RenderContext) {
+function resourceLabel(record: { id: string; sourceId?: string; name: string; values: Record<string, unknown>; createdAt?: string }, definition: { stats: RenderContext['stats']; display_name?: string | null }, display: unknown, ctx: RenderContext) {
 	const id = typeof display === 'string' ? display : definition.display_name;
 	if (!id) return record.name;
 	const value = createEvaluator(definition.stats, record.values, undefined, {
-		resources: ctx.resources, resourceDefinitions: ctx.resourceDefinitions, createdAt: record.createdAt,
+		resources: ctx.resources, resourceDefinitions: ctx.resourceDefinitions, createdAt: record.createdAt, instanceId: record.sourceId ?? record.id,
 		enumerations: ctx.enumerations, character: ctx.character
 	}).get(id);
 	return textValue(value) || record.name;
@@ -179,7 +180,7 @@ function selectOptions(v: View, ctx: RenderContext, evaluate: (value: unknown) =
 			if (allowed && !allowed.includes(record.id)) return [];
 			const saved = typeof v.resource_saved_stat === 'string'
 				? textValue(createEvaluator(definition.stats, record.values, undefined, {
-					resources: ctx.resources, resourceDefinitions: definitions, createdAt: record.createdAt,
+					resources: ctx.resources, resourceDefinitions: definitions, createdAt: record.createdAt, instanceId: record.sourceId ?? record.id,
 					enumerations: ctx.enumerations, character: ctx.character
 				}).get(v.resource_saved_stat))
 				: record.sourceId ?? record.id;
@@ -216,6 +217,10 @@ export function SourceSelect({ node: v, context: ctx, evaluate }: {
 	const selected = options.filter(option => stored.includes(option.value)).map(option => option.id);
 	const maximum = v.max_selection_amount == null ? undefined : numberValue(evaluate(v.max_selection_amount), it.selectMaximum);
 	const editable = ctx.onChange !== undefined;
+	// A single-choice select with exactly one option has no decision to make; in a draft form it is
+	// filled with that option so source page hooks (5e granted proficiencies) never read an empty choice.
+	const only = !multi && options.length === 1 && !selected.length && editable && ctx.drafts ? options[0] : undefined;
+	useEffect(() => { if (only) saveInput(v, ctx, stat.id, only.value); }, [only?.id]);
 	const explicitSaveNote = ctx.onChange && !ctx.drafts && v.should_auto_save !== true
 		? <small className="unsupported-note">{it.explicitSave}</small> : null;
 	function choose(ids: string[]) {
@@ -228,7 +233,8 @@ export function SourceSelect({ node: v, context: ctx, evaluate }: {
 		if (!multi) { choose([option.id]); return; }
 		choose(selected.includes(option.id) ? selected.filter(id => id !== option.id) : [...selected, option.id]);
 	}
-	if (v.style === 'list') return <fieldset className="source-select-list" disabled={!editable}>
+	// Multiple choice renders as checkboxes in every style: a native multi-select needs Ctrl-click and fails on touch.
+	if (v.style === 'list' || multi) return <fieldset className="source-select-list" disabled={!editable}>
 		<legend>{stat.name}</legend>
 		{options.map(option => <label key={option.id} className="check-field">
 			<input type={multi ? 'checkbox' : 'radio'} name={String(v.id)} checked={selected.includes(option.id)}
@@ -239,16 +245,11 @@ export function SourceSelect({ node: v, context: ctx, evaluate }: {
 	</fieldset>;
 	return <label className="field source-select">
 		<span>{stat.name}</span>
-		{multi
-			? <select multiple aria-label={stat.name} disabled={!editable} value={selected}
-				onChange={event => choose([...event.target.selectedOptions].map(option => option.value))}>
-				{options.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
-			</select>
-			: <select aria-label={stat.name} disabled={!editable} value={selected[0] ?? ''}
-				onChange={event => choose(event.target.value ? [event.target.value] : [])}>
-				<option value="">{it.choose}</option>
-				{options.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
-			</select>}
+		<select aria-label={stat.name} disabled={!editable} value={selected[0] ?? ''}
+			onChange={event => choose(event.target.value ? [event.target.value] : [])}>
+			<option value="">{it.choose}</option>
+			{options.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
+		</select>
 		{error && <small role="alert" className="error-text">{error}</small>}
 		{explicitSaveNote}
 	</label>;

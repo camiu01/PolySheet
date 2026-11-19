@@ -3,6 +3,8 @@
  * @remarks Exactly one matching character mechanic runs per event; multiple
  * handlers or dynamic subscriptions remain explicit errors. Reverting an event
  * removes that mechanic's reversible overrides without touching base values.
+ * Resource-scoped names run resource mechanics (see `resource-events.ts`); their
+ * base-value writes are returned as `resources` for the caller to persist.
  * @see https://docs.rpg-companion.app/Mechanic/
  */
 import { object, type Character, type CharacterOverrides, type ResourceInstance, type StoredSystem, type SystemDefinition } from '../domain/model';
@@ -13,6 +15,7 @@ import { cloneOverrides, resolveCharacterOverrides, revertMechanic } from './ove
 import {
   eventNames, executeEffect, validateEffect, type EffectContext, type EventMessage
 } from './effects';
+import { changedResources, resourceDispatcher, withWrites, type ResourceWrites } from './resource-events';
 
 function fields(node: Record<string, unknown>, allowed: string[]) {
   if (Object.keys(node).some(key => node[key] != null && !allowed.includes(key))) throw new Error('Opzione evento o effetto non supportata.');
@@ -86,8 +89,13 @@ function editablePopup(effect: Record<string, unknown>, system: SystemDefinition
 /** Extend explicit event rolls only with verified min/max pools and signed source bonuses. */
 export function rollEventDice(expression: string, random?: (faces: number) => number) {
   if (expression.length > 100) throw new Error('Formula dado troppo lunga.');
+  // Sources list a flat modifier as its own formula next to the dice (5e weapon damage: "1d8", "-1").
+  if (/^[+-]?\d{1,6}$/.test(expression.trim())) {
+    const modifier = Number(expression.trim());
+    return { expression, dice: [] as number[], modifier, total: modifier };
+  }
   const match = /^(?:(min|max)\((\d{1,3}d\d{1,7})\)|(\d{1,3}d\d{1,7}))(?:\s*([+-])\s*(-?\d{1,6}))?$/i.exec(expression.trim());
-  if (!match) throw new Error('Formula dado evento non supportata.');
+  if (!match) throw new Error(`Formula dado evento non supportata: ${expression.trim().slice(0, 60)}`);
   const roll = rollDice(match[2] ?? match[3], undefined, random);
   const modifier = Number(match[5] ?? 0) * (match[4] === '-' ? -1 : 1);
   const kept = match[1]?.toLowerCase() === 'min' ? Math.min(...roll.results)
@@ -95,33 +103,54 @@ export function rollEventDice(expression: string, random?: (faces: number) => nu
   return { expression, dice: roll.results, modifier, total: kept + modifier };
 }
 
-export type CharacterEventResult =
-  | { kind: 'roll'; title: string; rolls: { text: string; results: ReturnType<typeof rollEventDice>[] }[];
-      messages: EventMessage[]; overrides: CharacterOverrides; reverted: string[] }
-  | { kind: 'popup'; title: string; input: unknown; variables: Record<string, unknown>;
-      edit?: ReturnType<typeof editablePopup>; messages: EventMessage[]; overrides: CharacterOverrides; reverted: string[] }
-  | { kind: 'effects'; messages: EventMessage[]; overrides: CharacterOverrides; reverted: string[] };
+export type CharacterEventResult = (
+  | { kind: 'roll'; title: string; rolls: { text: string; results: ReturnType<typeof rollEventDice>[] }[] }
+  | { kind: 'popup'; title: string; input: unknown; variables: Record<string, unknown>; edit?: ReturnType<typeof editablePopup> }
+  | { kind: 'effects' }
+) & {
+  messages: EventMessage[]; overrides: CharacterOverrides; reverted: string[];
+  /** Owned resource instances whose base values the command changed. */
+  resources: ResourceInstance[];
+};
 
-/** Evaluate against one immutable command snapshot; randomness is drawn only at explicit roll execution. */
+/** A resource-card event: the named mechanic of that resource runs instead of a character mechanic. */
+function resourceEventPlan(event: unknown): CharacterEventPlan {
+  const input = object(event);
+  fields(input, ['name', 'payload']);
+  if (typeof input.name !== 'string' || !input.name || input.name.length > 200) throw new Error('Nome evento non valido.');
+  // `$character.stat` writes from a card action need an owner; the event name keeps them revertable together.
+  return { name: input.name, payload: input.payload == null ? {} : object(input.payload),
+    mechanicId: `resource-event:${input.name}`, effect: null, revert: [] };
+}
+
+/**
+ * Evaluate against one immutable command snapshot; randomness is drawn only at explicit roll execution.
+ * @param targetResource Local id of an owned resource whose card fired the event, if any.
+ */
 export function executeCharacterEvent(system: StoredSystem, character: Character, resources: ResourceInstance[],
-  event: unknown, random?: (faces: number) => number): CharacterEventResult {
+  event: unknown, random?: (faces: number) => number, targetResource?: string): CharacterEventResult {
   if (character.systemKey !== system.key) throw new Error('Sistema evento non corrispondente.');
-  const plan = characterEventPlan(system.definition, event);
+  const plan = targetResource ? resourceEventPlan(event) : characterEventPlan(system.definition, event);
   const variables: Record<string, unknown> = { $event: plan.payload, $edit_mode: false };
   const reverted: string[] = [];
   const budget = { nodes: 0, rolls: 0 };
+  const writes: ResourceWrites = new Map();
+  const characterScope = () => {
+    const resolved = resolveCharacterOverrides(ctx.overrides);
+    return new RuntimeResource(`character:${character.id}`, system.definition.character_stats,
+      character.values, character.createdAt, {}, resolved.values, undefined, resolved.modifiers);
+  };
   const ctx: EffectContext = {
+    pendingRolls: [],
     definition: system.definition, values: character.values, resources, createdAt: character.createdAt, variables,
     overrides: cloneOverrides(character.overrides), messages: [], reverted, mechanicId: plan.mechanicId ?? '',
     ancestors: [plan.name], budget,
     evaluate(value: unknown) {
       const resolved = resolveCharacterOverrides(ctx.overrides);
       return createEvaluator(system.definition.character_stats, character.values, undefined, {
-        resources, resourceDefinitions: system.definition.resources, createdAt: character.createdAt,
+        resources: withWrites(resources, writes), resourceDefinitions: system.definition.resources, createdAt: character.createdAt,
         enumerations: system.definition.enumerated_types, variables,
-        overrides: resolved.values, modifiers: resolved.modifiers,
-        character: new RuntimeResource(`character:${character.id}`, system.definition.character_stats,
-          character.values, character.createdAt, {}, resolved.values, undefined, resolved.modifiers)
+        overrides: resolved.values, modifiers: resolved.modifiers, character: characterScope()
       }).evaluate(value);
     },
     dispatch(target: unknown) {
@@ -135,33 +164,46 @@ export function executeCharacterEvent(system: StoredSystem, character: Character
       ctx.variables.$event = nested.payload;
       ctx.mechanicId = nested.mechanicId!;
       ctx.ancestors = [...previousAncestors, nested.name];
-      try { return executeEffect(nested.effect, ctx); } finally {
+      try {
+        const terminal = executeEffect(nested.effect, ctx);
+        if (terminal?.kind !== 'popup') resourceEvents.broadcast(nested.name);
+        return terminal;
+      } finally {
         ctx.variables.$event = previousEvent; ctx.mechanicId = previousMechanic; ctx.ancestors = previousAncestors;
       }
     }
   };
+  const resourceEvents = resourceDispatcher(system.definition, character, resources, writes, ctx, characterScope);
+  ctx.dispatchResource = resourceEvents.dispatch;
+  ctx.writeResource = resourceEvents.write;
   for (const id of plan.revert) ctx.overrides = revertMechanic(ctx.overrides, id);
   reverted.push(...plan.revert);
-  const terminal = plan.effect ? executeEffect(plan.effect, ctx) : undefined;
+  const updated = () => changedResources(resources, writes);
+  const terminal = targetResource ? resourceEvents.card({ resourceId: targetResource }, plan.name, plan.payload)
+    : plan.effect ? executeEffect(plan.effect, ctx) : undefined;
+  if (!targetResource && plan.effect && terminal?.kind !== 'popup') resourceEvents.broadcast(plan.name);
+  const rolls = ctx.pendingRolls!;
   if (terminal?.kind === 'popup') {
+    // A popup ends the command; rolls collected before it would never be shown.
+    if (rolls.length) throw new Error('Tiro seguito da popup non supportato.');
     const effect = terminal.effect;
     const title = ctx.evaluate(effect.pop_up_title);
     if (typeof title !== 'string') throw new Error('Il titolo evento deve essere testo.');
     const edit = effect.should_persist_on_save === true ? editablePopup(effect, system.definition, ctx.evaluate) : undefined;
     return { kind: 'popup', title, input: edit?.input ?? effect.pop_up_view, variables: ctx.variables,
-      edit, messages: ctx.messages, overrides: ctx.overrides, reverted };
+      edit, messages: ctx.messages, overrides: ctx.overrides, reverted, resources: updated() };
   }
-  if (terminal?.kind === 'roll') {
+  if (rolls.length) {
     let dice = 0;
     // Preflight every expression before drawing randomness, so unsupported later rolls cannot partly execute.
-    for (const row of terminal.rolls) for (const expression of row.formulas) {
+    for (const row of rolls) for (const expression of row.formulas) {
       rollEventDice(expression, () => { if (++dice > 100) throw new Error('Troppi dadi per evento.'); return 1; });
     }
     return {
       kind: 'roll', title: plan.name,
-      rolls: terminal.rolls.map(row => ({ text: row.text, results: row.formulas.map(expression => rollEventDice(expression, random)) })),
-      messages: ctx.messages, overrides: ctx.overrides, reverted
+      rolls: rolls.map(row => ({ text: row.text, results: row.formulas.map(expression => rollEventDice(expression, random)) })),
+      messages: ctx.messages, overrides: ctx.overrides, reverted, resources: updated()
     };
   }
-  return { kind: 'effects', messages: ctx.messages, overrides: ctx.overrides, reverted };
+  return { kind: 'effects', messages: ctx.messages, overrides: ctx.overrides, reverted, resources: updated() };
 }

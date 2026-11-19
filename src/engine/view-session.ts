@@ -2,14 +2,21 @@
 import { object, view, type Stat, type View } from '../domain/model';
 import { createEvaluator, statPath, type EvaluationEnvironment } from './formulas';
 
-/** Walk only the current form; nested popups own independent sessions. */
+const inputKeys = ['stat', 'edit_stat', 'photo_stat', 'resource_stat', 'resource_set_stat'];
+/**
+ * Walk only the current form; nested popups own independent sessions.
+ * @remarks Official sources reuse ids on static views (5e About subheaders). Only an id
+ * shared with a view that can hold a draft is ambiguous, so only that is rejected.
+ */
 export function sessionViews(input: unknown): View[] {
-  const result: View[] = [], ids = new Set<string>();
+  const result: View[] = [], ids = new Set<string>(), inputIds = new Set<string>();
   function walk(input: unknown, depth: number) {
     if (depth > 64 || result.length >= 10000) throw new Error('Vista troppo complessa');
     const node = view(input);
-    if (ids.has(node.id)) throw new Error(`ID vista duplicato: ${node.id}`);
-    ids.add(node.id); result.push(node);
+    const holdsInput = inputKeys.some(key => node[key] != null);
+    if (ids.has(node.id) && (holdsInput || inputIds.has(node.id))) throw new Error(`ID vista duplicato: ${node.id}`);
+    ids.add(node.id); if (holdsInput) inputIds.add(node.id);
+    result.push(node);
     for (const field of ['subviews', 'header', 'content', 'center_content', 'bottom_left_stack', 'bottom_right_stack'])
       if (Array.isArray(node[field])) node[field].forEach(v => walk(v, depth + 1));
     for (const field of ['header_view', 'left_view']) if (node[field]) walk(node[field], depth + 1);

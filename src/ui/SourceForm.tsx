@@ -1,14 +1,29 @@
 /** @file Real scoped source drafts. Nothing is persisted before a successful Save. */
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { matchesType, type ResourceInstance } from '../domain/model';
 import { draftCalculations, initialDrafts, inputStat, scopedDrafts, sessionViews, validationMessages } from '../engine/view-session';
 import { RenderView, type RenderContext } from './renderer';
 import { it } from './it';
 import { RuntimeResource } from '../engine/formulas';
 
-/** Stage one form with local input shadowing, validate source messages and submit one atomic patch. */
-export function SourceForm({ input, context, onDone, onBusyChange, saveText = it.save, cancelText = it.cancel, showSave = true, showCancel = true }: {
+/** Merge staged records; a re-staged id replaces its earlier copy and keeps children first. */
+export function mergeStaged(previous: ResourceInstance[], created: ResourceInstance[]) {
+  const ids = new Set(created.map(r => r.id));
+  return [...previous.filter(r => !ids.has(r.id)), ...created];
+}
+
+/**
+ * Stage one form with local input shadowing, validate source messages and submit one atomic patch.
+ * @remarks With `autoApply`, every change is forwarded to `context.onCommit` immediately and no
+ * buttons are shown; used for draft-only nested resources inside an enclosing draft.
+ */
+export function SourceForm({ input, context, onDone, onCancel = onDone, onBusyChange, saveText = it.save, cancelText = it.cancel, showSave = true, showCancel = true, autoApply = false, revealErrorsOnSubmit = false }: {
   input: unknown; context: RenderContext; onDone: () => void;
+  /** Defaults to `onDone`; a multi-page owner can distinguish going back from completion. */
+  onCancel?: () => void;
+  autoApply?: boolean;
+  /** Keep Save enabled and show source validation only after a first attempt (guided creation). */
+  revealErrorsOnSubmit?: boolean;
   saveText?: string; cancelText?: string; showSave?: boolean; showCancel?: boolean;
   onBusyChange?: (busy: boolean) => void;
 }) {
@@ -22,12 +37,19 @@ export function SourceForm({ input, context, onDone, onBusyChange, saveText = it
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
+  const [attempted, setAttempted] = useState(false);
+  useEffect(() => {
+    if (!autoApply || !context.onCommit || (!Object.keys(changes).length && !additions.length)) return;
+    context.onCommit(changes, additions).catch(cause => setError(cause instanceof Error ? cause.message : String(cause)));
+  // Re-apply only when this form's own staged state changes, never on parent re-renders.
+  }, [autoApply, changes, additions]);
   try {
     const nodes = sessionViews(input);
-    const environment = { ...context, resources: [...(context.resources ?? []), ...additions],
+    const environment = { ...context, resources: mergeStaged(context.resources ?? [], additions),
+      stagedIds: [...(context.stagedIds ?? []), ...additions.map(r => r.id)],
       variables: { ...context.variables, $view: scopedDrafts(context.variables?.$view, drafts), $edit_mode: true },
       character: context.character?.stats === context.stats
-        ? new RuntimeResource(context.character.key, context.stats, { ...sourceValues, ...changes }, context.createdAt)
+        ? new RuntimeResource(context.character.key, context.stats, { ...sourceValues, ...changes }, context.createdAt, context.character.variables)
         : context.character };
     const errors = validationMessages(input, context.stats, context.values, drafts, environment);
     function update(id: string, value: unknown) {
@@ -36,16 +58,44 @@ export function SourceForm({ input, context, onDone, onBusyChange, saveText = it
       setDrafts(previous => ({ ...previous, ...Object.fromEntries(nodes.filter(v => inputStat(v, context.stats)?.id === id).map(v => [v.id, value])) }));
     }
     const formContext: RenderContext = {
-      ...environment, drafts, previewValues: { ...sourceValues, ...changes }, validationErrors: errors, onChange: showSave ? update : undefined, onInput: showSave ? (_viewId, id, value) => update(id, value) : undefined,
+      ...environment, drafts, previewValues: { ...sourceValues, ...changes }, validationErrors: errors, validationSummary: revealErrorsOnSubmit,
+      hideValidation: revealErrorsOnSubmit ? !attempted : context.hideValidation, onChange: showSave ? update : undefined, onInput: showSave ? (_viewId, id, value) => update(id, value) : undefined,
       onCommit: showSave ? async (patch, created = []) => {
         const next = typeof patch === 'function' ? patch({ ...sourceValues, ...latestChanges.current }) : patch;
         for (const [id, value] of Object.entries(next)) update(id, value);
-        setAdditions(previous => [...previous, ...created]);
+        setAdditions(previous => mergeStaged(previous, created));
       } : undefined
     };
+    const body = <>
+      <div className="source-form-fields"><fieldset disabled={busy} className="source-form-controls"><RenderView input={input} context={formContext} />
+        <div className="base-grid">{autoApply ? null : draftCalculations(context.stats, drafts).filter(s => ['string', 'integer', 'decimal', 'bool'].includes(s.value_type)).map(s =>
+          <RenderView key={s.id} input={{ id: `polysheet-derived-${s.id}`, type: 'stat', stat: s.id }} context={{ ...formContext, onChange: undefined, onInput: undefined }} />
+        )}</div>
+      </fieldset></div>
+      {error && <p role="alert" className="error-text">{error}</p>}
+      {revealErrorsOnSubmit && attempted && Object.keys(errors).length > 0 && <p role="status" tabIndex={-1} className="error-text form-summary">{it.completeHighlighted}</p>}
+      {!autoApply && <div className="modal-actions">
+        {showCancel && <button type="button" className="button secondary" disabled={busy} onClick={onCancel}>{cancelText}</button>}
+        {showSave && <button type="submit" className="button primary" disabled={busy || !context.onCommit || (!revealErrorsOnSubmit && Object.keys(errors).length > 0)}>{busy ? it.saving : saveText}</button>}
+      </div>}
+    </>;
+    // A nested auto-applied form must not be a second <form> inside its owner's form.
+    if (autoApply) return <div className="source-form" role="group" data-invalid={Object.keys(errors).length ? 'true' : undefined}>{body}</div>;
     return <form className="source-form" onSubmit={event => {
       event.preventDefault(); event.stopPropagation();
-      if (lock.current || Object.keys(errors).length || event.currentTarget.querySelector('[aria-invalid="true"],[data-view-error]')) return;
+      const form = event.currentTarget;
+      if (lock.current) return;
+      if (Object.keys(errors).length || form.querySelector('[aria-invalid="true"],[data-view-error],[data-invalid="true"]')) {
+        setAttempted(true);
+        // Focus the first invalid control; with none mounted (collapsed or non-editable views), the summary.
+        requestAnimationFrame(() => {
+          const control = form.querySelector<HTMLElement>('.source-form-fields [aria-invalid="true"]:not(:disabled)');
+          const target = control && !control.closest('details:not([open])') ? control : form.querySelector<HTMLElement>('.form-summary');
+          form.querySelector('.source-form-fields .field-error,[aria-invalid="true"],[data-view-error]')?.scrollIntoView?.({ block: 'center' });
+          target?.focus({ preventScroll: !!control });
+        });
+        return;
+      }
       lock.current = true; setBusy(true); onBusyChange?.(true); setError('');
       void (async () => {
         try {
@@ -59,16 +109,14 @@ export function SourceForm({ input, context, onDone, onBusyChange, saveText = it
         finally { lock.current = false; setBusy(false); onBusyChange?.(false); }
       })();
     }}>
-      <div className="source-form-fields"><fieldset disabled={busy} className="source-form-controls"><RenderView input={input} context={formContext} />
-        <div className="base-grid">{draftCalculations(context.stats, drafts).map(s =>
-          <RenderView key={s.id} input={{ id: `polysheet-derived-${s.id}`, type: 'stat', stat: s.id }} context={{ ...formContext, onChange: undefined, onInput: undefined }} />
-        )}</div>
-      </fieldset></div>
-      {error && <p role="alert" className="error-text">{error}</p>}
-      <div className="modal-actions">
-        {showCancel && <button type="button" className="button secondary" disabled={busy} onClick={onDone}>{cancelText}</button>}
-        {showSave && <button type="submit" className="button primary" disabled={busy || !context.onCommit || Object.keys(errors).length > 0}>{busy ? it.saving : saveText}</button>}
-      </div>
+      {body}
     </form>;
-  } catch (error) { return <p role="alert">{error instanceof Error ? error.message : String(error)}</p>; }
+  } catch (error) {
+    return <>
+      <p role="alert">{error instanceof Error ? error.message : String(error)}</p>
+      {showCancel && !autoApply && <div className="modal-actions">
+        <button type="button" className="button secondary" onClick={onCancel}>{cancelText}</button>
+      </div>}
+    </>;
+  }
 }

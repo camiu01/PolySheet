@@ -7,21 +7,23 @@ function sameOverrides(left: unknown, right: unknown) {
   return JSON.stringify(left ?? {}) === JSON.stringify(right ?? {});
 }
 
-/** Run one command in a write transaction and persist only changed mechanic overrides. */
-export async function runCharacterEvent(characterId: string, event: unknown, database = db) {
+/** Run one command in a write transaction and persist changed overrides and owned resource values. */
+export async function runCharacterEvent(characterId: string, event: unknown, database = db, targetResource?: string) {
   return database.transaction('rw', database.characters, database.systems, database.resources, async () => {
     const character = await database.characters.get(characterId);
     const system = character && await database.systems.get(character.systemKey);
     if (!character || !system) throw new Error(it.eventOwnerMissing);
     const resources = await database.resources.where('systemKey').equals(system.key).toArray();
-    const result = executeCharacterEvent(system, character, resources, event);
-    if (!sameOverrides(character.overrides, result.overrides)) {
+    const result = executeCharacterEvent(system, character, resources, event, undefined, targetResource);
+    if (!sameOverrides(character.overrides, result.overrides) || result.resources.length) {
       character.overrides = result.overrides;
       character.updatedAt = new Date().toISOString();
       character.revision++;
       await database.characters.put(character);
     }
-    return { result, character, system, resources };
+    if (result.resources.length) await database.resources.bulkPut(result.resources);
+    const latest = result.resources.length ? await database.resources.where('systemKey').equals(system.key).toArray() : resources;
+    return { result, character, system, resources: latest };
   });
 }
 
@@ -39,12 +41,13 @@ export async function saveCharacterEvent(characterId: string, event: unknown, ex
       || Object.hasOwn(patch, expectedField) && (typeof patch[expectedField] !== 'string'
         || !result.edit.options.includes(patch[expectedField])))
       throw new Error(it.invalidValue);
-    if (!sameOverrides(character.overrides, result.overrides)) {
+    if (!sameOverrides(character.overrides, result.overrides) || result.resources.length) {
       character.overrides = result.overrides;
       character.updatedAt = new Date().toISOString();
       character.revision++;
       await database.characters.put(character);
     }
+    if (result.resources.length) await database.resources.bulkPut(result.resources);
     for (const [id, value] of Object.entries(patch)) await setCharacterValue(characterId, id, value, database);
   });
 }

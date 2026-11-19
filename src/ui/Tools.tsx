@@ -2,7 +2,7 @@
  * @file Local resource, dice, compatibility, and backup screens.
  * @remarks Resource links are PolySheet notebook metadata, not RPG rule effects.
  */
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ArrowDownToLine, Dices, FileCheck2, HardDrive, Moon, Plus, ShieldCheck, Sun, Trash2, Upload } from 'lucide-react';
 import { type Character, type Preferences, type ResourceInstance, type StoredSystem } from '../domain/model';
@@ -38,14 +38,14 @@ export function Resources({ systems, system, characters, run }: SystemPageProps 
   return <>
     <PageHeading title={it.resources} description={it.resourceSubtitle}
       action={<button className="button primary" disabled={!defs.length} onClick={() => { setDefinitionId(defs[0]?.id ?? ''); setEditing('new'); }}><Plus size={18} />{it.newResource}</button>} />
-    <Selector systems={systems} system={system} /><Warning>{it.resourceHelp}</Warning>
-    {system && <CatalogImport key={system.key} system={system} run={run} />}
-    {!system ? <Empty title={it.noSystemSelected} /> : resources.length ? <div className="resource-grid">{resources.filter(r => !r.catalogGroup || r.catalogGroup === r.id).map(r => {
+    <Selector systems={systems} system={system} />
+    {!system ? <Empty title={it.noSystemSelected} /> : resources.length ? <ResourceArchive key={system.key} defs={defs}
+      records={resources.filter(r => !r.catalogGroup || r.catalogGroup === r.id)} render={r => {
       const d = defs.find(d => d.id === r.definitionId);
       return <article key={r.id} className="resource-card"><div className="card-title-row"><span className="eyebrow">{d?.name}</span><button className="icon-button danger-text" aria-label={`${it.delete} ${r.name}`} onClick={() => setDeleting(r)}><Trash2 size={17} /></button></div>
         <h2>{r.name}</h2>{r.catalogSource ? <><p className="muted">{it.catalogEntry}</p>
           {r.catalogIssue && <Warning>{it.catalogUnavailable}: {r.catalogIssue}</Warning>}</> : d?.display_view ? <RenderView input={d.display_view} context={{
-          systemKey: system.key, stats: d.stats, values: r.values, createdAt: r.createdAt, resources, resourceDefinitions: defs,
+          systemKey: system.key, stats: d.stats, values: r.values, createdAt: r.createdAt, instanceId: r.sourceId ?? r.id, resources, resourceDefinitions: defs,
           enumerations: system.definition.enumerated_types
         }} /> : <p className="muted">{it.noResourceView}</p>}
         {r.catalogSource ? <button className="link-button" onClick={() => download(r.catalogSource!.original, `${r.definitionId}.rpg.json`)}>{it.exportCatalog}</button>
@@ -53,7 +53,9 @@ export function Resources({ systems, system, characters, run }: SystemPageProps 
         {!r.catalogSource && eligible.length > 0 && <div className="resource-attach"><label className="field"><span>{it.characters}</span><select aria-label={`${it.characters} · ${r.name}`} value={selectedCharacter} onChange={e => setCharacterId(e.target.value)}>{eligible.map(c => <option value={c.id} key={c.id}>{c.name}</option>)}</select></label>
           <button className="button secondary" onClick={() => void run(() => attachResource(selectedCharacter, r.id))}>{it.attach}</button></div>}
       </article>;
-    })}</div> : <Empty title={it.noResources}>{it.resourceHelp}</Empty>}
+    }} /> : <Empty title={it.noResources}>{it.resourceHelp}</Empty>}
+    {system && <details className="catalog-import-disclosure"><summary>{it.importCatalog}</summary>
+      <CatalogImport key={system.key} system={system} run={run} /></details>}
     {editing && system && <Modal title={editing === 'new' ? it.newResource : it.edit} onClose={() => !resourceBusy && setEditing(null)}>
       {definition && <ResourceEditor key={chosenId} system={system} definition={definition} editing={editing} resources={resources}
         onSelect={setDefinitionId} onDone={() => setEditing(null)} onBusyChange={setResourceBusy} run={run} />}
@@ -66,20 +68,31 @@ export function Resources({ systems, system, characters, run }: SystemPageProps 
 /** Roll bounded manual expressions using the selected system's dice, when present. */
 export function DicePage({ systems, system, preferences, run }: SystemPageProps & { preferences: Preferences }) {
   const [expression, setExpression] = useState('1d6');
+  const [syntax, setSyntax] = useState('');
   const rolls = useLiveQuery(() => system ? db.rolls.where('systemKey').equals(system.key).toArray() : [], [system?.key]) ?? [];
   const sorted = [...rolls].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const latest = sorted[0];
+  function roll(formula: string) {
+    if (!system) return;
+    // A formula mistake belongs beside the field; only storage failures use the app-wide notice.
+    let result: ReturnType<typeof rollDice>;
+    try { result = rollDice(formula, system.definition.dice?.map(d => d.faces)); }
+    catch (error) { setSyntax(error instanceof Error ? error.message : String(error)); return; }
+    setSyntax('');
+    void run(async () => {
+      await saveRoll({ id: crypto.randomUUID(), systemKey: system.key, formula: formula.trim(), ...result, createdAt: new Date().toISOString() }, preferences.historyLimit);
+    });
+  }
   return <>
     <PageHeading title={it.dice} description={it.diceSubtitle} /><Selector systems={systems} system={system} />
     <div className="dice-layout"><section className="dice-panel"><Dices size={36} /><h2>{it.roll}</h2><p className="muted">{it.manualDice}</p>
       {system && !system.definition.dice && <Warning>{it.noDice}</Warning>}
-      <form onSubmit={e => { e.preventDefault(); void run(async () => {
-        if (!system) throw new Error(it.noSystemSelected);
-        const result = rollDice(expression, system.definition.dice?.map(d => d.faces));
-        await saveRoll({ id: crypto.randomUUID(), systemKey: system.key, formula: expression.trim(), ...result, createdAt: new Date().toISOString() }, preferences.historyLimit);
-      }); }}>
-        <label className="field"><span>{it.formula}</span><input value={expression} onChange={e => setExpression(e.target.value)} maxLength={100} placeholder="2d6 + 3" /></label>
-        <div className="die-buttons">{(system?.definition.dice ?? []).map(d => <button className="button die-button" key={d.id} type="button" onClick={() => setExpression(`1d${d.faces}`)}>{d.name}</button>)}</div>
+      <form onSubmit={e => { e.preventDefault(); roll(expression); }}>
+        <label className="field"><span>{it.formula}</span><input value={expression} onChange={e => { setExpression(e.target.value); setSyntax(''); }} maxLength={100} placeholder="2d6 + 3"
+          aria-invalid={!!syntax} aria-describedby={syntax ? 'dice-formula-error' : undefined} />
+          {syntax && <small id="dice-formula-error" role="alert" className="error-text">{syntax}</small>}</label>
+        <div className="die-buttons">{(system?.definition.dice ?? []).map(d => <button className="button die-button" key={d.id} type="button" disabled={!system}
+          aria-label={`${it.roll} ${d.name}`} onClick={() => { setExpression(`1d${d.faces}`); roll(`1d${d.faces}`); }}>{d.name}</button>)}</div>
         <button className="button primary" disabled={!system}><Dices size={18} />{it.roll}</button>
       </form>
       {latest && <div className="dice-result" aria-live="polite"><span className="eyebrow">{it.result}</span><output>{latest.total}</output><span>{latest.formula} · [{latest.results.join(', ')}]</span></div>}
@@ -137,5 +150,53 @@ export function Settings({ preferences, run }: { preferences: Preferences; run: 
         try { await restoreBackup(backup.text); setBackup(null); useUi.getState().navigate('characters'); } finally { setRestoring(false); }
       }, it.restored);
     }}>{it.confirmRestore}</button></div></Modal>}
+  </>;
+}
+
+const archivePage = 50;
+const folded = (text: string) => text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase('it');
+
+/**
+ * Search, filter and page the archive; only one page of cards is mounted.
+ * @remarks Keyed by system, so filters reset when the system changes. Catalog entries are the
+ * records that keep an imported original (`catalogSource`), not private copies of a catalog graph.
+ */
+function ResourceArchive({ records, defs, render }: {
+  records: ResourceInstance[]; defs: StoredSystem['definition']['resources']; render: (record: ResourceInstance) => ReactNode;
+}) {
+  const [query, setQuery] = useState(''), [type, setType] = useState(''), [origin, setOrigin] = useState('');
+  const [page, setPage] = useState(0);
+  const needle = folded(query.trim());
+  const matches = records.filter(r => (!needle || folded(r.name).includes(needle)) && (!type || r.definitionId === type)
+    && (!origin || (origin === 'catalog') === !!r.catalogSource));
+  const pages = Math.max(1, Math.ceil(matches.length / archivePage)), current = Math.min(page, pages - 1);
+  const types = defs.filter(d => records.some(r => r.definitionId === d.id));
+  const filtered = !!needle || !!type || !!origin;
+  const reset = () => { setQuery(''); setType(''); setOrigin(''); setPage(0); };
+  return <>
+    <div className="archive-filters" role="search">
+      <label className="field"><span>{it.searchResources}</span>
+        <input type="search" value={query} onChange={e => { setQuery(e.target.value); setPage(0); }} /></label>
+      <label className="field"><span>{it.resourceType}</span>
+        <select value={type} onChange={e => { setType(e.target.value); setPage(0); }}>
+          <option value="">{it.allTypes}</option>
+          {types.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+        </select></label>
+      <label className="field"><span>{it.resourceOrigin}</span>
+        <select value={origin} onChange={e => { setOrigin(e.target.value); setPage(0); }}>
+          <option value="">{it.allOrigins}</option>
+          <option value="catalog">{it.originCatalog}</option>
+          <option value="local">{it.originLocal}</option>
+        </select></label>
+      {filtered && <button type="button" className="button secondary" onClick={reset}>{it.clearFilters}</button>}
+    </div>
+    <p className="muted" role="status" data-testid="resource-count">{it.resourceResults(matches.length, records.length)}</p>
+    {matches.length ? <div className="resource-grid">{matches.slice(current * archivePage, (current + 1) * archivePage).map(render)}</div>
+      : <Empty title={it.noResourceMatches}><button type="button" className="button secondary" onClick={reset}>{it.clearFilters}</button></Empty>}
+    {pages > 1 && <nav className="archive-pages" aria-label={it.resourcePages}>
+      <button type="button" className="button secondary" disabled={current === 0} onClick={() => setPage(current - 1)}>{it.previousPage}</button>
+      <span>{it.pageOf(current + 1, pages)}</span>
+      <button type="button" className="button secondary" disabled={current === pages - 1} onClick={() => setPage(current + 1)}>{it.nextPage}</button>
+    </nav>}
   </>;
 }

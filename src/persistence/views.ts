@@ -1,7 +1,7 @@
 /** @file Atomic source-form patches and locally created resource assignments. */
 import { jsonValue, matchesType, type ResourceInstance } from '../domain/model';
 import { db, setCharacterValue } from './db';
-import { saveResource } from './resources';
+import { addResources, saveResource } from './resources';
 import { combatContext } from '../engine/combat';
 import { commandCombat } from './combat';
 
@@ -11,10 +11,7 @@ export async function commitCharacterView(id: string, patch: ValuePatch, additio
   await database.transaction('rw', [database.characters, database.systems, database.resources], async () => {
     const character = await database.characters.get(id);
     if (!character) throw new Error('Personaggio non trovato');
-    for (const record of additions) {
-      if (record.systemKey !== character.systemKey || await database.resources.get(record.id)) throw new Error('Nuova risorsa non compatibile.');
-      await saveResource(record, database);
-    }
+    await addResources(additions, character.systemKey, database);
     const changes = typeof patch === 'function' ? patch(character.values) : patch;
     for (const [statId, value] of Object.entries(changes)) await setCharacterValue(id, statId, value, database);
   });
@@ -24,10 +21,7 @@ export async function commitResourceView(id: string, patch: ValuePatch, addition
   await database.transaction('rw', [database.resources, database.systems], async () => {
     const record = await database.resources.get(id);
     if (!record) throw new Error('Risorsa non trovata');
-    for (const child of additions) {
-      if (child.systemKey !== record.systemKey || await database.resources.get(child.id)) throw new Error('Nuova risorsa non compatibile.');
-      await saveResource(child, database);
-    }
+    await addResources(additions, record.systemKey, database);
     const changes = typeof patch === 'function' ? patch(record.values) : patch;
     const system = await database.systems.get(record.systemKey);
     const definition = system?.definition.resources.find(d => d.id === record.definitionId);
@@ -45,10 +39,7 @@ export async function commitCombatView(combatId: string, actorId: string, patch:
     const combat = await database.combats.get(combatId);
     const system = combat && await database.systems.get(combat.systemKey);
     if (!combat || !system) throw new Error('Incontro non trovato.');
-    for (const record of additions) {
-      if (record.systemKey !== system.key || await database.resources.get(record.id)) throw new Error('Nuova risorsa non compatibile.');
-      await saveResource(record, database);
-    }
+    await addResources(additions, system.key, database);
     const characters = await database.characters.where('systemKey').equals(system.key).toArray();
     const resources = await database.resources.where('systemKey').equals(system.key).toArray();
     const scope = combatContext(system, combat, characters, resources).scopes.get(actorId);

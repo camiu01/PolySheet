@@ -119,7 +119,7 @@ it.skipIf(!existsSync('.reference/reported-system.rpg'))('recovers original HP, 
   expect(screen.queryByText('Non supportato: menuButton')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Menu della sorgente' }));
   fireEvent.click(screen.getByRole('menuitem', { name: 'Long rest' }));
-  expect(screen.getByText(/Evento importato non eseguito da PolySheet.*trigger_long_rest/)).toBeInTheDocument();
+  expect(screen.getByText(/Azione non ancora disponibile in PolySheet.*trigger_long_rest/)).toBeInTheDocument();
   avatar.unmount();
   const reportedError = vi.spyOn(console, 'error').mockImplementation(() => {});
   const sheet = render(<><RenderView input={status} context={context} /><button>Other sheet controls</button></>);

@@ -12,19 +12,36 @@ import { it } from './it';
 import { CharacterInventory } from './CharacterInventory';
 import { RuntimeResource } from '../engine/formulas';
 import { useUi } from './store';
+import { CreationFlow } from './CreationFlow';
+import { mergeStaged } from './SourceForm';
 
 /** Keep every choice in a local draft; cancel/failure writes no partial character or graph. */
 export function CharacterCreator({ systems, onSystemChange, character, run, onDone, onClose }: {
   systems: StoredSystem[]; onSystemChange: (key: string) => void;
   character?: Character; run: Run; onDone: (id: string) => void; onClose: () => void;
 }) {
-  const [chosenKey, setChosenKey] = useState('');
+  // The game last chosen elsewhere, or a single installed real game, is preselected; the demo still requires a deliberate choice.
+  const [chosenKey, setChosenKey] = useState(() => {
+    const real = systems.filter(s => s.definition.id !== 'polysheet-sentieri');
+    return real.find(s => s.key === useUi.getState().systemKey)?.key ?? (systems.length === 1 && real.length === 1 ? real[0].key : '');
+  });
   const system = systems.find(s => s.key === (character?.systemKey ?? chosenKey));
   const chooseSystem = (key: string) => { setChosenKey(key); onSystemChange(key); };
   const [busy, setBusy] = useState(false);
-  return <Modal title={character ? it.characterSetup : it.newCharacter} onClose={() => !busy && onClose()}>
-    {system ? <SetupForm key={system.key} system={system} systems={systems} onSystemChange={chooseSystem}
-      character={character} busy={busy} setBusy={setBusy} run={run} onDone={onDone} onClose={onClose} />
+  const [manual, setManual] = useState(false);
+  const guided = !character && !manual && !!system?.definition.character_creation_flow.length;
+  return <Modal title={character ? it.characterSetup : it.newCharacter} onClose={() => !busy && onClose()} wide={guided}>
+    {system && guided ? <>
+      <div className="creation-toolbar">
+        <SystemSelect systems={systems} value={system.key} onChange={chooseSystem} />
+        <button type="button" className="link-button" onClick={() => setManual(true)}>{it.useManualSetup}</button>
+      </div>
+      <CreationFlow key={system.key} system={system} run={run} onDone={onDone} onClose={onClose} />
+    </> : system ? <>
+      {!character && !!system.definition.character_creation_flow.length &&
+        <button type="button" className="link-button" disabled={busy} onClick={() => setManual(false)}>{it.useCreationFlow}</button>}
+      <SetupForm key={system.key} system={system} systems={systems} onSystemChange={chooseSystem}
+      character={character} busy={busy} setBusy={setBusy} run={run} onDone={onDone} onClose={onClose} /></>
       : <><p>{it.chooseGameHelp}</p><SystemSelect systems={systems} value="" onChange={chooseSystem} />
         <div className="modal-actions"><button className="button secondary" onClick={onClose}>{it.cancel}</button></div></>}
   </Modal>;
@@ -111,7 +128,7 @@ function SetupForm({ system, systems, onSystemChange, character, busy, setBusy, 
           const changes = typeof patch === 'function' ? patch(latestValues.current) : patch;
           latestValues.current = { ...latestValues.current, ...changes };
           setValues(previous => ({ ...previous, ...changes }));
-          setAdditions(previous => [...previous, ...created]);
+          setAdditions(previous => mergeStaged(previous, created));
         }
       }} />
     </fieldset></div>

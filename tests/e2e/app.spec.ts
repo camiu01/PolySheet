@@ -10,6 +10,7 @@ import { gzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
 import { demo, demoOriginal } from '../../src/demo';
 import { base, capabilitySystem, constant, list, stat } from '../fixtures/capabilities';
+import { chooseGame, openCatalogImport } from './helpers';
 import { viewSystem } from '../fixtures/views';
 import { it as copy } from '../../src/ui/it';
 import { catalogSystem, classOriginal, raceOriginal, backgroundOriginal, subraceOriginal } from '../fixtures/catalog';
@@ -32,8 +33,24 @@ async function importJson(page: Page, text: string, confirm = true) {
 async function create(page: Page, name: string, systemKey?: string) {
   await navigate(page, 'Personaggi');
   await page.getByRole('button', { name: 'Nuovo personaggio', exact: true }).first().click();
-  await page.getByRole('combobox', { name: copy.chooseSystem, exact: true }).selectOption(systemKey ?? { index: 1 });
-  await expect(page.getByText('Creazione manuale', { exact: true })).toBeVisible();
+  const game = page.getByRole('combobox', { name: copy.chooseSystem, exact: true });
+  if (systemKey) await game.selectOption(systemKey);
+  else await chooseGame(game);
+  // Systems with source creation pages open the guided flow; these tests exercise manual setup.
+  const manual = page.getByText(copy.manual, { exact: true });
+  const useManual = page.getByRole('button', { name: copy.useManualSetup, exact: true });
+  await expect(manual.or(useManual)).toBeVisible();
+  if (await useManual.isVisible()) {
+    // The guided flow keeps its actions in view: only its fields scroll (desktop and mobile).
+    const next = page.getByRole('dialog').getByRole('button', { name: copy.next, exact: true });
+    if (await next.count()) {
+      await expect(next).toBeInViewport({ ratio: 1 });
+      await page.locator('.creation-flow > .source-form > .source-form-fields').evaluate(node => { node.scrollTop = node.scrollHeight; });
+      await expect(next).toBeInViewport({ ratio: 1 });
+    }
+    await useManual.click();
+  }
+  await expect(manual).toBeVisible();
   await page.getByLabel('Nome del personaggio').fill(name);
   await page.getByRole('button', { name: 'Crea personaggio', exact: true }).click();
   await expect(page.getByRole('heading', { name, exact: true, level: 1 })).toBeVisible();
@@ -127,7 +144,7 @@ test('reported original HP, AC and description recover with manual class and rac
   await expect(page.getByText(/Non supportato: .*bottom_right_button_event/)).toHaveCount(0);
   await page.locator('.source-avatar-section').getByRole('button', { name: 'Menu della sorgente', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Long rest', exact: true }).click();
-  await expect(page.getByText(/Evento importato non eseguito da PolySheet.*trigger_long_rest/)).toBeVisible();
+  await expect(page.getByText(/Azione non ancora disponibile in PolySheet.*trigger_long_rest/)).toBeVisible();
   await navigate(page, 'Risorse');
   for (const [definitionId, archiveName] of [['class', 'Classe manuale'], ['class_details', 'Dettagli classe manuale'], ['race', 'Razza manuale']]) {
     await page.getByRole('button', { name: 'Nuova risorsa locale', exact: true }).click();
@@ -211,7 +228,7 @@ test('avatar corner menu stays inside the viewport and accepts pointer selection
   expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(await page.evaluate(() => window.innerWidth));
   await page.getByRole('menuitem', { name: 'Riposo locale', exact: true }).click();
   await expect(menu).not.toBeVisible();
-  await expect(page.getByText(/Evento importato non eseguito da PolySheet.*rest/)).toBeVisible();
+  await expect(page.getByText(/Azione non ancora disponibile in PolySheet.*rest/)).toBeVisible();
 });
 
 test('production assets, manifest and offline worker retain the deployment subpath', async ({ page, context, baseURL }) => {
@@ -334,7 +351,7 @@ for (const id of ['5e', '5e2024', 'pf2e']) {
     await preview.getByRole('button', { name: 'Conferma importazione' }).click();
     await expect(preview).not.toBeVisible();
     await expect(page.locator('.system-card')).toHaveCount(1);
-    await page.locator('.system-card .icon-button').click();
+    await page.locator('.system-card .card-footer .link-button').click();
     await expect(page.locator('main')).not.toContainText('sortBy senza order');
     await waitForWorker(page);
     await context.setOffline(true);
@@ -547,11 +564,11 @@ test('URL imports report HTTP and CORS errors and import a permitted JSON respon
   await page.getByRole('button', { name: copy.importUrl }).click();
   await page.getByLabel('URL del sistema o repository GitHub').fill('https://fixtures.polysheet.test/missing.json');
   await page.getByRole('button', { name: 'Carica anteprima' }).click();
-  await expect(page.getByRole('alert')).toContainText('HTTP 404');
+  await expect(page.locator('p.error-text[role=alert]')).toContainText('HTTP 404');
   await page.route('https://fixtures.polysheet.test/cors.json', route => route.abort('failed'));
   await page.getByLabel('URL del sistema o repository GitHub').fill('https://fixtures.polysheet.test/cors.json');
   await page.getByRole('button', { name: 'Carica anteprima' }).click();
-  await expect(page.getByRole('alert')).toContainText('CORS');
+  await expect(page.locator('p.error-text[role=alert]')).toContainText('CORS');
   await page.route('https://fixtures.polysheet.test/system.json', route => route.fulfill({ status: 200, body: demoOriginal, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' } }));
   await page.getByLabel('URL del sistema o repository GitHub').fill('https://fixtures.polysheet.test/system.json');
   await page.getByRole('button', { name: 'Carica anteprima' }).click();
@@ -560,7 +577,8 @@ test('URL imports report HTTP and CORS errors and import a permitted JSON respon
   await expect(page.getByRole('heading', { name: 'Sentieri', exact: true })).toBeVisible();
 });
 
-for (const id of ['5e', '5e2024', 'pf2e']) {
+// PF2e cannot be prepared from its public source; pf2e-guided-import.spec.ts covers its compiled-file flow.
+for (const id of ['5e', '5e2024']) {
   test(`repository link imports ${id} and catalog originals with preview, private assignment and offline restore`, async ({ page, context }) => {
     const commit = '1'.repeat(40), treeSha = '2'.repeat(40);
     const files = new Map<string, string>();
@@ -692,7 +710,7 @@ test('GitHub clone URL discovers files, validates selection and retains an immut
   await expect(page.getByLabel('File di sistema nel repository').locator('option')).toHaveCount(2);
   await page.getByLabel('File di sistema nel repository').selectOption('a/system.json');
   await page.getByRole('button', { name: 'Carica file selezionato' }).click();
-  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(page.locator('p.error-text[role=alert]')).toBeVisible();
   await expect(page.getByRole('dialog', { name: 'Prima di importare' })).not.toBeVisible();
   await expect(page.locator('.system-card')).toHaveCount(0);
   await page.getByLabel('File di sistema nel repository').selectOption('5e/system.rpg');
@@ -730,13 +748,13 @@ test('GitHub discovery reports rate limits, missing repositories and authoring-o
   await page.getByRole('button', { name: copy.importUrl }).click();
   await page.getByLabel('URL del sistema o repository GitHub').fill('git@github.com:owner/repo.git');
   await page.getByRole('button', { name: 'Carica anteprima' }).click();
-  await expect(page.getByRole('alert')).toContainText('Limite di richieste GitHub');
+  await expect(page.locator('p.error-text[role=alert]')).toContainText('Limite di richieste GitHub');
   status = 404;
   await page.getByRole('button', { name: 'Carica anteprima' }).click();
-  await expect(page.getByRole('alert')).toContainText('non trovato o non pubblico');
+  await expect(page.locator('p.error-text[role=alert]')).toContainText('non trovato o non pubblico');
   status = 200;
   await page.getByRole('button', { name: 'Carica anteprima' }).click();
-  await expect(page.getByRole('alert')).toContainText('Nessun system.rpg');
+  await expect(page.locator('p.error-text[role=alert]')).toContainText('Nessun system.rpg');
   await expect(page.locator('.system-card')).toHaveCount(0);
 });
 
@@ -993,6 +1011,8 @@ for (const [id, expected, blocked] of [['5e', 208, 0], ['5e2024', 74, 19], ['pf2
       }));
       await context.setOffline(true); await page.reload();
       await navigate(page, 'Risorse');
+      // The archive mounts one 50-card page; search reaches entries beyond it.
+      await page.getByLabel(copy.searchResources, { exact: true }).fill('Druid');
       const druid = page.locator('.resource-card').filter({ has: page.getByRole('heading', { name: 'Druid', exact: true }) });
       await expect(druid).toHaveCount(1);
       await expect(druid).not.toContainText(copy.catalogUnavailable);
@@ -1021,6 +1041,46 @@ for (const [id, expected, blocked] of [['5e', 208, 0], ['5e2024', 74, 19], ['pf2
     await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 30000 });
     await page.getByRole('button', { name: /Cataloghi originali/ }).click();
     await expect(level).toHaveValue('1');
+    if (id === '5e2024') return;
+    // One command reaches the maximum level and summarizes the gains: 5e with the imported subclass,
+    // PF2e with HP derived from levels and no dice or subclass list.
+    await page.getByRole('button', { name: copy.progression, exact: true }).click();
+    const advance = page.getByRole('dialog', { name: copy.progression });
+    await advance.getByRole('button', { name: copy.progressionMax(20), exact: true }).click();
+    await expect(advance.getByLabel(copy.progressionTarget, { exact: true })).toHaveValue('20');
+    if (id === '5e') await advance.getByRole('combobox', { name: copy.progressionArchetype }).selectOption({ index: 1 });
+    else await expect(advance.getByText(copy.progressionHpDerived)).toBeVisible();
+    await expect(advance.getByText(copy.progressionGains(20))).toBeVisible();
+    await advance.getByLabel(copy.progressionAcknowledge).check();
+    await advance.locator('button[type=submit]').click();
+    await expect(advance.locator('.progression-saved')).toContainText(copy.progressionSaved);
+    await expect(advance.getByText(id === '5e' ? 'Archdruid' : 'Weapon Legend', { exact: true }).first()).toBeVisible();
+    if (id === 'pf2e') {
+      // Open level choices are the source's grants; a boost is assigned there and applied by its commit program.
+      const choices = advance.locator('.progression-choices');
+      await expect(choices.getByText(/scelte aperte fino al tuo livello/)).toBeVisible();
+      // A completed grant leaves the open list, so the open count drops once the write lands.
+      const open = async () => Number((await choices.getByText(/scelte aperte fino al tuo livello/).innerText()).match(/^\d+/)![0]);
+      const before = await open();
+      await choices.getByRole('checkbox', { name: 'Strength', exact: true }).first().click();
+      await expect.poll(open).toBe(before - 1);
+      await choices.getByRole('button', { name: copy.progressionApplyChoices, exact: true }).click();
+      await expect(choices.getByRole('status')).toHaveText(copy.progressionChoicesApplied);
+    } else {
+      // Druid ASI levels from the source's should_show_asi: 4, 8, 12, 16, 19; the first takes +2 Wisdom.
+      const increases = advance.locator('.progression-asi');
+      await expect(increases).toHaveCount(5);
+      const first = increases.first();
+      await expect(first.locator('legend')).toHaveText(copy.progressionAsiLevel(4));
+      await first.getByLabel(copy.progressionAsiFirst).selectOption({ label: 'Wisdom' });
+      await first.getByLabel(copy.progressionAsiSecond).selectOption({ label: 'Wisdom' });
+      await first.getByRole('button', { name: copy.progressionApplyChoices, exact: true }).click();
+      await expect(first.getByRole('status')).toHaveText(copy.progressionChoicesApplied);
+      await expect(first.getByRole('button', { name: copy.progressionApplyChoices, exact: true })).toBeDisabled();
+    }
+    await expect(advance.getByText(copy.progressionNothingRecovered)).toBeVisible();
+    await advance.locator('.modal-actions').getByRole('button', { name: copy.close, exact: true }).click();
+    await expect(level).toHaveValue('20');
   });
 }
 
@@ -1044,13 +1104,18 @@ if (process.env.LIVE_REPOSITORY_IMPORT === '1') {
     await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 30000 });
     await navigate(page, 'Risorse');
     const before = 74;
-    await expect(page.locator('.resource-card')).toHaveCount(before);
+    // Only one 50-card page is mounted; the status line carries the full count.
+    await expect(page.getByTestId('resource-count')).toHaveText(`${before} risorse`);
+    await expect(page.locator('.resource-card')).toHaveCount(50);
+    await openCatalogImport(page);
     await page.getByLabel(copy.catalogUrl, { exact: true }).fill(`https://github.com/blastervla/rpg-companion-app-systems/tree/${pinnedCommit}/systems/5e2024/resource_instances`);
     await page.getByRole('button', { name: copy.catalogFromUrl, exact: true }).click();
     await expect(page.getByRole('dialog', { name: copy.catalogPreview, exact: true })).toBeVisible({ timeout: 60000 });
     await page.getByRole('dialog').getByRole('button', { name: copy.confirmImport, exact: true }).click();
     await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 30000 });
-    await expect(page.locator('.resource-card')).toHaveCount(before);
+    // Only one 50-card page is mounted; the status line carries the full count.
+    await expect(page.getByTestId('resource-count')).toHaveText(`${before} risorse`);
+    await expect(page.locator('.resource-card')).toHaveCount(50);
     await create(page, 'Repository live');
     const aside = page.locator('.sheet-aside');
     await aside.getByRole('combobox', { name: 'Classe da aggiungere', exact: true }).selectOption({ label: 'Wizard' });
@@ -1156,12 +1221,10 @@ test('grimoire theme, local fonts and responsive navigation preserve every desti
   await captureInterface(page, `${testInfo.project.name}-sheet`);
   await create(page, 'Lupo delle Felci');
   await navigate(page, 'Personaggi');
-  await page.getByRole('button', { name: 'Sentieri 2', exact: true }).click();
+  // Two characters of one game: nothing to narrow down, so no search or system filters.
   await expect(page.locator('.character-card')).toHaveCount(2);
-  await page.getByRole('button', { name: 'Tutti i sistemi 2', exact: true }).click();
-  await page.getByLabel(copy.search, { exact: true }).fill('Mira');
-  await expect(page.locator('.character-card')).toHaveCount(1);
-  await page.getByLabel(copy.search, { exact: true }).fill('');
+  await expect(page.getByLabel(copy.search, { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Sentieri 2', exact: true })).toHaveCount(0);
   await page.evaluate(async () => { await document.fonts.ready; });
   expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toContain('Plus Jakarta Sans');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -1226,6 +1289,7 @@ for (const kind of ['json', 'web-folder', 'github-folder']) {
       : kind === 'web-folder' ? 'https://catalog.polysheet.test/catalog/'
         : 'https://github.com/catalog-owner/library/tree/main/catalog';
     const count = kind === 'json' ? 1 : 2;
+    await openCatalogImport(page);
     await page.getByLabel(copy.catalogUrl, { exact: true }).fill(link);
     await page.getByRole('button', { name: copy.catalogFromUrl, exact: true }).click();
     const preview = page.getByRole('dialog', { name: copy.catalogPreview, exact: true });

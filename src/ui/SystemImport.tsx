@@ -6,7 +6,7 @@ import { it } from './it';
 
 /** Explain each source before opening a picker; the example stays a secondary path. */
 export function SystemImportOptions({ onFile, onLink, onDemo, busy }: {
-  onFile: () => void; onLink: () => void; onDemo: () => void; busy: boolean;
+  onFile: () => void; onLink: () => void; onDemo?: () => void; busy: boolean;
 }) {
   return <section className="system-import" aria-labelledby="system-import-heading">
     <h2 id="system-import-heading">{it.importSourceTitle}</h2>
@@ -29,11 +29,11 @@ export function SystemImportOptions({ onFile, onLink, onDemo, busy }: {
       <summary>{it.importFormatsTitle}</summary>
       <p>{it.importFormatsHelp}</p><p>{it.importCatalogHelp}</p>
     </details>
-    <aside className="import-demo" aria-labelledby="import-demo-heading">
+    {onDemo && <aside className="import-demo" aria-labelledby="import-demo-heading">
       <BookOpen size={22} aria-hidden="true" />
       <div><h3 id="import-demo-heading">{it.demoTitle}</h3><p>{it.demoDescription}</p></div>
       <button className="button text-button" disabled={busy} onClick={onDemo}>{it.demoAction}<ArrowRight size={16} aria-hidden="true" /></button>
-    </aside>
+    </aside>}
   </section>;
 }
 

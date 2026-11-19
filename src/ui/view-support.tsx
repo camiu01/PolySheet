@@ -6,6 +6,7 @@
 import { BookOpen, Shield, Backpack, Swords, Flag, Dices, Skull, Sparkles, Star, Pencil, MoreHorizontal, MoreVertical, Sun, PawPrint, ArrowUp, ArrowUpDown, Flame, Badge, Circle } from 'lucide-react';
 import { isResourceReference, type Stat, type View } from '../domain/model';
 import { it } from './it';
+import { RuntimeResource } from '../engine/formulas';
 
 /** Minimal rendering state needed to read and stage one source input. */
 export interface InputContext {
@@ -17,18 +18,42 @@ export interface InputContext {
 	onInput?: (viewId: string, statId: string, value: unknown) => void;
 }
 
-/** Character-only event gate shared by source controls; resource views never dispatch. */
+/** Event gate shared by source controls: the character sheet, or a resource card with its own scope. */
 export function canSourceEvent(context: {
 	drafts?: Record<string, unknown>;
 	stats: Stat[];
 	character?: { stats: Stat[] };
+	eventScope?: 'resource';
 	canEvent?: (event: unknown) => boolean;
 	onEvent?: (event: unknown) => void;
 }, event: unknown) {
-	return event != null && !context.drafts && context.stats === context.character?.stats
+	return event != null && !context.drafts && (context.stats === context.character?.stats || context.eventScope === 'resource')
 		&& context.canEvent?.(event) === true && !!context.onEvent;
 }
 
+
+/**
+ * Event scope of one resource card: its buttons run that resource's own mechanics.
+ * Catalog originals and draft sessions never dispatch.
+ * Base inputs use the sheet's resource writer, never its character writer.
+ */
+export function resourceEventScope(context: {
+	drafts?: Record<string, unknown>; eventBusy?: boolean;
+	canResourceEvent?: (definitionId: string, event: unknown) => boolean;
+	onResourceEvent?: (resourceId: string, event: unknown) => void;
+	onResourceChange?: (resourceId: string, statId: string, value: unknown) => void;
+	onResourceOverride?: (resourceId: string, statId: string, value: number) => void;
+}, record: { id: string; definitionId: string; catalogSource?: unknown }) {
+	const { canResourceEvent, onResourceEvent, onResourceOverride, onResourceChange } = context;
+	if (!canResourceEvent || !onResourceEvent || context.drafts !== undefined || record.catalogSource) return {};
+	return {
+		eventScope: 'resource' as const, eventBusy: context.eventBusy, canResourceEvent, onResourceEvent, onResourceOverride, onResourceChange,
+		onChange: onResourceChange && ((statId: string, value: unknown) => onResourceChange(record.id, statId, value)),
+		onOverride: onResourceOverride && ((statId: string, value: number) => onResourceOverride(record.id, statId, value)),
+		canEvent: (event: unknown) => canResourceEvent(record.definitionId, event),
+		onEvent: (event: unknown) => onResourceEvent(record.id, event)
+	};
+}
 
 /** Explicit source icon names mapped to local glyphs; artwork is not copied. */
 export const sourceIcons: Record<string, typeof Shield> = {
@@ -84,6 +109,8 @@ export function viewColor(value: unknown, evaluate: (input: unknown) => unknown)
  * @returns The id, or undefined when the value is not a resource reference.
  */export function resourceReferenceId(value: unknown): string | undefined {
 	if (isResourceReference(value)) return value.resourceId;
+	// Calculated resource stats evaluate to runtime scopes keyed by their local id.
+	if (value instanceof RuntimeResource) return value.key.startsWith('resource:') ? value.key.slice('resource:'.length) : undefined;
 	if (typeof value === 'string' && value.length > 0 && value.length <= 500) return value;
 	if (Array.isArray(value) && value.length === 1) return resourceReferenceId(value[0]);
 	return undefined;
@@ -115,6 +142,23 @@ export function readableId(id: string): string {
 /** Clamp a finite numeric option into a safe display range. */
 export function boundedNumber(value: unknown): number | undefined {
 	return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+/**
+ * Resolve numeric view bounds: a literal `*_value_allowed` wins over its
+ * `calculated_*` formula, and a non-numeric formula result fails visibly.
+ */
+export function viewBounds(v: View, evaluate: (input: unknown) => unknown) {
+	const bound = (literal: unknown, calculated: unknown, label: string) => {
+		if (boundedNumber(literal) !== undefined || calculated == null) return boundedNumber(literal);
+		const value = boundedNumber(evaluate(calculated));
+		if (value === undefined) throw new Error(`${label}: numero richiesto`);
+		return value;
+	};
+	return {
+		minimum: bound(v.min_value_allowed, v.calculated_min_value_allowed, it.tickerMin),
+		maximum: bound(v.max_value_allowed, v.calculated_max_value_allowed, it.tickerMax)
+	};
 }
 
 /** Current value for one input view, preferring session drafts over persisted values. */

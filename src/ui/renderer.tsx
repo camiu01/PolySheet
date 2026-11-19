@@ -2,10 +2,11 @@
  * @file Source-driven, text-only view rendering with explicit unsupported markers.
  * @remarks Sheet inputs commit on blur; source forms own explicit `$view` drafts.
  */
-import { Component, useState, type ReactNode, type CSSProperties } from 'react';
+import { Component, useEffect, useId, useRef, useState, type ReactNode, type CSSProperties } from 'react';
 import { createEvaluator, type EvaluationEnvironment } from '../engine/formulas';
 import { formula, object, view, type Stat, type View } from '../domain/model';
 import { unsupportedViewOptions, viewFields } from '../importing/system';
+import { ViewError } from './ViewErrors';
 import { it } from './it';
 import { PhotoInput } from './PhotoInput';
 import { inputValue, readableOn, saveInput, sourceColor, sourceIcons, textValue, viewColor } from './view-support';
@@ -26,6 +27,16 @@ export interface RenderContext extends EvaluationEnvironment {
   canEvent?: (event: unknown) => boolean;
   onEvent?: (event: unknown) => void;
   eventBusy?: boolean;
+  /** Set on a resource card whose `canEvent`/`onEvent` target that resource's own mechanics. */
+  eventScope?: 'resource';
+  /** Sheet-level gates handed down so nested resource cards can build their own event scope. */
+  canResourceEvent?: (definitionId: string, event: unknown) => boolean;
+  onResourceEvent?: (resourceId: string, event: unknown) => void;
+  /** Persist a base input on the owning resource card, using the sheet's save/error status. */
+  onResourceChange?: (resourceId: string, statId: string, value: unknown) => void;
+  onResourceOverride?: (resourceId: string, statId: string, value: number) => void;
+  /** Set on a resource card: writes a calculated value of that instance (source ticker on charges). */
+  onOverride?: (statId: string, value: number) => void;
   stats: Stat[];
   values: Record<string, unknown>;
   onChange?: (id: string, value: unknown) => void;
@@ -33,8 +44,14 @@ export interface RenderContext extends EvaluationEnvironment {
   onCommit?: (patch: ValuePatch, additions?: ResourceInstance[]) => Promise<void>;
   drafts?: Record<string, unknown>;
   validationErrors?: Record<string, string>;
+  /** The owning form announces errors in one summary, so field messages are not live regions. */
+  validationSummary?: boolean;
+  /** Source validation messages stay hidden until the user first tries to continue. */
+  hideValidation?: boolean;
   onInput?: (viewId: string, statId: string, value: unknown) => void;
   previewValues?: Record<string, unknown>;
+  /** Ids of resources that exist only in an enclosing draft; edits replace the staged copy. */
+  stagedIds?: string[];
   /** Raw `enumerated_types`; used by select and menu options only. */
   enumerations?: unknown[];
 }
@@ -78,7 +95,8 @@ export function ScalarInput({ stat, value, onSave, onDraft, label, min, max, max
 type Renderer = (v: View, ctx: RenderContext, evaluate: (v: unknown) => unknown) => ReactNode;
 function children(items: unknown, ctx: RenderContext) {
   if (!Array.isArray(items)) throw new Error('Lista di componenti non valida');
-  return items.map((v, i) => <RenderView key={String(object(v).id ?? i)} input={v} context={ctx} />);
+  // Index-qualified keys: official sources repeat ids on static siblings.
+  return items.map((v, i) => <RenderView key={`${String(object(v).id ?? '')}:${i}`} input={v} context={ctx} />);
 }
 function resourceText(v: View, ctx: RenderContext) {
   if (v.resource_id == null) return undefined;
@@ -89,7 +107,7 @@ function resourceText(v: View, ctx: RenderContext) {
     const r = ctx.resources?.find(r => r.id === id && r.definitionId === d.id && (!ctx.systemKey || r.systemKey === ctx.systemKey));
     if (!r) throw new Error(it.missingResource);
     const display = typeof v.resource_display_stat === 'string' ? v.resource_display_stat : d.display_name;
-    return display ? textValue(createEvaluator(d.stats, r.values, undefined, { resources: ctx.resources, resourceDefinitions: ctx.resourceDefinitions, createdAt: r.createdAt, enumerations: ctx.enumerations, character: ctx.character }).get(display)) : r.name;
+    return display ? textValue(createEvaluator(d.stats, r.values, undefined, { resources: ctx.resources, resourceDefinitions: ctx.resourceDefinitions, createdAt: r.createdAt, instanceId: r.sourceId ?? r.id, enumerations: ctx.enumerations, character: ctx.character }).get(display)) : r.name;
   }).join(', ');
 }
 const sourceIconEntries = Object.entries(sourceIcons);
@@ -146,7 +164,9 @@ export const rendererRegistry = new Map<string, Renderer>([
   ['text', (v, ctx, e) => {
     if (typeof v.edit_stat === 'string') {
       const stat = ctx.stats.find(s => s.id === v.edit_stat);
-      if (!stat || stat.type !== 'base' || !['string', 'integer', 'decimal', 'bool'].includes(stat.value_type)) throw new Error('Campo non modificabile');
+      if (!stat || !['string', 'integer', 'decimal', 'bool'].includes(stat.value_type)) throw new Error('Campo non modificabile');
+      // A calculated target cannot store input; show its current value read-only (5e `selected_options`).
+      if (stat.type !== 'base') return <span className="text-view">{textValue(e({ type: 'stat', stat: stat.id }))}</span>;
       if (ctx.onChange) return <ScalarInput key={ctx.drafts ? v.id : `${stat.id}:${String(ctx.values[stat.id])}`} stat={stat}
         value={inputValue(v, ctx, stat)}
         label={v.label ? textValue(e(v.label)) : stat.name}
@@ -183,7 +203,8 @@ export const rendererRegistry = new Map<string, Renderer>([
   ['checkbox', (v, ctx, e) => {
     const stat = ctx.stats.find(s => s.id === v.stat && s.type === 'base' && s.value_type === 'bool');
     if (!stat) throw new Error('Checkbox senza statistica booleana base');
-    return <label className={`check-field ${v.label_alignment === 'left' ? 'check-label-left' : ''}`}><input type="checkbox" checked={inputValue(v, ctx, stat) === true}
+    // `switcher` is the same boolean input presented as an accessible switch.
+    return <label className={`check-field ${v.label_alignment === 'left' ? 'check-label-left' : ''} ${v.style === 'switcher' ? 'switch-field' : ''}`}><input type="checkbox" role={v.style === 'switcher' ? 'switch' : undefined} checked={inputValue(v, ctx, stat) === true}
       disabled={!ctx.onChange || (v.enabled != null && e(v.enabled) !== true)}
       onChange={event => saveInput(v, ctx, stat.id, event.target.checked)} />{v.label ? textValue(e(v.label)) : stat.name}</label>;
   }]
@@ -201,7 +222,7 @@ class ViewErrorBoundary extends Component<ViewProps & { children: ReactNode }, V
   }
   render() {
     return this.state.error !== null
-      ? <div role="status" data-view-error className="unsupported view-error" title={it.viewUnavailable}><span className="sr-only">{it.viewUnavailable} </span>{this.state.error}</div>
+      ? <ViewError message={this.state.error} title={it.viewUnavailable} />
       : this.props.children;
   }
 }
@@ -209,9 +230,38 @@ class ViewErrorBoundary extends Component<ViewProps & { children: ReactNode }, V
 export function RenderView(props: ViewProps) {
   return <ViewErrorBoundary input={props.input} context={props.context}><ViewContent {...props} /></ViewErrorBoundary>;
 }
+const editableControls = 'input:not([type=hidden]), select, textarea, [role=combobox], [role=listbox]';
+
+/**
+ * Mark the editable controls of a view with its validation message: `aria-invalid` plus
+ * `aria-describedby`, added and removed with the message. Source views build arbitrary
+ * control trees, so the controls are found in the rendered wrapper rather than threaded through.
+ */
+function useFieldValidation(message: string | undefined) {
+  const wrapper = useRef<HTMLDivElement>(null), id = useId();
+  useEffect(() => {
+    const controls = message ? [...wrapper.current?.querySelectorAll<HTMLElement>(editableControls) ?? []] : [];
+    for (const control of controls) {
+      control.setAttribute('aria-invalid', 'true');
+      control.setAttribute('aria-describedby', [control.getAttribute('aria-describedby'), id].filter(Boolean).join(' '));
+    }
+    return () => {
+      for (const control of controls) {
+        control.removeAttribute('aria-invalid');
+        const rest = (control.getAttribute('aria-describedby') ?? '').split(' ').filter(token => token && token !== id);
+        if (rest.length) control.setAttribute('aria-describedby', rest.join(' ')); else control.removeAttribute('aria-describedby');
+      }
+    };
+  }, [message, id]);
+  return { wrapper, id };
+}
+
 function ViewContent({ input, context }: ViewProps) {
   // `$edit_mode` is true only inside a real draft session, never during sheet rendering.
   const environment: RenderContext = { ...context, variables: { $edit_mode: context.drafts !== undefined, ...context.variables } };
+  const viewId = input && typeof input === 'object' && !Array.isArray(input) ? (input as { id?: unknown }).id : undefined;
+  const message = !context.hideValidation && typeof viewId === 'string' ? context.validationErrors?.[viewId] : undefined;
+  const validation = useFieldValidation(message);
   try {
     const v = view(input);
     const options = unsupportedViewOptions(v);
@@ -239,13 +289,14 @@ function ViewContent({ input, context }: ViewProps) {
       marginLeft: size(v.margin_left), marginRight: size(v.margin_right),
       marginTop: size(v.margin_top), marginBottom: size(v.margin_bottom)
     };
-    return <div className="view-wrapper" style={style}>
+    // Each message is tied to its controls; with a form summary it is not another alert.
+    return <div className="view-wrapper" style={style} ref={validation.wrapper}>
       {handler(v, environment, e)}
-      {context.validationErrors?.[v.id] && <p role="alert" className="error-text">{context.validationErrors[v.id]}</p>}
+      {message && <p id={validation.id} role={context.validationSummary ? undefined : 'alert'} className="error-text field-error">{message}</p>}
       {v.validation_message != null && !context.drafts && <small className="unsupported-note">{it.validationRequiresForm}</small>}
       {ignored.length > 0 && <small className="unsupported-note">{it.unsupported}: {ignored.join(', ')}</small>}
     </div>;
   } catch (error) {
-    return <div role="status" data-view-error className="unsupported view-error">{error instanceof Error ? error.message : String(error)}</div>;
+    return <ViewError message={error instanceof Error ? error.message : String(error)} />;
   }
 }

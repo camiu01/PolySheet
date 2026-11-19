@@ -6,7 +6,7 @@ import { it } from '../../src/ui/it';
 
 test('system import separates sources, opens the real file picker and cancels before writing', async ({ page }, info) => {
   await page.goto('./');
-  await page.locator('main').getByRole('button', { name: it.systems, exact: true }).click();
+  await page.locator('main').getByRole('button', { name: it.importSystem, exact: true }).click();
   const main = page.locator('main');
   await expect(main.locator('.page-heading button')).toHaveCount(0);
   await expect(main.getByRole('heading', { name: it.importFileTitle })).toBeVisible();
@@ -32,7 +32,7 @@ test('system import separates sources, opens the real file picker and cancels be
 
 test('link options and compatibility review disclose details without hiding blocking errors', async ({ page }, info) => {
   await page.goto('./');
-  await page.locator('main').getByRole('button', { name: it.systems, exact: true }).click();
+  await page.locator('main').getByRole('button', { name: it.importSystem, exact: true }).click();
   await page.getByRole('button', { name: it.importUrl, exact: true }).click();
   const link = page.getByRole('dialog', { name: it.importUrl });
   await link.getByRole('textbox', { name: it.url, exact: true }).fill('https://files.example/system.rpg');

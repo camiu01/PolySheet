@@ -71,3 +71,17 @@ describe('monolithic JSON import', () => {
     expect(() => decodeUtf8(Uint8Array.from([0xc3, 0x28]))).toThrow('UTF-8 valida');
   });
 });
+
+it('accepts resource identity and item-scoped resourceArray labels without unresolved-reference warnings', () => {
+  const stat = (id: string) => ({ type: 'stat', stat: id });
+  const system = { ...demo, resources: [...demo.resources,
+    { id: 'armor', name: 'Armor', stats: [{ id: 'label', name: 'Label', type: 'base', value_type: 'string', default_value: '' }] },
+    { id: 'kit', name: 'Kit', stats: [
+      { id: 'armors', name: 'Armors', type: 'base', value_type: 'array', sub_value_type: 'resource', default_value: [] },
+      { id: 'own_id', name: 'Own id', type: 'calculated', value_type: 'string', components: stat('id') }],
+      edit_view: { id: 'kit_edit', type: 'resourceArray', resource_id: 'armor', stat: 'armors', view_type: 'edit', pop_up_button_text: stat('label') } }] };
+  const unresolved = parseSystem(JSON.stringify(system)).diagnostics.filter(d => d.message.includes('contesto non disponibile'));
+  expect(unresolved).toEqual([]);
+  const character = { ...demo, character_stats: [...demo.character_stats, { id: 'own_id', name: 'Own id', type: 'calculated', value_type: 'string', components: stat('id') }] };
+  expect(parseSystem(JSON.stringify(character)).diagnostics).toContainEqual(expect.objectContaining({ message: 'Riferimento mancante o contesto non disponibile: id' }));
+});

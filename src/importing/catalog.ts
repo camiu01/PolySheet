@@ -1,4 +1,4 @@
-/** @file Bounded, source-preserving class/origin/background catalogs, not archive decoding. */
+/** @file Bounded, source-preserving character, spell and equipment catalogs, not archive decoding. */
 import { jsonValue, matchesType, object, type ResourceInstance, type Stat, type StoredSystem } from '../domain/model';
 import { checkReferences } from '../domain/references';
 import { boundedJson } from './system';
@@ -10,8 +10,10 @@ export interface CatalogPreview {
   resources: ResourceInstance[];
 }
 export const MAX_REPOSITORY_CATALOG_BYTES = 24 * 1024 * 1024;
-export const MAX_REPOSITORY_CATALOG_FILES = 1000;
-export const CATALOG_ROOTS = ['class', 'race', 'ancestry', 'heritage', 'background'];
+/** PF2e publishes 1,089 feat files besides its classes, ancestries, heritages and backgrounds. */
+export const MAX_REPOSITORY_CATALOG_FILES = 2000;
+/** Catalog templates materialize private graphs, never shared mutable character references. */
+export const CATALOG_ROOTS = ['class', 'race', 'ancestry', 'heritage', 'background', 'feat', 'monster', 'spell', 'weapon', 'armor', 'item'];
 /**
  * Read a complete snapshot, validating optional resource-array removal history.
  * @remarks No prior graph is merged. Conflicting current/deleted IDs are ambiguous
@@ -40,7 +42,7 @@ export async function catalogDigest(original: string) {
 /**
  * Retain one compact immutable template; materialize nested instances on assignment.
  * @remarks Invalid source semantics remain visible and nonassignable, never repaired.
- * Keeping unassigned graphs out of the instance table preserves its 10,000-record cap.
+ * Keeping unassigned graphs out of the instance table preserves its bounded record budget.
  */
 export async function prepareCatalogTemplate(original: string, source: string, system: StoredSystem): Promise<CatalogPreview> {
   const input = object(boundedJson(original)), stats = object(input.stats);
@@ -75,7 +77,7 @@ export async function prepareCatalog(original: string, source: string, system: S
   if (!CATALOG_ROOTS.includes(String(input.resource_id))) throw new Error(it.catalogFormat);
   const rootId = crypto.randomUUID(), resources: ResourceInstance[] = [];
   function convert(input: unknown, path: string, id = crypto.randomUUID()): { resourceId: string } {
-    if (resources.length >= 10000) throw new Error(it.resourceListLimit);
+    if (resources.length >= 10000) throw new Error(it.resourceItemsLimit);
     const node = object(input, path);
     if (Object.keys(node).some(k => !['system', 'resource_id', 'stats'].includes(k))
       || (node.system != null && node.system !== system.definition.id)) throw new Error(`${path}: ${it.catalogFormat}`);
@@ -95,6 +97,8 @@ export async function prepareCatalog(original: string, source: string, system: S
       if (!stat) throw new Error(`${path}.stats.${key}: ${it.catalogUnknownField}`);
       const wrapped = object(entry, `${path}.stats.${key}`);
       let value = snapshotValue(wrapped, stat, `${path}.stats.${key}`);
+      // Upstream monster photos omit absent members; internal photos retain both nullable slots.
+      if (value !== null && stat.value_type === 'photo') value = { url: null, base64: null, ...object(value, `${path}.stats.${key}`) };
       if (value !== null && stat.value_type === 'resource') value = convert(value, `${path}.stats.${key}.value`);
       else if (value !== null && stat.value_type === 'array' && stat.sub_value_type === 'resource') {
         if (!Array.isArray(value) || value.length > 10000) throw new Error(`${path}.stats.${key}: ${it.invalidValue}`);

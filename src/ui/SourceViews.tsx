@@ -1,15 +1,17 @@
 /** @file Source popup and local resource controls; general events stay unsupported. */
 import { useState } from 'react';
-import { createEvaluator } from '../engine/formulas';
+import { ChevronDown } from 'lucide-react';
+import { createEvaluator, resourceParent } from '../engine/formulas';
 import { isResourceReference, jsonValue, object, type ResourceInstance, type View } from '../domain/model';
 import { initialValues } from '../persistence/db';
 import { commitResourceView } from '../persistence/views';
+import { stageTemplate } from '../persistence/catalog';
 import { RenderView, textValue, type RenderContext } from './renderer';
 import { SourceForm } from './SourceForm';
 import { Modal } from './shared';
 import { it } from './it';
 import { FilteredResourcePicker } from './FilteredResourcePicker';
-import { gridColumns } from './view-support';
+import { gridColumns, resourceEventScope } from './view-support';
 
 /** Outside an edit session, selection waits for an explicit form Save. */
 export function DeferredResourceSelect({ node, context }: { node: View; context: RenderContext }) {
@@ -46,8 +48,10 @@ export function SourcePopup({ node: v, context: ctx }: { node: View; context: Re
   } catch (error) { return <p data-view-error className="unsupported">{error instanceof Error ? error.message : String(error)}</p>; }
 }
 
-/** Create via the original edit view, then assign only the correct pinned type. */
-export function SourceResourceSelect({ node: v, context: ctx }: { node: View; context: RenderContext }) {
+/** Create via source forms or assign a pinned template; manual inventory may prefer existing catalogs. */
+export function SourceResourceSelect({ node: v, context: ctx, preferTemplates = false }: {
+  node: View; context: RenderContext; preferTemplates?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
@@ -58,24 +62,32 @@ export function SourceResourceSelect({ node: v, context: ctx }: { node: View; co
   if (!definition || !field) return <p data-view-error className="unsupported">{it.noResourceType}</p>;
   const fieldId = field.id, arrayField = field.value_type === 'array';
   const inline = v.create_in_place === true || definition.core !== true || v.inline_creation_mode === 'only';
-  const resources = (ctx.resources ?? []).filter(r => !r.catalogSource && r.definitionId === definition.id && (!ctx.systemKey || r.systemKey === ctx.systemKey));
+  // Offer usable catalog roots (choosing one stages a private copy of its whole graph) and local records,
+  // but not the root of another character's private graph: a shallow copy would share its children.
+  const offered = (r: ResourceInstance) => r.catalogSource ? !r.catalogIssue : r.catalogGroup !== r.id;
+  const resources = (ctx.resources ?? []).filter(r => offered(r) && r.definitionId === definition.id && (!ctx.systemKey || r.systemKey === ctx.systemKey));
   const selected = ctx.drafts && Object.hasOwn(ctx.drafts, v.id) ? ctx.drafts[v.id] : ctx.values[fieldId] ?? field.default_value;
   const selectedRefs = Array.isArray(selected) ? selected : [selected];
-  const selectedNames = selectedRefs.filter(isResourceReference).map(ref => resources.find(r => r.id === ref.resourceId)?.name ?? it.missingResource).join(', ');
+  const selectedNames = selectedRefs.filter(isResourceReference).map(ref => ctx.resources?.find(r => r.id === ref.resourceId)?.name ?? it.missingResource).join(', ');
   async function assign(record: ResourceInstance, created: ResourceInstance[]) {
     if (!ctx.onCommit) throw new Error(it.formReadOnly);
     if (ctx.systemKey && record.systemKey !== ctx.systemKey) throw new Error(it.invalidValue);
     await ctx.onCommit(latest => {
       const current = latest[fieldId];
       const previous = v.should_append === true && Array.isArray(current) ? current : [];
-      if (previous.length >= 10000) throw new Error(it.resourceListLimit);
+      if (previous.length >= 10000) throw new Error(it.resourceItemsLimit);
       return { [fieldId]: arrayField ? [...previous, { resourceId: record.id }] : { resourceId: record.id } };
     }, created);
     setOpen(false); setCreating(false);
   }
-  return <><button type="button" className="button secondary" aria-label={`${it.addResource} · ${definition.name}`} disabled={!ctx.onCommit}
-    onClick={() => { setError(''); setNewId(crypto.randomUUID()); setCreating(inline); setOpen(true); }}>
-    {v.view_type === 'icon' ? '+' : selectedNames || `${it.choose} ${definition.name}`}
+  // Rendered as a field: it shows a value to choose, not an action.
+  return <><button type="button" className={v.view_type === 'icon' ? 'button secondary' : 'choice-field'} aria-label={`${it.addResource} · ${definition.name}`} disabled={!ctx.onCommit}
+    onClick={() => {
+      setError(''); setNewId(crypto.randomUUID());
+      setCreating(inline && !(preferTemplates && resources.some(resource => resource.catalogSource)));
+      setOpen(true);
+    }}>
+    {v.view_type === 'icon' ? '+' : <><span className={selectedNames ? undefined : 'choice-placeholder'}>{selectedNames || `${it.choose} ${definition.name}`}</span><ChevronDown size={16} aria-hidden="true" /></>}
   </button>{open && <Modal title={`${it.addResource} · ${definition.name}`} bottomSheet={v.creation_pop_up_type == null || v.creation_pop_up_type === 'bottomSheet'} onClose={() => !busy && setOpen(false)}>
     {creating ? definition.edit_view ? <SourceForm
       input={definition.edit_view} onBusyChange={setBusy} onDone={() => setOpen(false)} context={{
@@ -95,20 +107,25 @@ export function SourceResourceSelect({ node: v, context: ctx }: { node: View; co
       <p className="muted">{it.localResourceSelection}</p>
       {!!resources.length && <FilteredResourcePicker input={v.filters} definition={definition} context={ctx} resources={resources} busy={busy} onSelect={r => {
         setBusy(true); setError('');
+        if (r.catalogSource) {
+          void stageTemplate(r.id).then(({ rootId, additions }) => assign({ ...r, id: rootId }, additions))
+            .catch(e => setError(e instanceof Error ? e.message : String(e))).finally(() => setBusy(false));
+          return;
+        }
         const record = v.preserve_ids === true ? r : {
           id: crypto.randomUUID(), systemKey: r.systemKey, definitionId: r.definitionId,
           name: r.name, values: r.values, createdAt: new Date().toISOString()
         };
         void assign(record, v.preserve_ids === true ? [] : [record]).catch(e => setError(String(e))).finally(() => setBusy(false));
       }} />}
-      {!resources.length && <p>{it.noResources}</p>}
+      {!resources.length && <p className="muted">{it.noPickerResources}</p>}
       {v.inline_creation_mode === 'optional' && <button type="button" className="button secondary" onClick={() => setCreating(true)}>{it.newResource}</button>}
     </>}
     {error && <p role="alert">{error}</p>}
   </Modal>}</>;
 }
 
-/** Render local list/display/edit views; unlinking never destroys an instance. */
+/** Render live local list/display/edit views; unlinking never destroys an instance. */
 export function SourceResourceSection({ node: v, context: ctx }: { node: View; context: RenderContext }) {
   const [selected, setSelected] = useState<ResourceInstance | null>(null);
   const [editing, setEditing] = useState(false);
@@ -128,11 +145,15 @@ export function SourceResourceSection({ node: v, context: ctx }: { node: View; c
     });
     const field = String(v.resource_set_stat ?? v.resource_stat);
     const editable = v.read_only !== true && !!ctx.onCommit && ctx.stats.some(s => s.id === field && s.type === 'base');
-    const resourceContext = (r: ResourceInstance): RenderContext => ({
-      systemKey: r.systemKey, stats: definition.stats, values: r.values, resources: ctx.resources,
-      resourceDefinitions: ctx.resourceDefinitions, createdAt: r.createdAt,
-      enumerations: ctx.enumerations, character: ctx.character
-    });
+    const resourceContext = (snapshot: ResourceInstance): RenderContext => {
+      const r = ctx.resources?.find(record => record.id === snapshot.id) ?? snapshot;
+      return {
+        systemKey: r.systemKey, stats: definition.stats, values: r.values, resources: ctx.resources,
+        resourceDefinitions: ctx.resourceDefinitions, createdAt: r.createdAt, instanceId: r.sourceId ?? r.id,
+        enumerations: ctx.enumerations, character: ctx.character, overrides: r.overrides, ...resourceEventScope(ctx, r),
+        parent: resourceParent(refs.find(ref => ref.resourceId === r.id))
+      };
+    };
     const visible = !expanded && typeof v.max_items_in_preview === 'number' ? records.slice(0, Math.max(0, v.max_items_in_preview)) : records;
     function move(fromId: string, toId: string) {
       if (!editable || v.reorganizable !== true || fromId === toId) return;
@@ -157,17 +178,17 @@ export function SourceResourceSection({ node: v, context: ctx }: { node: View; c
         onDrop={e => { e.preventDefault(); move(e.dataTransfer.getData('text/plain'), r.id); }}>
         {definition.list_view ? <RenderView input={definition.list_view} context={resourceContext(r)} /> : <strong>{r.name}</strong>}
         <div className="button-row">
-          {v.tap_displays_resource !== false && <button type="button" className="link-button" onClick={() => { setSelected(r); setEditing(false); }}>{it.details} · {r.name}</button>}
+          {v.tap_displays_resource !== false && <button type="button" className="link-button" onClick={() => { setSelected(r); setEditing(false); }}>{it.details}<span className="sr-only"> · {r.name}</span></button>}
           {editable && <button type="button" className="link-button" onClick={() => {
             void ctx.onCommit?.(latest => {
               const items = latest[field];
               if (!Array.isArray(items)) throw new Error(it.invalidValue);
               return { [field]: items.filter(item => !isResourceReference(item) || item.resourceId !== r.id) };
             }).catch(e => setError(String(e)));
-          }}>{it.detach} · {r.name}</button>}
+          }}>{it.detach}<span className="sr-only"> · {r.name}</span></button>}
           {editable && v.reorganizable === true && <>
-            <button type="button" className="link-button" disabled={index === 0} onClick={() => move(r.id, visible[index - 1].id)}>{it.moveUp} · {r.name}</button>
-            <button type="button" className="link-button" disabled={index === visible.length - 1} onClick={() => move(r.id, visible[index + 1].id)}>{it.moveDown} · {r.name}</button>
+            <button type="button" className="link-button" disabled={index === 0} onClick={() => move(r.id, visible[index - 1].id)}>{it.moveUp}<span className="sr-only"> · {r.name}</span></button>
+            <button type="button" className="link-button" disabled={index === visible.length - 1} onClick={() => move(r.id, visible[index + 1].id)}>{it.moveDown}<span className="sr-only"> · {r.name}</span></button>
           </>}
         </div>
       </article>)}

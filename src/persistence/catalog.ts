@@ -1,5 +1,5 @@
 /** @file Atomic catalog storage, private character graphs and dependent subrace selection. */
-import { isResourceReference, jsonValue, type ResourceInstance, type StoredSystem, type SystemDefinition } from '../domain/model';
+import { isResourceReference, jsonValue, type ResourceInstance, type StoredSystem, type SystemDefinition, MAX_STORED_RESOURCES } from '../domain/model';
 import { checkReferences, referencedIds } from '../domain/references';
 import { prepareCatalog, prepareCatalogTemplate, MAX_REPOSITORY_CATALOG_BYTES, MAX_REPOSITORY_CATALOG_FILES, type CatalogPreview } from '../importing/catalog';
 import { prepareImport, artifactBytes } from '../importing/package';
@@ -43,7 +43,7 @@ async function addTemplates(previews: CatalogPreview[], database: typeof db) {
       }
       roots.push(previous.id); continue;
     }
-    if (existing.length >= 10000) throw new Error(it.resourceListLimit);
+    if (existing.length >= MAX_STORED_RESOURCES) throw new Error(it.resourceListLimit);
     await database.resources.add(root);
     existing.push(root); roots.push(root.id);
   }
@@ -111,6 +111,46 @@ export async function prepareAssignment(resourceId: string, database: typeof db)
     ? await prepareCatalog(template.catalogSource.original, template.catalogSource.source, system) : undefined;
   return { template, system, materialized };
 }
+/**
+ * Copy one template graph into fresh private instances, remapping internal references.
+ * @returns The new root id and every copied instance; shared/cyclic children are copied once.
+ */
+export function privateGraph(system: StoredSystem, sourceRoot: string, existing: ResourceInstance[]) {
+  const byId = new Map(existing.map(r => [r.id, r])), ids = new Map<string, string>();
+  const queue = [sourceRoot], queued = new Set(queue), additions: ResourceInstance[] = [];
+  for (let i = 0; i < queue.length; i++) {
+    const id = queue[i];
+    if (ids.has(id)) continue;
+    const source = byId.get(id), definition = system.definition.resources.find(d => d.id === source?.definitionId);
+    if (!source || !definition || ids.size >= 10000) throw new Error(it.missingResource);
+    checkReferences(definition.stats, source.values, existing, system.key);
+    ids.set(id, crypto.randomUUID());
+    for (const stat of definition.stats) for (const child of referencedIds(stat, source.values[stat.id])) {
+      if (!queued.has(child)) { queued.add(child); queue.push(child); }
+    }
+  }
+  const rootId = ids.get(sourceRoot)!;
+  for (const [id, localId] of ids) {
+    const source = byId.get(id)!, definition = system.definition.resources.find(d => d.id === source.definitionId)!;
+    const values = jsonValue(source.values) as ResourceInstance['values'];
+    for (const stat of definition.stats) {
+      const value = values[stat.id];
+      if (stat.value_type === 'resource' && isResourceReference(value)) values[stat.id] = { resourceId: ids.get(value.resourceId)! };
+      else if (stat.value_type === 'array' && stat.sub_value_type === 'resource' && Array.isArray(value))
+        values[stat.id] = value.map(v => isResourceReference(v) ? { resourceId: ids.get(v.resourceId)! } : v);
+    }
+    additions.push({ id: localId, systemKey: system.key, definitionId: source.definitionId, name: source.name,
+      values, createdAt: new Date().toISOString(), catalogGroup: rootId,
+      ...(source.sourceId ? { sourceId: source.sourceId } : {}) });
+  }
+  return { rootId, additions };
+}
+/** Stage a catalog or local template as a private graph for a draft; nothing is written. */
+export async function stageTemplate(resourceId: string, database = db) {
+  const { system, materialized } = await prepareAssignment(resourceId, database);
+  const existing = materialized?.resources ?? await database.resources.where('systemKey').equals(system.key).toArray();
+  return privateGraph(system, materialized?.rootId ?? resourceId, existing);
+}
 /** Assign only a locally prepared, unchanged graph inside the owner's transaction. */
 export async function assignPrepared(characterId: string, fieldId: string, prepared: Awaited<ReturnType<typeof prepareAssignment>>, database: typeof db) {
   const { template, system, materialized } = prepared;
@@ -121,38 +161,19 @@ export async function assignPrepared(characterId: string, fieldId: string, prepa
       || JSON.stringify(latest) !== JSON.stringify(template)) throw new Error(it.missingResource);
     const fields = catalogFields(system.definition);
     const isClass = fields.classes?.id === fieldId;
-    const field = isClass ? fields.classes : fields.singular.find(s => s.id === fieldId && s.resource_type === template.definitionId);
+    // A plain resource list of the template's type (5e `feats`) gets the private copy appended.
+    const list = !isClass ? system.definition.character_stats.find(s => s.id === fieldId && s.type === 'base' && s.value_type === 'array'
+      && s.sub_value_type === 'resource' && s.resource_type === template.definitionId) : undefined;
+    const field = isClass ? fields.classes : list ?? fields.singular.find(s => s.id === fieldId && s.resource_type === template.definitionId);
     if (!field || (isClass && template.definitionId !== 'class')) throw new Error(it.missingResource);
     const existing = materialized?.resources ?? await database.resources.where('systemKey').equals(system.key).toArray();
-    const sourceRoot = materialized?.rootId ?? resourceId;
-    const byId = new Map(existing.map(r => [r.id, r])), ids = new Map<string, string>();
-    const queue = [sourceRoot], queued = new Set(queue), additions: ResourceInstance[] = [];
-    for (let i = 0; i < queue.length; i++) {
-      const id = queue[i];
-      if (ids.has(id)) continue;
-      const source = byId.get(id), definition = system.definition.resources.find(d => d.id === source?.definitionId);
-      if (!source || !definition || ids.size >= 10000) throw new Error(it.missingResource);
-      checkReferences(definition.stats, source.values, existing, system.key);
-      ids.set(id, crypto.randomUUID());
-      for (const stat of definition.stats) for (const child of referencedIds(stat, source.values[stat.id])) {
-        if (!queued.has(child)) { queued.add(child); queue.push(child); }
-      }
-    }
-    const rootId = ids.get(sourceRoot)!;
-    for (const [id, localId] of ids) {
-      const source = byId.get(id)!, definition = system.definition.resources.find(d => d.id === source.definitionId)!;
-      const values = jsonValue(source.values) as ResourceInstance['values'];
-      for (const stat of definition.stats) {
-        const value = values[stat.id];
-        if (stat.value_type === 'resource' && isResourceReference(value)) values[stat.id] = { resourceId: ids.get(value.resourceId)! };
-        else if (stat.value_type === 'array' && stat.sub_value_type === 'resource' && Array.isArray(value))
-          values[stat.id] = value.map(v => isResourceReference(v) ? { resourceId: ids.get(v.resourceId)! } : v);
-      }
-      additions.push({ id: localId, systemKey: system.key, definitionId: source.definitionId, name: source.name,
-        values, createdAt: new Date().toISOString(), catalogGroup: rootId,
-        ...(source.sourceId ? { sourceId: source.sourceId } : {}) });
-    }
+    const { rootId, additions } = privateGraph(system, materialized?.rootId ?? resourceId, existing);
     let value: unknown = { resourceId: rootId };
+    if (list) {
+      const current = character.values[fieldId] ?? [];
+      if (!Array.isArray(current)) throw new Error(it.invalidValue);
+      value = [...current, { resourceId: rootId }];
+    }
     if (isClass) {
       const definition = system.definition.resources.find(d => d.id === field.resource_type)!;
       const wrapper: ResourceInstance = {
@@ -165,7 +186,7 @@ export async function assignPrepared(characterId: string, fieldId: string, prepa
       if (!Array.isArray(current)) throw new Error(it.invalidValue);
       value = [...current, { resourceId: wrapper.id }];
     }
-    if (await database.resources.count() + additions.length > 10000) throw new Error(it.resourceListLimit);
+    if (await database.resources.count() + additions.length > MAX_STORED_RESOURCES) throw new Error(it.resourceListLimit);
     await database.resources.bulkAdd(additions);
     await setCharacterValue(characterId, fieldId, value, database);
     const subrace = subraceFields(system.definition);

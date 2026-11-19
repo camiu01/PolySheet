@@ -4,6 +4,17 @@ This is a tested subset, not full upstream UI/event compatibility. Source
 documents and version pins remain immutable. All application controls are
 Italian; imported labels retain their original language.
 
+## Selective 5e monsters
+
+In **Risorse → Importa cataloghi → Cerca mostri 5e**, search the original
+repository file names, then review and confirm one downloaded original.
+The centered picker reuses 50-item local pagination, a scrollable body and
+stable Cancel footer. Spaces also match underscores in file-name searches.
+Search/preview/cancel write nothing. Assigning the installed template in a
+companion form stages a private graph until the enclosing Save; encounter
+addition creates its own separate graph. No remote portraits are requested.
+See [combat use](COMBAT.md#use) and the [5e audit](DND5E_AUDIT.md) for limits.
+
 ## Guided local setup
 
 **Avanza livello** opens a centered, local-only level/HP assistant on compatible
@@ -13,9 +24,16 @@ higher-level character, create the first-level character and then advance it.
 The imported HP mode controls roll/average/max; current HP is not healed.
 New-class preview creates nothing in storage. Multiclass prerequisites require
 an explicit manual acknowledgement; no automatic ability checks are claimed.
+For compatible 5e sources, **Capacità selezionabili** offers Fighting Style,
+Artificer Infusions and analogous declared feature choices before confirmation.
+Native checkbox groups show the source allowance and keep selections local.
+Drafts are scoped to the class, target level and subclass, never applied to a
+different advancement; reopening seeds persisted selections. Source availability and limits are rechecked
+on confirmation. Other feature selections and other classes remain untouched.
 The separate-choices checklist and its acknowledgement remain visible because
-proficiency, ASI/feat, spell and infusion callbacks are not executed here.
-Save applies class/HP changes atomically; Cancel never rolls or writes.
+general proficiency, ASI/feat, spell and infusion effect callbacks do not run here.
+Save applies class/HP and submitted feature selections atomically; Cancel never
+rolls or writes. Invalid or stale requests leave every record unchanged.
 Reopening uses persisted values, not a cached advancement.
 
 **Nuovo personaggio** collects a name, optional compatible class/origin catalogs
@@ -83,10 +101,44 @@ visible error. A manual base edit clears value overrides for that field;
 modifiers remain additive. Terminal effects (`showPopUp`, `roll`) execute at
 most one per command. Reversion removes the mechanic's override entry.
 
-Unsupported: `$view`-dependent scopes, resource-owned mechanics, `showResource`,
-`dismissResource`, `delayed`, `copyResource`, dotted/meta stat targets beyond
-direct ids, `on_result_effect`, asynchronous branches, nested popups/rolls in
-sequences. These paths fail explicitly with a diagnostic, never as silent no-ops.
+Resource-scoped events (2026-11-18): `fireEvent.event_names` accepts a static
+`list` of constant names or `eventName` nodes; computed lists (`map`, `stat`)
+stay errors. An `eventName` with `for_resource` runs the single matching
+mechanic of that resource instance; a resource without a handler is unchanged,
+because sources fire these names at every class or archetype (PF2e
+`resource_daily_preparations`). Handlers may only touch instances reachable
+from the character's own values, never catalog roots. Resource writes are
+`setStat` with `set` aggregation on base stats (the instance has no override
+layer); `$character.stat` writes become overrides of the character mechanic
+that fired the event, so reverting it reverts both; `$variable.stat` writes the
+owned resource bound to a loop variable. Writes are applied only after the
+whole command succeeds. A `when` with no matching clause is a no-op (PF2e
+`characterLoaded` guards rely on it). `delayed` is accepted structurally but
+reaching it aborts the command. Assumptions not verified upstream: scoped names
+reach only the target resource, unscoped names only character mechanics, and
+resource writes replace base values.
+
+Resource card actions (2026-11-18): a source `button`/stat event inside a
+resource card on the character sheet runs that resource's single matching
+mechanic (`toggle_equip`, `toggle_attunement`, `togglePrepareSpell`, weapon
+`attack`/`damage`, `castSpell`). Inside a resource handler an unscoped event
+reaches the same resource first, then the character (5e: weapon `shoot_ammo`
+is weapon-local, item `remove_empty_items` is a character mechanic). Rolls
+inside a sequence are collected and the sequence continues; a `map` of
+`rollable` and flat modifier formulas ("-1") are accepted. `addToStat` on a
+resource adds to its base value; `stat.sub` writes through a resource-valued
+stat. `dismissResource` (also delayed) is UI pacing and changes nothing; the
+open sheet stays open. Card buttons stay disabled, with "Azione non ancora
+disponibile in PolySheet.", when the handler needs a popup form value
+(`$view.`), uses calculated subscriptions or aggregation (5e `effect` use,
+Second Wind), or is otherwise invalid. These scoping rules are inferred from
+the 5e source, not verified upstream.
+
+Unsupported: `$view`-dependent scopes, resource mechanics outside scoped
+`eventName` dispatch or resource card actions, popups fired from a resource
+handler, `showResource`, `dismissResource`, executing `delayed` (except `dismissResource`), `copyResource`,
+dotted/meta stat targets other than `$character.stat` and `$variable.stat`,
+`on_result_effect`, asynchronous branches, nested popups/rolls in sequences. These paths fail explicitly with a diagnostic, never as silent no-ops.
 
 ## Use
 
@@ -324,8 +376,10 @@ special contexts such as `$character.$edit_mode`.
   referenced resource for editing; calculated target fields cannot be overwritten.
 - `resource` inline creation (`create_if_empty`) is not executed and stays
   diagnosed instead of silently inventing a record.
-- Popup `extra_buttons`, `in_edit_mode`, `dismissible`, checkbox-specific autosave,
-  dynamic stat bounds and dynamic list chips are not accepted as supported.
+- Popup `extra_buttons`, `in_edit_mode`, `dismissible`, checkbox-specific autosave
+  and dynamic list chips are not accepted as supported.
+  Stat and ticker `calculated_min/max_value_allowed` are enforced; a literal
+  bound takes precedence and a non-numeric result fails visibly.
   The documented subset uses explicit root Save, or an enclosing draft session.
 - Resources with or without a source edit view can use the explicit manual
   editor. Existing-record saves patch changed fields against the latest record;

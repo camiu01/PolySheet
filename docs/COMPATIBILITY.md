@@ -21,6 +21,134 @@ rejects the format or leaves the action visibly unexecuted. A preview with zero
 errors may still have hundreds of warnings and produce runtime errors on
 unpopulated resource references. No diagnostic count is a compatibility certificate.
 
+## Selective 5e monsters, 2026-11-19
+
+Current gap assessment: [D&D 5e audit](DND5E_AUDIT.md). Older dated entries
+and matrix rows below retain their original verification scope; they do not
+supersede the newer bounded event, source-compiler and catalog increments.
+
+Evidence: unchanged official 5e 0.9.1 package SHA-256
+`5de5642ad7281d7a99566a518d916e43c24f0c2046c4c40b8042e5074ac3ea3b`,
+source revision `8788e3b18099e4a1b3510f02869d97f1488586b4`,
+`systems/5e/resource_instances/monster_goblin_goblin.json` and
+`systems/5e/system/combat_system/combatant_types/monster_instance/index.rpgs`.
+
+Monster files use `.json`, not only `.rpg.json`, and were omitted from both
+catalog root mapping and conventional automatic discovery. The new **Cerca
+mostri 5e** path reads public GitHub metadata at one immutable commit, searches
+original file names locally and downloads only the selected file. The ordinary
+preview/confirmation installs its exact original. No complete bestiary download,
+byte-limit increase, bundled game content or remote image fetch is introduced.
+File/direct-JSON catalog imports also accept typed `monster` roots.
+
+Source photo objects can omit `base64` or `url`; materialization fills only
+the absent nullable slots before the existing strict photo validation.
+Invalid bytes/extra fields remain invalid and originals remain byte-identical.
+An assignment creates a bounded private graph. Encounter addition clones a
+compatible monster template only for an instanced combatant and validates the
+latest template/system before committing the clone and initializer together.
+Failure leaves both encounter and resource archive unchanged. Immutable
+templates and other characters' assigned private roots are not offered as
+shared mutable combat records.
+
+The public [sequence](https://docs.rpg-companion.app/Effects/sequence)
+description explicitly defaults omitted `synchronous` to true, despite its
+table marking the field required. The original 5e initializer omits it.
+Both diagnostics and runtime now honor that sequential default; false, null
+and unsupported options still fail. Other initializer restrictions are unchanged.
+Independent Goblin expectations: AC 15; HP `2d6+0`, yielding 6 with both dice
+fixed to 3; first/second additions named `Goblin #1` / `Goblin #2`.
+Reload/restore never rerolls. The original image URL remains inert.
+
+Tests: `monster-catalogs.test.ts`, `capabilities.test.ts`,
+`duplicate-catalog-labels.test.tsx` and production
+`e2e/monster-catalogs.spec.ts`. All 1,416 pinned monster files map without
+typed assignment blockers, not proof of full action/view compatibility.
+The source's unresolved `monster_instance_trait` type and broader limits
+remain disclosed in the audit; no source rewrite hides them.
+
+## Resource parent ownership, 2026-11-18
+
+Evidence: official 5e 0.9.1 package SHA-256
+`5de5642ad7281d7a99566a518d916e43c24f0c2046c4c40b8042e5074ac3ea3b`,
+and source revision `8788e3b18099e4a1b3510f02869d97f1488586b4`:
+`systems/5e/system/resources/class/stats.rpgs:214-228,270-271`.
+`resources[id=class].stats[id=current_class_details]` reads its owning
+`class_details` wrapper through `$parent`; an archetype first reads its parent
+class's `current_class_details`. Without this scope, class `level` defaults
+to 1 even after the wrapper's saved `class_level` advances.
+
+The public [stat](https://docs.rpg-companion.app/Stat/Formulas/stat) and
+[resource](https://docs.rpg-companion.app/System/Resource) pages establish
+resource traversal and optional paths, but do not specify a complete
+`$parent` contract. The tested policy follows the pinned class formulas:
+typed references retain their declaring scope through calculated collections,
+sorting and lambdas. Forwarding a reference does not reparent it to the
+lookup caller. The same record under two owners has distinct cached values;
+ancestor references reuse their scope so cycles still fail within existing
+budgets. Unassigned references have no inferred parent.
+
+`resource`, `resourceArray` and `resourceSection` carry that owner into their
+rendered resource scopes. `$view` remains local; reading an owner's draft
+requires an explicit `$parent.$view` path. Parent metadata is weakly held,
+absent from JSON/structured clones, and never added to saved records or
+source originals. Reopening derives it from the current reference path.
+
+Independent expectations, covered by `resource-parent.test.ts`,
+`resource-context.test.tsx` and the pinned `progression.test.ts`: shared child
+levels 2/5 remain isolated; Fighter 2 exposes Action Surge; a selected level-3
+archetype resolves its level and wrapper; Fighter 3/Wizard 1 retains Fighter
+level 3; Fighter 20 has four attacks per action. Browser acceptance checks
+Action Surge in the preview, result and main sheet, plus level text after
+reload. This does not establish every system's special context variables,
+automatic effect lifecycle, or parent recovery for a standalone ID-only
+resource event with no retained reference path.
+
+## Selectable 5e advancement features, 2026-11-19
+
+Evidence: the unchanged official 5e 0.9.1 package SHA-256
+`5de5642ad7281d7a99566a518d916e43c24f0c2046c4c40b8042e5074ac3ea3b`
+and revision `8788e3b18099e4a1b3510f02869d97f1488586b4`,
+`systems/5e/system/resources/feat/{stats,display_view}.rpgs` and
+`mechanics/save_selectable_features_choice.rpgs` in that resource directory.
+The select `feat_display_selectable_features_select` reads calculated
+`chosen_selectable_features`. Its Save mechanic removes this feature's
+`selectable_feature_ids` from the destination, appends the draft selection
+and deduplicates. `selected_selectable_feature_ids_stat_path` resolves to
+`$parent.current_class_details.selected_selectable_feature_ids`, or to the
+character's `selected_selectable_feature_ids`.
+
+The level assistant now offers explicit local checkbox drafts **before**
+confirmation. It reads the unchanged availability, current selection and
+maximum formulas at the proposed class level and subclass, including earlier
+unfilled choices. Confirmation rechecks those formulas against the latest
+transactional graph, verifies the parent destination is the selected wrapper,
+and commits only the submitted features' selections with class/HP changes.
+Unrelated selections survive; foreign, duplicate, unavailable and excessive
+choices abort the whole command before any HP roll. Multiclass requests use
+upstream feature/option identities, not temporary preview record IDs.
+
+Independent expectations from `resource_instances/class_fighter_fighter.rpg.json`
+and `class_artificer_artificer__eb_.rpg.json`: Fighting Style allows one selection;
+Archery saves `archery1` on the Fighter wrapper, not the character or immutable
+catalog. Artificer Infusions first appears at class level 2, permits four choices,
+and includes Enhanced Defense but not level-6 Radiant Weapon. At class level 6
+the allowance is six and Radiant Weapon becomes available; level 20 allows twelve.
+Choosing Fighter through multiclass leaves the Artificer's choices unchanged.
+Tests: `progression.test.ts`, `progression-features.test.tsx` and the production
+desktop/mobile guided-setup case in `e2e/sheet-interactions.spec.ts`.
+
+This is a bounded manual advancement command, not general support for writing
+calculated selects or arbitrary `$parent` event destinations. It stores source
+selection IDs as base values, without executing Save callbacks, overriding the
+calculated `chosen_selectable_features`, activating equipment effects or granting
+external spell resources. General source-card diagnostics remain visible.
+Original bytes, import pins, database schema and backup format are unchanged.
+The public [select](https://docs.rpg-companion.app/Views/select) and
+[setStat](https://docs.rpg-companion.app/Effects/setStat) contracts were inspected;
+the source's parent destination and replacement policy above are pinned-source
+evidence, not a claim of general upstream override/lifecycle parity.
+
 ## Nullable resources and selection filters, 2026-11-16
 
 The 5e race definition's `weapons` calculation tests
@@ -153,13 +281,87 @@ combined with deterministic `sum`/`max`/`min` aggregation; `set`/`none` clashes
 require an upstream user prompt and stay a visible error. A manual base edit
 clears value overrides for that field; modifiers remain additive.
 
-Unsupported: `$view`-dependent scopes, resource-owned mechanics, `showResource`,
-`dismissResource`, `delayed`, `copyResource`, dotted/meta stat targets beyond
-direct ids, `on_result_effect`, asynchronous branches, nested popups/rolls in
-sequences. These paths fail explicitly with a diagnostic, never as silent no-ops.
+Resource-scoped events (2026-11-18): `fireEvent.event_names` accepts a static
+`list` of constant names or `eventName` nodes; computed lists (`map`, `stat`)
+stay errors. An `eventName` with `for_resource` runs the single matching
+mechanic of that resource instance; a resource without a handler is unchanged,
+because sources fire these names at every class or archetype (PF2e
+`resource_daily_preparations`). Handlers may only touch instances reachable
+from the character's own values, never catalog roots. Resource writes are
+`setStat` with `set` aggregation on base stats (the instance has no override
+layer); `$character.stat` writes become overrides of the character mechanic
+that fired the event, so reverting it reverts both; `$variable.stat` writes the
+owned resource bound to a loop variable. Writes are applied only after the
+whole command succeeds. A `when` with no matching clause is a no-op (PF2e
+`characterLoaded` guards rely on it). `delayed` is accepted structurally but
+reaching it aborts the command. Assumptions not verified upstream: scoped names
+reach only the target resource, unscoped names only character mechanics, and
+resource writes replace base values.
+
+Resource card actions (2026-11-18): a source `button`/stat event inside a
+resource card on the character sheet runs that resource's single matching
+mechanic (`toggle_equip`, `toggle_attunement`, `togglePrepareSpell`, weapon
+`attack`/`damage`, `castSpell`). Inside a resource handler an unscoped event
+reaches the same resource first, then the character (5e: weapon `shoot_ammo`
+is weapon-local, item `remove_empty_items` is a character mechanic). Rolls
+inside a sequence are collected and the sequence continues; a `map` of
+`rollable` and flat modifier formulas ("-1") are accepted. `addToStat` on a
+resource adds to its base value; `stat.sub` writes through a resource-valued
+stat. `dismissResource` (also delayed) is UI pacing and changes nothing; the
+open sheet stays open. Card buttons stay disabled, with "Azione non ancora
+disponibile in PolySheet.", when the handler needs a `$view.` input absent
+from its own display card, requires an unsupported popup or is otherwise
+invalid. The charge and card-input increment below supersedes the earlier
+Second Wind restriction. These scoping rules are inferred from the 5e source,
+not verified upstream.
+
+Unsupported: arbitrary `$view`-dependent scopes, resource mechanics outside scoped
+`eventName` dispatch or resource card actions, popups fired from a resource
+handler, `showResource`, `dismissResource`, executing `delayed` (except `dismissResource`), `copyResource`,
+dotted/meta stat targets other than `$character.stat` and `$variable.stat`,
+`on_result_effect`, asynchronous branches, nested popups/rolls in sequences. These paths fail explicitly with a diagnostic, never as silent no-ops.
 Commands are serialized, bounded and never execute during rendering, reopening
 or backup restore. Backup format upgraded to v4 (reads v1–v4); `Character.overrides`
 is optional and validated on restore.
+
+#### Card Amount, charges and rest subscriptions, 2026-11-18
+
+Evidence: the unchanged official 5e 0.9.1 package, SHA-256
+`5de5642ad7281d7a99566a518d916e43c24f0c2046c4c40b8042e5074ac3ea3b`,
+and source revision `8788e3b18099e4a1b3510f02869d97f1488586b4`,
+`systems/5e/system/resources/item/{display_view,stats}.rpgs` and
+`mechanics/item_{add,subtract}_quantity.rpgs` within that item directory.
+The card input `item_quantity` edits `edit_quantity` (default 1).
+Resource actions derive their `$view` from those declared card inputs and
+persisted instance values, not character fields or arbitrary form scopes.
+ADD/REMOVE therefore apply Amount, and the character's `remove_empty_items`
+handler removes zero-quantity references from effective equipment. Unlinking
+does not delete the resource record. Desktop/mobile production acceptance
+checks the independent sequence 1 → 2 → 5 → 2 → 1 → 0, then reloads and
+checks that the item stays absent.
+
+Browser verification exposed an additional UI gap: display cards had no
+base-input writer, hiding Amount, and open detail cards retained their initial
+resource snapshot. Cards now use the sheet's resource save/error path and
+render the latest instance after each save or action. Both `resourceSection`
+and popup `resourceArray` paths have always-on regression coverage.
+
+In `resources[id=effect]`, calculated event subscriptions distinguish own
+`eventName` values (USE) from plain global names (`short_rest`). Numeric writes
+to calculated resource stats persist as instance `overrides`, separate from
+base values; charge tickers can explicitly edit these overrides. This supports
+the charge-consumption part of Second Wind, not an inferred healing roll.
+Character events broadcast to owned instances subscribed by global name.
+Each failing subscriber rolls back its pending writes and reports a warning;
+it does not block successful subscribers. Tests cover this dispatch/isolation
+and original 5e USE consumption. There is no application rest menu yet:
+short-rest dispatch is an engine test, not a verified user-facing rest flow.
+Manual charge buttons remain the available refill control.
+
+Tests: `resource-events.test.ts`, `resource-card-inputs.test.tsx`, and
+`e2e/sheet-interactions.spec.ts` with `e2e/resource-card-actions.ts`.
+No source bytes, database schema or backup version were changed in this
+follow-up; resource overrides use the existing v4 backup envelope.
 
 Tests: `character-events.test.tsx`, `sheet-actions.test.tsx`,
 `e2e/sheet-interactions.spec.ts`. The current `tests/package.test.ts` diagnostic
@@ -511,9 +713,60 @@ a private graph, source duplicate-class rejection and explicit manual
 prerequisite acknowledgement. Subclass options/thresholds come from the class.
 Current HP stays unchanged. Subclass selection is applied at its threshold.
 
+PF2e (2026-11-19): the pinned PF2e confirm program is recognized by its
+single `forEach` over `level_up_selected_class_progression` that adds the
+evaluated increment to `$class_progression.class_level`. The assistant applies
+that increment per level and records `temp_last_level_up_class_id`; HP is not
+rolled or written, because PF2e `max_hp` is calculated from levels. PF2e
+classes declare no subclass list or threshold, so none is offered, and the
+dialog shows no multiclass or HP-method controls. The grant and proficiency
+popups that follow the increment are not executed; their choices stay on the
+sheet, where the source reports pending slots. All 9 pinned PF2e classes reach
+level 20 in a local check (Fighter maximum HP 181, Wizard 101).
+
+PF2e level choices (2026-11-19): after advancing, the dialog lists the grants
+of the current level that the source's `has_pending_interactive_slots` filter
+reports as open (feat slots, ability boosts, skill increases) and renders each
+with its own `progression_grant` edit view; each control writes that grant's
+base value. «Applica le scelte» runs the creation page `post_edit` that
+commits `all_interactive_progression_grants_for_current_level` (PF2e page 1:
+ability scores, `committed_*` values, feat slots) on draft copies of the owned
+grants under their own ids, then saves the changed values atomically; any
+skipped effect aborts the command. The program compares assigned with committed
+choices, so applying twice changes nothing more. Inferred, not verified
+upstream: that this creation-page commit is also the edit path after creation.
+Feats are now catalog roots (`feat` added to `CATALOG_ROOTS`; repository and
+link imports accept `feat_*.rpg.json`, up to 2,000 files): of the pinned
+catalogs, 1,034 of 1,089 PF2e feats and all 148 5e feats prepare; 55 PF2e feats
+stay visible as non-assignable with the format diagnostic. The PF2e game row
+opens the repository step for the publisher's compiled file, so classes,
+ancestries, heritages, backgrounds and feats come from the pinned commit.
+5e ability score improvements are offered after the advance, one form per
+class level the source's `should_show_asi` reports in the advanced range
+(evaluated with the wrapper staged at each level, as its level-up popup is;
+Fighter 1 → 20: 4, 6, 8, 12, 14, 16, 19). Each form applies +1 to two
+`ability` options (the same one twice for +2) to the `<id>_score` base values,
+or appends a chosen feat catalog to `feats`, mirroring `level_up_asi`. That
+source event adds without a score cap or feat prerequisite check, so neither is
+enforced here. 5e selectable features are now offered before confirmation by
+the bounded [selectable-feature command](#selectable-5e-advancement-features-2026-11-19),
+without executing their original calculated-select Save callback.
+
+The dialog now allows an explicit source-defined Roll/Average/Max choice and
+saves that method with the advancement. Before confirmation it previews new
+class features (Fighter level 2: Action Surge); afterward it compares readable
+sheet stats (CON 14, Average: maximum HP 12 → 20), lists features/remaining
+choices and explicitly states that current HP, hit dice and slots are not
+restored. Unevaluable stats are omitted, not filled with invented values.
+
+The missing parent scope reported at the earlier checkpoint is fixed for
+resource-stat traversal and its resource views; see
+[resource parent ownership](#resource-parent-ownership-2026-11-18).
+The advancement summary no longer injects a global `$parent` workaround.
+
 This assistant intentionally commits permanent manual base edits, not
 `addToStat` modifier overrides. It does not execute `on_level_up_confirm`,
-its popup callbacks, proficiency/ASI/feat/spell/infusion assignments or
+its popup callbacks, automatic proficiency/ASI/feat/spell/infusion effects or
 mechanic reversal. The UI requires acknowledgement of this boundary and
 retains a separate-choices checklist. Full automatic progression diagnostics
 remain accurate and are not suppressed. A successful command is not evidence

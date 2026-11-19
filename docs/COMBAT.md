@@ -7,10 +7,12 @@ All displayed system labels and formulas come from the pinned import.
 
 1. Import a system defining `combat_system`. Existing imports receive current
    diagnostics without rewriting their original text, compressed bytes or identity.
-2. Create required local resources in **Risorse**. The archive name is separate
-   from the source's `name` stat. Assign nested references in the typed base editor.
-   For the inspected 5e monster, create a `dice_roll` resource with `dice_amount`,
-   `dice_type` and `constant`, then assign it to the monster's `hit_points`.
+2. For 5e, open **Risorse → Importa cataloghi → Cerca mostri 5e**, search the
+   original file names and confirm the selected monster's preview. Only that
+   original is downloaded; nested dice/actions are materialized on assignment.
+   Local monster JSON files also work. Other local resources can still be
+   created manually: their archive name is separate from the source `name` stat.
+   Assign nested references in the typed base editor when using that manual path.
 3. Open **Combattimento**, name an encounter and choose its difficulty. Add
    source-defined types, selecting a same-version character/template when needed.
 4. Roll initiative explicitly or enter it manually. Resolve complete ties manually.
@@ -36,8 +38,10 @@ All displayed system labels and formulas come from the pinned import.
   Remote URLs are retained but never fetched. No SVG or external image execution.
 - Resource references use PolySheet's own `{resourceId}` representation. General
   resource archives and mutable upstream instance interchange remain unsupported.
-  Separate class/ancestry catalogs use immutable originals and private manual
-  assignment, not direct combat sources.
+  Catalogs use immutable originals and private assignment. Only a compatible
+  monster template can explicitly create a private instanced combatant graph;
+  other catalog types and existing private assignment roots are not offered
+  as shared combat sources.
 - Combat variables include `$combatants`, `$combat`, `$combat_difficulty`,
   `$combatant` and template `$resource`. Initiative is descending, followed by the
   source's numeric tie-breakers. Complete ties never get an invented winner.
@@ -47,7 +51,9 @@ All displayed system labels and formulas come from the pinned import.
 - A new instance runs only synchronous `sequence` and `setStat` with aggregation
   `set`, one override per direct destination. Rolls are bounded `xdy +/- n`,
   use cryptographic randomness and are committed atomically with the instance.
-  Unsupported initialization fails visibly and adds nothing.
+  Omitted sequence synchrony defaults to true, as documented upstream.
+  Unsupported initialization fails visibly and adds nothing, including no
+  leftover newly cloned monster resources.
 - Linked player characters remain live same-version records. Combat field patches
   preserve concurrent edits to other fields. Local instance overrides stay separate
   from base values and from immutable source definitions.
@@ -57,11 +63,13 @@ All displayed system labels and formulas come from the pinned import.
 
 ## Not implemented
 
-General mechanics, event dispatch, lifecycle effects, stacking/reversal, equipment
-automation, official character creation, unsupported resource views, generic Rollable
-actions and book/class/race archives. Unsupported fields stay diagnosed; imported
-systems remain labelled partial. Initializer support does not imply general
-effect-engine compatibility.
+General combat mechanics/event dispatch, lifecycle effects, stacking/reversal,
+equipment automation, official character creation, unsupported resource views,
+generic Rollable actions and resource archives. Bounded explicit actions in the
+character sheet do not imply those actions run in combat. Unsupported fields stay
+diagnosed; imported systems remain labelled partial. Initializer support does
+not imply general effect-engine compatibility. See the
+[current 5e gaps](DND5E_AUDIT.md), including a source monster-trait type mismatch.
 
 The original MIT regression fixture exercises typed editors and combat in both
 browser profiles. Optional pinned-source tests additionally execute real monster

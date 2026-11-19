@@ -13,6 +13,24 @@ beforeAll(() => {
   HTMLDialogElement.prototype.close = function () { this.removeAttribute('open'); };
 });
 
+it.each(['resource', 'resourceArray', 'resourceSection'])('retains $parent in %s views and refreshes its latest values', type => {
+  const label = { id: 'parent-label', type: 'text', text: stat('$parent.level') };
+  const definition: ResourceDefinition = { id: 'child', name: 'Child', stats: [], list_view: label, display_view: label };
+  const record = { id: 'child', systemKey: 'sys', definitionId: 'child', name: 'Child', values: {} };
+  const array = type !== 'resource';
+  const context = {
+    stats: [base('level', 'integer', 2), base('children', array ? 'array' : 'resource',
+      array ? [{ resourceId: record.id }] : { resourceId: record.id }, array ? 'resource' : undefined)],
+    values: { level: 2 }, resources: [record], resourceDefinitions: [definition]
+  };
+  const input = { id: 'children-view', type, stat: 'children', resource_stat: 'children', resource_id: 'child' };
+  const result = render(<RenderView input={input} context={context} />);
+  expect(screen.getByText('2', { exact: true })).toBeInTheDocument();
+  result.rerender(<RenderView input={input} context={{ ...context, values: { level: 5 } }} />);
+  expect(screen.getByText('5', { exact: true })).toBeInTheDocument();
+  expect(screen.queryByText('2', { exact: true })).toBeNull();
+});
+
 it('resolves only an explicitly supplied character snapshot, with separate caches and strict missing contexts', () => {
   const stats = [base('attack', 'integer', 5)];
   const character = new RuntimeResource('owner-a', stats, { attack: 5 });
@@ -116,4 +134,33 @@ it('updates the owning character through a nested character draft instead of exp
   fireEvent.blur(screen.getByRole('spinbutton'));
   expect(screen.getByText('9')).toBeInTheDocument();
   expect(committed.attack).toBe(5);
+});
+
+it('exposes the upstream resource identity as `id` in root scopes and in resourceArray button labels', () => {
+  const ids = base('selected_ids', 'array', ['feat-a'], 'string');
+  const selected = { id: 'selected', name: 'Selected', type: 'calculated', value_type: 'bool',
+    components: { type: 'contains', haystack: stat('selected_ids'), needle: stat('id') } } as const;
+  expect(createEvaluator([ids, selected], {}, undefined, { instanceId: 'feat-a' }).get('selected')).toBe(true);
+  expect(createEvaluator([ids, selected], {}, undefined, { instanceId: 'feat-b' }).get('selected')).toBe(false);
+  expect(() => createEvaluator([ids, selected], {}).get('selected')).toThrow('Statistica mancante: id');
+});
+
+it('keeps `$view` local: a nested resource does not inherit its parent form drafts', () => {
+  const detail = { id: 'detail', name: 'Detail', stats: [base('label', 'string', 'x')] } as ResourceDefinition;
+  const record = { id: 'd1', systemKey: 'sys', definitionId: 'detail', name: 'D', values: {} };
+  const evaluator = createEvaluator([base('details', 'array', [{ resourceId: 'd1' }], 'resource')], {}, undefined, {
+    resources: [record], resourceDefinitions: [detail], variables: { $view: { parent_input: 'P' } } });
+  expect(evaluator.evaluate(stat('$view.parent_input'))).toBe('P');
+  const nested = { type: 'map', components: stat('details'), map_value_key: '$item', mapper: stat('$item?.$view?.child_select.name') };
+  expect(evaluator.evaluate(nested)).toEqual([null]);
+});
+
+it('does not offer the root of another character private graph', () => {
+  const root = { id: 'private-class', catalogGroup: 'private-class', systemKey: 'sys', definitionId: 'feat', name: 'Fighter copy', values: {} };
+  render(<SourceResourceSelect node={{ id: 'pick', type: 'selectResources', resource_id: 'feat', stat: 'feats' }} context={{
+    stats: [{ ...base('feats', 'array', [], 'resource'), resource_type: 'feat' }], values: {}, drafts: {},
+    systemKey: 'sys', resources: [root], resourceDefinitions: [{ id: 'feat', name: 'Feat', core: true, stats: [base('name', 'string', '')] }],
+    onCommit: vi.fn() }} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Aggiungi risorsa · Feat' }));
+  expect(screen.queryByRole('button', { name: 'Fighter copy' })).toBeNull();
 });

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 import type { View } from '../domain/model';
 import { RenderView, ScalarInput, type RenderContext } from './renderer';
-import { inputValue, saveInput, textValue, viewColor } from './view-support';
+import { inputValue, saveInput, textValue, viewBounds, viewColor } from './view-support';
 import { SourceForm } from './SourceForm';
 import { Modal } from './shared';
 import { it } from './it';
@@ -32,10 +32,15 @@ export function SourceStat({ node: v, context: ctx, evaluate: e }: {
   const tap = canSourceEvent(ctx, v.on_tap_event);
   const longTap = canSourceEvent(ctx, v.on_long_tap_event);
   const editValue = edit ? e({ type: 'stat', stat: edit.id }) : undefined;
+  const { minimum, maximum } = viewBounds(v, e);
   const adjustment = v.edit_bottom_sheet_title != null && v.on_tap_event == null && !details
     && !!edit && ['integer', 'decimal'].includes(edit.value_type) && typeof editValue === 'number' && v.change_amount !== 0 && !!ctx.onCommit;
   const title = adjustment ? textValue(e(v.edit_bottom_sheet_title)) : v.sheet_title != null ? textValue(e(v.sheet_title)) : name;
-  return <div className={`stat-block ${v.style === 'list' ? 'stat-list' : ''}`}>
+  // A source adjustment sheet (add/subtract) is the editing path; a second inline input would compete with it.
+  const inline = !!ctx.onChange && !!edit && v.change_amount !== 0 && !adjustment;
+  // When the input edits the shown stat itself, the input is the value: no second copy above it.
+  const single = inline && edit!.id === stat.id && !(details || tap || longTap || adjustment) && v.always_show_sign !== true;
+  return <div className={['stat-block', v.style === 'list' ? 'stat-list' : '', single ? 'stat-inline-edit' : ''].filter(Boolean).join(' ')}>
     <span className="stat-label" style={{ color: viewColor(v.name_color, e) }}>{name}</span>
     {details || tap || longTap || adjustment ? <button type="button" className="stat-detail-trigger" disabled={ctx.eventBusy}
       onPointerDown={event => {
@@ -56,17 +61,15 @@ export function SourceStat({ node: v, context: ctx, evaluate: e }: {
     {longTap && <button type="button" className="icon-button stat-more" disabled={ctx.eventBusy}
       aria-label={`${it.longTapAction} · ${name}`} title={`${it.longTapAction} · ${name}`}
       onClick={() => ctx.onEvent?.(v.on_long_tap_event)}><MoreHorizontal size={16} aria-hidden="true" /></button>}
-    {ctx.onChange && edit && v.change_amount !== 0 && <ScalarInput key={ctx.drafts ? v.id : `${edit.id}:${String(ctx.values[edit.id])}`} stat={edit}
+    {inline && edit && <ScalarInput key={ctx.drafts ? v.id : `${edit.id}:${String(ctx.values[edit.id])}`} stat={edit}
       value={inputValue(v, ctx, edit)} label={`${it.edit} ${edit.name}`}
       step={typeof v.change_amount === 'number' ? v.change_amount : undefined}
-      min={typeof v.min_value_allowed === 'number' ? v.min_value_allowed : undefined}
-      max={typeof v.max_value_allowed === 'number' ? v.max_value_allowed : undefined}
+      min={minimum} max={maximum}
       onDraft={ctx.onInput ? next => saveInput(v, ctx, edit.id, next) : undefined}
       onSave={next => saveInput(v, ctx, edit.id, next)} />}
     {open && <Modal title={title} onClose={() => !busy && setOpen(false)}>
       {adjustment && edit && typeof editValue === 'number' ? <NumericAdjustment stat={edit} value={editValue} context={ctx}
-        minimum={typeof v.min_value_allowed === 'number' ? v.min_value_allowed : undefined}
-        maximum={typeof v.max_value_allowed === 'number' ? v.max_value_allowed : undefined}
+        minimum={minimum} maximum={maximum}
         onBusyChange={setBusy} onDone={() => setOpen(false)} />
         : v.bottom_sheet_in_edit_mode === true
         ? <SourceForm input={v.bottom_sheet_view} context={ctx} onBusyChange={setBusy} onDone={() => setOpen(false)} />

@@ -87,9 +87,12 @@ describe('documented formulas', () => {
     expect(createEvaluator([], {}, undefined, { variables: { $actor: new RuntimeResource('a', [base('score', 'integer', 8)], {}) } }).get('$actor.score')).toBe(8);
     expect(() => createEvaluator([], {}, { steps: 5, depth: 3 }).evaluate({ type: 'map', components: list(constant(1), constant(2), constant(3)), mapper: stat('$mapValue') })).toThrow('Limite');
   });
-  it('does not cache contextual calculated results across iterations', () => {
-    const e = createEvaluator([{ id: 'bound', name: 'Bound', type: 'calculated', value_type: 'integer', components: stat('$mapValue') }]);
-    expect(e.evaluate({ type: 'map', components: list(constant(2), constant(8)), mapper: stat('bound') })).toEqual([2, 8]);
+  it('scopes stat formulas lexically, so caller lambda values never leak in and stats stay cacheable', () => {
+    // No official 5e/PF2e stat formula reads an unbound lambda variable; the importer reports such paths as missing.
+    const e = createEvaluator([{ id: 'bound', name: 'Bound', type: 'calculated', value_type: 'integer', components: stat('$mapValue') },
+      { id: 'base', name: 'Base', type: 'calculated', value_type: 'integer', components: constant(5) }]);
+    expect(() => e.evaluate({ type: 'map', components: list(constant(2), constant(8)), mapper: stat('bound') })).toThrow('$mapValue');
+    expect(e.evaluate({ type: 'map', components: list(constant(2), constant(8)), mapper: { type: 'add', components: list(stat('$mapValue'), stat('base')) } })).toEqual([7, 13]);
   });
   it('bypasses caches explicitly and never rolls during read-only rendering', () => {
     let count = 0;
@@ -103,7 +106,7 @@ describe('typed persistence and combat', () => {
   const setHp = { type: 'setStat', stat: 'hp', aggregation_type: 'set', new_value: constant(3) };
   it.each([
     ['concurrent sequence', { type: 'sequence', synchronous: false, effects: [setHp] }],
-    ['implicit sequence', { type: 'sequence', effects: [setHp] }],
+    ['invalid synchrony', { type: 'sequence', synchronous: null, effects: [setHp] }],
     ['unknown condition', { ...setHp, condition: constant(false) }],
     ['dynamic destination', { ...setHp, meta_stat: constant('hp') }],
     ['calculated aggregation', { ...setHp, calculated_aggregation_type: 'add' }],
@@ -116,6 +119,16 @@ describe('typed persistence and combat', () => {
     const combat = await createCombat(system.key, 'Unsupported initializer', database);
     await expect(commandCombat(combat.id, { type: 'add', typeId: 'scout' }, database)).rejects.toThrow();
     expect((await database.combats.get(combat.id))?.combatants).toEqual([]);
+  });
+  it('uses the documented synchronous default when sequence omits the field', async () => {
+    const source = capabilitySystem;
+    const { database, system } = await setup({ ...source, combat_system: { ...source.combat_system,
+      combatant_types: [{ ...source.combat_system.combatant_types[0], on_create: { type: 'sequence', effects: [setHp] } }]
+    } });
+    const combat = await createCombat(system.key, 'Default synchrony', database);
+    await commandCombat(combat.id, { type: 'add', typeId: 'scout' }, database);
+    expect((await database.combats.get(combat.id))?.combatants[0].overrides.hp).toBe(3);
+    expect(system.diagnostics.some(d => d.message.includes('synchronous'))).toBe(false);
   });
   it('preserves resource references, blocks dangling/cross-version links and restores v4', async () => {
     const { database, system } = await setup();

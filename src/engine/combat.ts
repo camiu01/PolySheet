@@ -70,7 +70,7 @@ export function combatContext(system: StoredSystem, combat: Combat, characters: 
     }
   };
 }
-/** Initialize a newly added instance exactly once; callers persist only on success. */
+/** Initialize once; omitted sequence synchrony uses the documented true default, never parallel execution. */
 export function initializeCombatant(system: StoredSystem, combat: Combat, id: string, characters: Character[], resources: ResourceInstance[], random?: (faces: number) => number) {
   const fighter = combat.combatants.find(f => f.id === id);
   const type = system.definition.combat_system?.combatant_types.find(t => t.id === fighter?.typeId);
@@ -86,7 +86,7 @@ export function initializeCombatant(system: StoredSystem, combat: Combat, id: st
       : ['type', 'stat', 'meta_stat', 'new_value', 'aggregation_type', 'calculated_aggregation_type'];
     if (Object.keys(e).some(key => !allowed.includes(key))) throw new Error('Opzione on_create non supportata.');
     if (e.type === 'sequence') {
-      if (e.synchronous !== true || !Array.isArray(e.effects)) throw new Error('Solo sequenze esplicitamente sincrone supportate in on_create.');
+      if (e.synchronous !== undefined && e.synchronous !== true || !Array.isArray(e.effects)) throw new Error('Solo sequenze sincrone supportate in on_create.');
       e.effects.forEach(child => apply(child, depth + 1)); return;
     }
     if (e.type !== 'setStat' || e.aggregation_type !== 'set' || e.meta_stat != null || e.calculated_aggregation_type != null || typeof e.stat !== 'string' || touched.has(e.stat))

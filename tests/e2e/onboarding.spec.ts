@@ -13,8 +13,8 @@ test('a novice can identify the game, cancel the demo, create deliberately, edit
   await expect(page.getByRole('heading', { name: 'Sistema di prova', exact: true })).toBeVisible();
   await expect(page.getByText(it.demoDescription, { exact: true })).toBeVisible();
   await expect(page.getByText(/regola nascosta|regole nascoste/i)).toHaveCount(0);
-  await page.getByText(`${it.gameUnavailable}: Pathfinder 2e, Daggerheart`, { exact: true }).click();
-  await expect(page.getByText(it.pathfinderUnavailable, { exact: false })).toBeVisible();
+  await expect(page.getByRole('button', { name: `${it.gamePrepare} · Pathfinder 2e`, exact: true })).toBeEnabled();
+  await page.getByText(`${it.gameUnavailable}: Daggerheart`, { exact: true }).click();
   await expect(page.getByText(it.daggerheartUnavailable, { exact: false })).toBeVisible();
   await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); window.scrollTo(0, 0); });
   await page.screenshot({ path: resolve(`.reference/ui-review/${info.project.name}-game-choices.png`), fullPage: true });

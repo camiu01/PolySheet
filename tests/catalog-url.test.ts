@@ -132,11 +132,11 @@ it('rejects missing files and wrong byte sizes rather than installing a partial 
   await expect(importCatalogUrl('https://github.com/owner/repo/tree/main/catalog', system)).rejects.toThrow('Dimensione');
 });
 
-it('accepts exactly 1000 GitHub JSON files and rejects 1001 before source downloads', async () => {
-  github(Array.from({ length: 1000 }, (_, i) => entry(`catalog/${i}.json`)));
-  expect(await importCatalogUrl('https://github.com/owner/repo/tree/main/catalog', system)).toHaveLength(1000);
-  const fetch = github(Array.from({ length: 1001 }, (_, i) => entry(`catalog/${i}.json`)));
-  await expect(importCatalogUrl('https://github.com/owner/repo', system)).rejects.toThrow('1.000');
+it('accepts exactly 2000 GitHub JSON files and rejects 2001 before source downloads', async () => {
+  github(Array.from({ length: 2000 }, (_, i) => entry(`catalog/${i}.json`)));
+  expect(await importCatalogUrl('https://github.com/owner/repo/tree/main/catalog', system)).toHaveLength(2000);
+  const fetch = github(Array.from({ length: 2001 }, (_, i) => entry(`catalog/${i}.json`)));
+  await expect(importCatalogUrl('https://github.com/owner/repo', system)).rejects.toThrow('2.000');
   expect(fetch).toHaveBeenCalledTimes(2);
 });
 

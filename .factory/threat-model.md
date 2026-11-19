@@ -1,6 +1,6 @@
 # Threat Model for PolySheet
 
-Last updated: 2026-11-17. Version: 1.5.0. Method: STRIDE.
+Last updated: 2026-11-19. Version: 1.6.0. Method: STRIDE.
 This is a source review, not a penetration-test or compliance certification.
 
 ## 1. System Overview
@@ -43,7 +43,7 @@ metadata. Remote URL import is user initiated and subject to browser CORS.
 
 - No application API, webhook, OAuth callback or server upload endpoint exists.
 - JSON/system inputs: 8 MiB raw and expanded, 400,000 values, depth 64.
-- Backups: 32 MiB and bounded record counts; sources rehashed and revalidated.
+- Backups: 128 MiB and bounded record counts; sources rehashed and revalidated.
 - Formulas: 10,000 operations/depth 64, safe direct/nested/optional path grammar;
   prototype-related keys are forbidden at parse and path boundaries.
 - Combat: 100 actors; bounded initialization/rolls; no imported code or arbitrary
@@ -64,7 +64,7 @@ metadata. Remote URL import is user initiated and subject to browser CORS.
   API payloads use the bounded JSON parser. Complete trees are required, with
   20,000 entries/100 candidates; symlinks/submodules are excluded. Paths are
   validated and encoded, and remote response URLs do not choose download hosts.
-- Catalog links: 1,000 files/24 MiB per remote batch, still 8 MiB per file.
+- Catalog links: 2,000 files/24 MiB per remote batch, still 8 MiB per file.
   Generic web folders need an explicit JSON index; unique relative paths remain
   within its directory, with no cross-host paths, parent traversal, nested
   indexes or HTML crawling. Index bytes count toward the web batch budget.
@@ -72,8 +72,13 @@ metadata. Remote URL import is user initiated and subject to browser CORS.
 - Catalog persistence: one immutable exact-original/digest record per template.
   Unsupported typed content stays visibly nonassignable. Private bounded graphs
   materialize only through explicit assignment; no rule effects are invented.
-  Templates cannot become mutable references or combat sources. Backup validation
-  reparses originals and checks template identity/shape; bundle writes validate
+  Templates cannot become mutable references or direct combat sources.
+  An explicit instanced-monster addition may clone a private bounded graph,
+  rechecking the exact template/system and resource count inside its transaction.
+  Initialization failure rolls back clones and encounter together. Metadata-only
+  5e discovery downloads only a user-selected, commit-pinned original, never the
+  complete bestiary or remote images. Backup validation reparses originals and
+  checks template identity/shape; bundle writes validate
   the projected bounded backup inside one rollback-capable transaction.
 - System removal: explicit exact-version confirmation, with resources and rolls
   removed atomically. Current character/encounter pins block removal. Creators
@@ -176,6 +181,13 @@ automated LLM scanning service or a new enforced CI gate.
   Only public repository metadata is queried; no local records or tokens are sent.
 
 ## 9. Version Changelog
+
+- 1.6.0 (2026-11-19): Selective public 5e monster discovery through the existing
+  bounded reader; private instanced-combat graphs with atomic initialization.
+  Source photo null-slot normalization retains strict photo checks and inert
+  URLs. Omitted initializer sequence synchrony uses the documented true default.
+  Corrected stale descriptions of existing backup/catalog count bounds; no
+  limits, database format, credentials or cloud service changed in this increment.
 
 - 1.5.0 (2026-11-17): Bounded browser-local JSON/RPGScript composition from
   one pinned Git tree, confined transitive macro imports, exact-source export
