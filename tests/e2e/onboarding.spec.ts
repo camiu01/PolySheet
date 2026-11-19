@@ -99,3 +99,27 @@ test('game choices and save feedback fit a narrow phone viewport', async ({ page
   await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); window.scrollTo(0, 0); });
   await page.screenshot({ path: resolve(`.reference/ui-review/${info.project.name}-game-choices-320.png`), fullPage: true });
 });
+
+test('choosing a game shows its download progress and failure in the tapped row, inside the viewport', async ({ page }, info) => {
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  await page.route(/github\.com|githubusercontent\.com/, async route => { await held; await route.abort('internetdisconnected'); });
+  await page.goto('./');
+  await page.getByRole('button', { name: it.newCharacter, exact: true }).first().click();
+  const choose = page.getByRole('button', { name: `${it.gamePrepare} · ${it.game2024}`, exact: true });
+  await choose.click();
+  const row = page.locator('.import-source-row').filter({ has: choose });
+  const status = row.getByRole('status');
+  await expect(status).toContainText(it.gameLoading(it.game2024));
+  await expect(status).toContainText(it.gameDiscovering);
+  await expect(status.getByRole('progressbar')).toBeVisible();
+  await expect(status).toBeInViewport();
+  await expect(choose).toContainText(it.gameLoadingShort);
+  if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/game-loading-${info.project.name}.png` });
+  release();
+  const alert = row.locator('.game-failed');
+  await expect(alert).toContainText(it.gameFailed(it.game2024));
+  await expect(alert).toBeInViewport();
+  await expect(choose).toBeEnabled();
+  if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/game-failed-${info.project.name}.png` });
+});

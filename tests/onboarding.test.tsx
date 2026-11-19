@@ -48,6 +48,27 @@ it('offers the same preparation entry for D&D and guided PF2e without promising 
   for (const button of screen.getAllByRole('button')) expect(button).toBeDisabled();
 });
 
+it('shows download progress and failures inside the chosen game row, where the tap happened', () => {
+  const { rerender } = render(<GameChoices onChoose={() => {}} busy progress={{ id: '5e2024', phase: copy.gameDiscovering }} />);
+  const status = screen.getByRole('status');
+  expect(status).toHaveTextContent(copy.gameLoading(copy.game2024));
+  expect(status.closest('.import-source-row')).toHaveTextContent(copy.game2024);
+  // Indeterminate until the catalog count is known.
+  expect(screen.getByRole('progressbar')).not.toHaveAttribute('value');
+  expect(screen.getByRole('button', { name: `${copy.gamePrepare} · ${copy.game2024}` })).toHaveTextContent(copy.gameLoadingShort);
+  rerender(<GameChoices onChoose={() => {}} busy progress={{ id: '5e2024', phase: copy.repositoryCatalogProgress, done: 12, total: 300 }} />);
+  expect(screen.getByRole('status')).toHaveTextContent('12/300');
+  expect(screen.getByRole('progressbar')).toHaveAttribute('value', '12');
+  rerender(<GameChoices onChoose={() => {}} busy={false} error={{ id: '5e2024', message: 'Failed to fetch' }} />);
+  expect(screen.queryByRole('status')).toBeNull();
+  // The global error notification is the live alert; the row repeats it visually, where the tap happened.
+  expect(screen.queryByRole('alert')).toBeNull();
+  const alert = document.querySelector('.game-failed')!;
+  expect(alert).toHaveTextContent(copy.gameFailed(copy.game2024));
+  expect(alert).toHaveTextContent('Failed to fetch');
+  expect(alert.closest('.import-source-row')).toHaveTextContent(copy.game2024);
+});
+
 it('gives an empty roster a single route to the game library', () => {
   useUi.getState().navigate('characters');
   render(<Characters systems={[]} characters={[]} run={async work => { await work(); }} />);

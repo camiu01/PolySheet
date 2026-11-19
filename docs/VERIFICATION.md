@@ -1101,3 +1101,21 @@ installed. The scoped inline visual review is retained locally at
   `monster-catalogs.spec.ts`: 16 passed. Root-path smoke earlier: 8 passed.
 - Mobile (375x812) catalog preview: long source URL wraps, dialog margins 16 px,
   no dialog or page horizontal overflow.
+
+## Game preparation feedback hotfix, 2026-11-19
+
+- Reported on a phone: after «Scegli questo GDR» (D&D 2024) the only signal
+  was the small header status, and the failure appeared only there.
+- The chosen row now shows a spinner on its button and a panel with the game
+  name, the current phase (repository lookup, rules, catalog count n/total),
+  an indeterminate then determinate `<progress>`, and a keep-open hint; a
+  failure replaces it with the error and a retry hint. The global notification
+  stays the only live `alert`, so screen readers are not told twice.
+- `tests/onboarding.test.tsx`: phase, indeterminate bar, `12/300` count and
+  in-row failure. `tests/e2e/onboarding.spec.ts` (desktop and mobile): with
+  GitHub held, the panel is inside the viewport; after the network fails the
+  failure panel is in view and the button is enabled again. Mobile
+  screenshots checked for both states.
+
+- `npm run check`: 383 passed, 1 skipped, 49 files. `npm run build`: passed.
+- Production Playwright `/PolySheet/`: 109 passed, 3 skipped (6.3 min).

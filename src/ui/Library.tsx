@@ -15,7 +15,7 @@ import { it } from './it';
 import { CompatibilityBadge, Modal, PageHeading, Warning, download, downloadBlob, type Run } from './shared';
 import { useUi } from './store';
 import { ImportDiagnostics, SystemImportOptions } from './SystemImport';
-import { GameChoices } from './GameChoices';
+import { GameChoices, type GameProgress } from './GameChoices';
 import './library.css';
 
 /** Guide source selection and review before installing; preserve exact originals and validation limits. */
@@ -31,7 +31,8 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [importError, setImportError] = useState('');
-  const [preparingGame, setPreparingGame] = useState(false);
+  const [game, setGame] = useState<GameProgress | null>(null);
+  const [gameError, setGameError] = useState<{ id: string; message: string } | null>(null);
   const busy = useRef(false);
   const [repository, setRepository] = useState<RepositoryDiscovery | null>(null);
   const [catalogs, setCatalogs] = useState<CatalogPreview[]>([]);
@@ -72,14 +73,17 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
   }
   async function prepareBundle(discovery: RepositoryDiscovery, selected: string, installed?: StoredSystem) {
     setCatalogProgress(installed ? '' : it.repositorySourceLoading);
-    const bundle = await prepareRepositoryBundle(discovery, selected, installed,
-      (done, total) => setCatalogProgress(`${it.repositoryCatalogProgress}: ${done}/${total}`));
+    if (!installed) setGame(current => current && { ...current, phase: it.repositorySourceLoading });
+    const bundle = await prepareRepositoryBundle(discovery, selected, installed, (done, total) => {
+      setCatalogProgress(`${it.repositoryCatalogProgress}: ${done}/${total}`);
+      setGame(current => current && { ...current, phase: it.repositoryCatalogProgress, done, total });
+    });
     setPreview(bundle.system); setCatalogs(bundle.catalogs); setCatalogProgress('');
     setRepository(null); setShowUrl(false);
   }
   async function fromGame(id: string) {
     await load(async () => {
-      setPreparingGame(true); setCatalogProgress(it.gamePreparing);
+      setGame({ id, phase: it.gameDiscovering }); setGameError(null); setCatalogProgress(it.gamePreparing);
       try {
         const discovered = await discoverRepository('https://github.com/blastervla/rpg-companion-app-systems',
           '8788e3b18099e4a1b3510f02869d97f1488586b4');
@@ -90,7 +94,10 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
           setShowUrl(true); return;
         }
         await prepareBundle(discovered, id);
-      } finally { setPreparingGame(false); setCatalogProgress(''); }
+      } catch (error) {
+        setGameError({ id, message: error instanceof Error ? error.message : String(error) });
+        throw error;
+      } finally { setGame(null); setCatalogProgress(''); }
     });
   }
   return <>
@@ -123,10 +130,9 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
       </article>)}
     </div>
     </>}
-    <GameChoices busy={loading} onChoose={id => void run(() => fromGame(id))}
+    <GameChoices busy={loading} progress={game} error={gameError} onChoose={id => void run(() => fromGame(id))}
       installed={systems.map(s => s.definition.id)}
       onUse={id => { const latest = systems.find(s => s.definition.id === id); if (latest) { selectSystem(latest.key); navigate('characters'); } }} />
-    {preparingGame && <p className="notice" role="status">{catalogProgress || it.gamePreparing}</p>}
     <SystemImportOptions busy={loading} onFile={() => file.current?.click()}
       onLink={() => { setRepository(null); setImportError(''); setShowUrl(true); }}
       onDemo={systems.some(s => s.definition.id === 'polysheet-sentieri') ? undefined
