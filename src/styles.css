@@ -464,3 +464,10 @@ details:not(.sheet-section,.diagnostic-group,.source-collapsible)[open]>summary:
 .progression-asi { border: 1px solid var(--line); border-radius: 8px; padding: 4px 16px 16px; margin: 12px 0 0; min-width: 0; }
 .progression-asi legend { padding: 0 6px; font-size: 13px; font-weight: 600; }
 .progression-asi-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); column-gap: 12px; }
+.progression-feature { min-width: 0; margin: 0; padding: 12px 0 0; border: 0; border-top: 1px solid var(--line); }
+.progression-feature legend { padding: 0 8px 0 0; font-weight: 600; font-size: 14px; overflow-wrap: anywhere; }
+.progression-feature .check-field { padding-block: 4px; overflow-wrap: anywhere; }
+.progression-feature .check-field input { flex-shrink: 0; }
+.progression-feature .check-field:has(input:checked) { color: var(--accent); }
+.progression-feature .check-field:has(input:disabled) { color: var(--muted); }
+.progression-features p { margin-block: 0 8px; }

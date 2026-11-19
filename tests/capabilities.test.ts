@@ -106,7 +106,7 @@ describe('typed persistence and combat', () => {
   const setHp = { type: 'setStat', stat: 'hp', aggregation_type: 'set', new_value: constant(3) };
   it.each([
     ['concurrent sequence', { type: 'sequence', synchronous: false, effects: [setHp] }],
-    ['implicit sequence', { type: 'sequence', effects: [setHp] }],
+    ['invalid synchrony', { type: 'sequence', synchronous: null, effects: [setHp] }],
     ['unknown condition', { ...setHp, condition: constant(false) }],
     ['dynamic destination', { ...setHp, meta_stat: constant('hp') }],
     ['calculated aggregation', { ...setHp, calculated_aggregation_type: 'add' }],
@@ -119,6 +119,16 @@ describe('typed persistence and combat', () => {
     const combat = await createCombat(system.key, 'Unsupported initializer', database);
     await expect(commandCombat(combat.id, { type: 'add', typeId: 'scout' }, database)).rejects.toThrow();
     expect((await database.combats.get(combat.id))?.combatants).toEqual([]);
+  });
+  it('uses the documented synchronous default when sequence omits the field', async () => {
+    const source = capabilitySystem;
+    const { database, system } = await setup({ ...source, combat_system: { ...source.combat_system,
+      combatant_types: [{ ...source.combat_system.combatant_types[0], on_create: { type: 'sequence', effects: [setHp] } }]
+    } });
+    const combat = await createCombat(system.key, 'Default synchrony', database);
+    await commandCombat(combat.id, { type: 'add', typeId: 'scout' }, database);
+    expect((await database.combats.get(combat.id))?.combatants[0].overrides.hp).toBe(3);
+    expect(system.diagnostics.some(d => d.message.includes('synchronous'))).toBe(false);
   });
   it('preserves resource references, blocks dangling/cross-version links and restores v4', async () => {
     const { database, system } = await setup();

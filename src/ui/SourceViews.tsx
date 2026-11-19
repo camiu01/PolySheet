@@ -48,8 +48,10 @@ export function SourcePopup({ node: v, context: ctx }: { node: View; context: Re
   } catch (error) { return <p data-view-error className="unsupported">{error instanceof Error ? error.message : String(error)}</p>; }
 }
 
-/** Create via the original edit view, then assign only the correct pinned type. */
-export function SourceResourceSelect({ node: v, context: ctx }: { node: View; context: RenderContext }) {
+/** Create via source forms or assign a pinned template; manual inventory may prefer existing catalogs. */
+export function SourceResourceSelect({ node: v, context: ctx, preferTemplates = false }: {
+  node: View; context: RenderContext; preferTemplates?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
@@ -80,7 +82,11 @@ export function SourceResourceSelect({ node: v, context: ctx }: { node: View; co
   }
   // Rendered as a field: it shows a value to choose, not an action.
   return <><button type="button" className={v.view_type === 'icon' ? 'button secondary' : 'choice-field'} aria-label={`${it.addResource} · ${definition.name}`} disabled={!ctx.onCommit}
-    onClick={() => { setError(''); setNewId(crypto.randomUUID()); setCreating(inline); setOpen(true); }}>
+    onClick={() => {
+      setError(''); setNewId(crypto.randomUUID());
+      setCreating(inline && !(preferTemplates && resources.some(resource => resource.catalogSource)));
+      setOpen(true);
+    }}>
     {v.view_type === 'icon' ? '+' : <><span className={selectedNames ? undefined : 'choice-placeholder'}>{selectedNames || `${it.choose} ${definition.name}`}</span><ChevronDown size={16} aria-hidden="true" /></>}
   </button>{open && <Modal title={`${it.addResource} · ${definition.name}`} bottomSheet={v.creation_pop_up_type == null || v.creation_pop_up_type === 'bottomSheet'} onClose={() => !busy && setOpen(false)}>
     {creating ? definition.edit_view ? <SourceForm

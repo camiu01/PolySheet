@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { it } from '../../src/ui/it';
 import { chooseManualGame } from './helpers';
 import { verifyItemQuantity } from './resource-card-actions';
+import { isResourceReference } from '../../src/domain/model';
 
 async function setupValues(page: Page, existing = false, constitution = '14') {
   const dialog = page.getByRole('dialog');
@@ -33,7 +34,8 @@ async function setupSnapshot(page: Page) {
       const request = database.transaction('characters').objectStore('characters').getAll(); request.onsuccess = () => resolve(request.result);
     });
     database.close();
-    return { resourceCount: resources.length, characters, feat: resources.find(r => r.definitionId === 'feat' && r.sourceId && r.catalogGroup) };
+    return { resourceCount: resources.length, characters, classes: resources.filter(r => r.definitionId === 'class_details'),
+      feat: resources.find(r => r.definitionId === 'feat' && r.sourceId && r.catalogGroup) };
   });
 }
 
@@ -146,6 +148,9 @@ test('real 5e guided setup recovers an incomplete sheet, cancels cleanly, edits 
   await page.screenshot({ path: resolve(`.reference/ui-review/${info.project.name}-configured-sheet.png`) });
   expect((await setupSnapshot(page)).characters).toHaveLength(2);
   const created = (await setupSnapshot(page)).characters.find(character => character.name === 'Mira · configurata')!;
+  const classReference = Array.isArray(created.values.classes) ? created.values.classes[0] : null;
+  if (!isResourceReference(classReference)) throw new Error('Expected the configured character class reference');
+  const classId = classReference.resourceId;
   expect(created.values.base_hp).toBe(10);
   expect(created.values.current_hp).toBe(12);
   expect(created.values.equipment).toHaveLength(1);
@@ -156,13 +161,20 @@ test('real 5e guided setup recovers an incomplete sheet, cancels cleanly, edits 
   await expect(advancement.getByRole('button', { name: it.progression, exact: true })).toBeDisabled();
   await expect(advancement.getByText(it.progressionChoices, { exact: true })).toBeVisible();
   await expect(advancement.getByText('Action Surge', { exact: true })).toBeVisible();
+  const style = advancement.getByRole('group', { name: 'Fighting Style', exact: true });
+  await style.getByRole('checkbox', { name: 'Archery', exact: true }).check();
+  await expect(style.getByRole('checkbox', { name: 'Dueling', exact: true })).toBeDisabled();
   await page.screenshot({ path: resolve(`.reference/ui-review/${info.project.name}-progression.png`) });
   await advancement.getByRole('button', { name: it.cancel, exact: true }).click();
   expect((await setupSnapshot(page)).characters.find(character => character.id === created.id)).toEqual(beforeAdvancement);
+  expect((await setupSnapshot(page)).classes.find(record => record.id === classId)!.values.selected_selectable_feature_ids).toEqual([]);
   await page.getByRole('button', { name: it.progression, exact: true }).click();
+  await expect(style.getByRole('checkbox', { name: 'Archery', exact: true })).not.toBeChecked();
+  await style.getByRole('checkbox', { name: 'Archery', exact: true }).check();
   await advancement.getByLabel(it.progressionAcknowledge, { exact: true }).check();
   await advancement.getByRole('button', { name: it.progression, exact: true }).click();
   await expect(advancement.getByRole('status')).toContainText(it.progressionSaved);
+  expect((await setupSnapshot(page)).classes.find(record => record.id === classId)!.values.selected_selectable_feature_ids).toEqual(['archery1']);
   await expect(advancement.getByText('Action Surge', { exact: true })).toBeVisible();
   await expectSetupGeometry(page, it.close);
   await page.screenshot({ path: resolve(`.reference/ui-review/${info.project.name}-progression-result.png`) });
@@ -175,6 +187,7 @@ test('real 5e guided setup recovers an incomplete sheet, cancels cleanly, edits 
   expect(Number(advanced.values.base_hp)).toBeGreaterThan(10);
   await page.reload();
   expect((await setupSnapshot(page)).characters.find(character => character.id === created.id)).toEqual(advanced);
+  expect((await setupSnapshot(page)).classes.find(record => record.id === classId)!.values.selected_selectable_feature_ids).toEqual(['archery1']);
   await page.getByRole('button', { name: /Mira · configurata/ }).first().click();
   await expect(page.getByText('Human Fighter 2', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: it.progression, exact: true }).click();

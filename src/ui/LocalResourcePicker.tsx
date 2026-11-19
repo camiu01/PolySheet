@@ -59,8 +59,9 @@ export function LocalResourcePicker({ resources, busy, onSelect }: {
   const startRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const matches = useMemo(() => {
-    const search = query.trim().toLocaleLowerCase('it');
-    const found = search ? resources.filter(r => r.name.toLocaleLowerCase('it').includes(search)) : resources;
+    const normalize = (text: string) => text.trim().toLocaleLowerCase('it').replace(/[_\s]+/g, ' ');
+    const search = normalize(query);
+    const found = search ? resources.filter(r => normalize(r.name).includes(search)) : resources;
     return [...found].sort((a, b) => a.name.localeCompare(b.name, 'it'));
   }, [resources, query]);
   const sources = useMemo(() => duplicateSourceLabels(resources), [resources]);

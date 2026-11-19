@@ -10,6 +10,7 @@ import { installSystem, SheetDatabase } from '../src/persistence/db';
 import { advanceCharacter, applyAbilityIncrease, applyLevelChoices } from '../src/persistence/progression';
 import { abilityIncreaseLevels, abilityIncreaseOptions, hitPointModes, levelChoiceCommit, pendingLevelChoices, progressionClasses, progressionEvaluator, progressionArchetypes, progressionContract, progressionPreview } from '../src/engine/progression';
 import { catalogSystem } from './fixtures/catalog';
+import { selectableProgressionFeatures } from '../src/engine/progression-selectable';
 
 it('recognizes imported advancement branches and ceiling without a bundled game fixture', async () => {
   const hp = { type: 'when', clauses: ['roll', 'average', 'max'].map(mode => ({
@@ -47,11 +48,24 @@ it.skipIf(!existsSync(fixture))('advances imported Fighter repeatedly, preserves
     const originals = resources.filter(record => record.catalogSource);
     const wrapper = progressionClasses(system, character, resources)[0];
     const request = { wrapperId: wrapper.record.id, expectedClassLevel: 1, targetLevel: 2, archetypeId: null, acknowledgeChoices: true };
+    const withStyle = { ...request, selectableFeatures: [{ featureId: 'fighting_style', selected: ['archery1'] }] };
+    const unchanged = await database.resources.toArray();
+    for (const selection of [
+      [{ featureId: 'fighting_style', selected: ['archery1', 'dueling1'] }],
+      [{ featureId: 'fighting_style', selected: ['not-an-option'] }],
+      [{ featureId: 'fighting_style', selected: ['archery1', 'archery1'] }],
+      [{ featureId: 'foreign-feature', selected: [] }]
+    ]) {
+      await expect(advanceCharacter(character.id, character.revision, { ...request, selectableFeatures: selection }, database)).rejects.toThrow();
+      expect(await database.characters.get(character.id)).toEqual(character);
+      expect(await database.resources.toArray()).toEqual(unchanged);
+    }
     expect(progressionPreview(system, character, resources, wrapper.record.id, 2).features).toEqual(['Action Surge']);
     expect(hitPointModes(system).map(mode => mode.id)).toEqual(['roll', 'average', 'max']);
-    const advanced = await advanceCharacter(character.id, character.revision, request, database);
+    const advanced = await advanceCharacter(character.id, character.revision, withStyle, database);
+    expect((await database.resources.get(wrapper.record.id))!.values.selected_selectable_feature_ids).toEqual(['archery1']);
     expect(advanced).toMatchObject({ level: 2, maxHp: 20, baseHpGain: 6 });
-    expect(advanced.summary.features).toEqual(['Action Surge']);
+    expect(advanced.summary.features).toEqual(['Archery', 'Action Surge']);
     // The summary is read back from the imported formulas: max HP is reported, current HP is not restored.
     expect(advanced.summary.improved).toContainEqual({ name: 'Maximum HP', before: 12, after: 20 });
     expect(advanced.summary.improved.some(row => /current/i.test(row.name))).toBe(false);
@@ -122,6 +136,56 @@ it.skipIf(!existsSync(fixture))('advances imported Fighter repeatedly, preserves
       { $details: { resourceId: highClass.record.id } }).get('$details.attacks_per_action')).toBe(4);
   } finally { await database.delete(); }
 }, 20000);
+
+it.skipIf(!existsSync(fixture))('derives Artificer infusion limits and availability, preserves choices across levels and multiclass cloning', async () => {
+  const system = await prepareSystem(gunzipSync(readFileSync(fixture)).toString('utf8'), 'Local infusion fixture');
+  const database = new SheetDatabase(`infusions-${crypto.randomUUID()}`);
+  try {
+    await installSystem(system, database);
+    const templates: string[] = [];
+    for (const name of ['class_artificer_artificer__eb_', 'class_fighter_fighter']) {
+      const original = readFileSync(`.reference/rpg-companion-app-systems/systems/5e/resource_instances/${name}.rpg.json`, 'utf8');
+      const [id] = await installCatalogs([await prepareCatalogTemplate(original, 'local.json', system)], database);
+      templates.push(id);
+    }
+    let character = await configureCharacter(system, 'Infusions', { constitution_score: 14, hit_point_mode: 'average' },
+      { classes: templates[0] }, undefined, database, true);
+    let resources = await database.resources.toArray();
+    const wrapper = progressionClasses(system, character, resources)[0].record;
+    const choices = (level: number) => selectableProgressionFeatures(system, character, resources, wrapper.id, level);
+    const infusion = (level: number) => choices(level).find(feature => feature.featureId === 'artificer_infusions');
+    expect(infusion(1)).toBeUndefined();
+    expect(infusion(2)).toMatchObject({ featureId: 'artificer_infusions', maximum: 4, selected: [] });
+    expect(infusion(2)!.options.map(option => option.id)).toContain('enhanced_defense');
+    expect(infusion(2)!.options.map(option => option.id)).not.toContain('radiant_weapon');
+    expect(infusion(6)!.maximum).toBe(6);
+    expect(infusion(6)!.options.map(option => option.id)).toContain('radiant_weapon');
+    expect(infusion(20)!.maximum).toBe(12);
+    const request = { wrapperId: wrapper.id, targetLevel: 2, archetypeId: null, acknowledgeChoices: true,
+      selectableFeatures: [{ featureId: 'artificer_infusions', selected: ['enhanced_defense'] }] };
+    await expect(advanceCharacter(character.id, character.revision, { ...request,
+      selectableFeatures: [{ featureId: 'artificer_infusions', selected: ['radiant_weapon'] }] }, database)).rejects.toThrow();
+    expect(await database.characters.get(character.id)).toEqual(character);
+    await advanceCharacter(character.id, character.revision, request, database);
+    character = (await database.characters.get(character.id))!;
+    resources = await database.resources.toArray();
+    expect(infusion(2)!.selected).toEqual(['enhanced_defense']);
+    const subclasses = progressionArchetypes(system, character, resources, wrapper.id, 6);
+    await advanceCharacter(character.id, character.revision, { ...request, targetLevel: 6, archetypeId: subclasses.options[0].id,
+      selectableFeatures: [{ featureId: 'artificer_infusions', selected: ['enhanced_defense', 'radiant_weapon'] }] }, database);
+    character = (await database.characters.get(character.id))!;
+    await advanceCharacter(character.id, character.revision, { ...request, targetLevel: 7, newClassId: templates[1],
+      manualPrerequisites: true, selectableFeatures: [{ featureId: 'fighting_style', selected: ['archery1'] }] }, database);
+    character = (await database.characters.get(character.id))!;
+    resources = await database.resources.toArray();
+    const fighter = progressionClasses(system, character, resources).find(choice => choice.name === 'Fighter')!;
+    expect(fighter.record.values.selected_selectable_feature_ids).toEqual(['archery1']);
+    expect((await database.resources.get(wrapper.id))!.values.selected_selectable_feature_ids).toEqual(['enhanced_defense', 'radiant_weapon']);
+    await database.close();
+    await database.open();
+    expect((await database.resources.get(fighter.record.id))!.values.selected_selectable_feature_ids).toEqual(['archery1']);
+  } finally { await database.delete(); }
+}, 30000);
 
 it.skipIf(!existsSync(fixture))('offers 5e ability score improvements at the source levels and applies +2 or a feat', async () => {
   const system = await prepareSystem(gunzipSync(readFileSync(fixture)).toString('utf8'), 'Local ASI fixture');

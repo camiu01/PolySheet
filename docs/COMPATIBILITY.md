@@ -21,6 +21,52 @@ rejects the format or leaves the action visibly unexecuted. A preview with zero
 errors may still have hundreds of warnings and produce runtime errors on
 unpopulated resource references. No diagnostic count is a compatibility certificate.
 
+## Selective 5e monsters, 2026-11-19
+
+Current gap assessment: [D&D 5e audit](DND5E_AUDIT.md). Older dated entries
+and matrix rows below retain their original verification scope; they do not
+supersede the newer bounded event, source-compiler and catalog increments.
+
+Evidence: unchanged official 5e 0.9.1 package SHA-256
+`5de5642ad7281d7a99566a518d916e43c24f0c2046c4c40b8042e5074ac3ea3b`,
+source revision `8788e3b18099e4a1b3510f02869d97f1488586b4`,
+`systems/5e/resource_instances/monster_goblin_goblin.json` and
+`systems/5e/system/combat_system/combatant_types/monster_instance/index.rpgs`.
+
+Monster files use `.json`, not only `.rpg.json`, and were omitted from both
+catalog root mapping and conventional automatic discovery. The new **Cerca
+mostri 5e** path reads public GitHub metadata at one immutable commit, searches
+original file names locally and downloads only the selected file. The ordinary
+preview/confirmation installs its exact original. No complete bestiary download,
+byte-limit increase, bundled game content or remote image fetch is introduced.
+File/direct-JSON catalog imports also accept typed `monster` roots.
+
+Source photo objects can omit `base64` or `url`; materialization fills only
+the absent nullable slots before the existing strict photo validation.
+Invalid bytes/extra fields remain invalid and originals remain byte-identical.
+An assignment creates a bounded private graph. Encounter addition clones a
+compatible monster template only for an instanced combatant and validates the
+latest template/system before committing the clone and initializer together.
+Failure leaves both encounter and resource archive unchanged. Immutable
+templates and other characters' assigned private roots are not offered as
+shared mutable combat records.
+
+The public [sequence](https://docs.rpg-companion.app/Effects/sequence)
+description explicitly defaults omitted `synchronous` to true, despite its
+table marking the field required. The original 5e initializer omits it.
+Both diagnostics and runtime now honor that sequential default; false, null
+and unsupported options still fail. Other initializer restrictions are unchanged.
+Independent Goblin expectations: AC 15; HP `2d6+0`, yielding 6 with both dice
+fixed to 3; first/second additions named `Goblin #1` / `Goblin #2`.
+Reload/restore never rerolls. The original image URL remains inert.
+
+Tests: `monster-catalogs.test.ts`, `capabilities.test.ts`,
+`duplicate-catalog-labels.test.tsx` and production
+`e2e/monster-catalogs.spec.ts`. All 1,416 pinned monster files map without
+typed assignment blockers, not proof of full action/view compatibility.
+The source's unresolved `monster_instance_trait` type and broader limits
+remain disclosed in the audit; no source rewrite hides them.
+
 ## Resource parent ownership, 2026-11-18
 
 Evidence: official 5e 0.9.1 package SHA-256
@@ -57,6 +103,51 @@ Action Surge in the preview, result and main sheet, plus level text after
 reload. This does not establish every system's special context variables,
 automatic effect lifecycle, or parent recovery for a standalone ID-only
 resource event with no retained reference path.
+
+## Selectable 5e advancement features, 2026-11-19
+
+Evidence: the unchanged official 5e 0.9.1 package SHA-256
+`5de5642ad7281d7a99566a518d916e43c24f0c2046c4c40b8042e5074ac3ea3b`
+and revision `8788e3b18099e4a1b3510f02869d97f1488586b4`,
+`systems/5e/system/resources/feat/{stats,display_view}.rpgs` and
+`mechanics/save_selectable_features_choice.rpgs` in that resource directory.
+The select `feat_display_selectable_features_select` reads calculated
+`chosen_selectable_features`. Its Save mechanic removes this feature's
+`selectable_feature_ids` from the destination, appends the draft selection
+and deduplicates. `selected_selectable_feature_ids_stat_path` resolves to
+`$parent.current_class_details.selected_selectable_feature_ids`, or to the
+character's `selected_selectable_feature_ids`.
+
+The level assistant now offers explicit local checkbox drafts **before**
+confirmation. It reads the unchanged availability, current selection and
+maximum formulas at the proposed class level and subclass, including earlier
+unfilled choices. Confirmation rechecks those formulas against the latest
+transactional graph, verifies the parent destination is the selected wrapper,
+and commits only the submitted features' selections with class/HP changes.
+Unrelated selections survive; foreign, duplicate, unavailable and excessive
+choices abort the whole command before any HP roll. Multiclass requests use
+upstream feature/option identities, not temporary preview record IDs.
+
+Independent expectations from `resource_instances/class_fighter_fighter.rpg.json`
+and `class_artificer_artificer__eb_.rpg.json`: Fighting Style allows one selection;
+Archery saves `archery1` on the Fighter wrapper, not the character or immutable
+catalog. Artificer Infusions first appears at class level 2, permits four choices,
+and includes Enhanced Defense but not level-6 Radiant Weapon. At class level 6
+the allowance is six and Radiant Weapon becomes available; level 20 allows twelve.
+Choosing Fighter through multiclass leaves the Artificer's choices unchanged.
+Tests: `progression.test.ts`, `progression-features.test.tsx` and the production
+desktop/mobile guided-setup case in `e2e/sheet-interactions.spec.ts`.
+
+This is a bounded manual advancement command, not general support for writing
+calculated selects or arbitrary `$parent` event destinations. It stores source
+selection IDs as base values, without executing Save callbacks, overriding the
+calculated `chosen_selectable_features`, activating equipment effects or granting
+external spell resources. General source-card diagnostics remain visible.
+Original bytes, import pins, database schema and backup format are unchanged.
+The public [select](https://docs.rpg-companion.app/Views/select) and
+[setStat](https://docs.rpg-companion.app/Effects/setStat) contracts were inspected;
+the source's parent destination and replacement policy above are pinned-source
+evidence, not a claim of general upstream override/lifecycle parity.
 
 ## Nullable resources and selection filters, 2026-11-16
 
@@ -657,9 +748,9 @@ Fighter 1 → 20: 4, 6, 8, 12, 14, 16, 19). Each form applies +1 to two
 `ability` options (the same one twice for +2) to the `<id>_score` base values,
 or appends a chosen feat catalog to `feats`, mirroring `level_up_asi`. That
 source event adds without a score cap or feat prerequisite check, so neither is
-enforced here. 5e selectable features (Fighting Style,
-infusions and other `selectable_features`) are still not offered here: their
-source save writes through `$parent` and an unseeded calculated select.
+enforced here. 5e selectable features are now offered before confirmation by
+the bounded [selectable-feature command](#selectable-5e-advancement-features-2026-11-19),
+without executing their original calculated-select Save callback.
 
 The dialog now allows an explicit source-defined Roll/Average/Max choice and
 saves that method with the advancement. Before confirmation it previews new
@@ -675,7 +766,7 @@ The advancement summary no longer injects a global `$parent` workaround.
 
 This assistant intentionally commits permanent manual base edits, not
 `addToStat` modifier overrides. It does not execute `on_level_up_confirm`,
-its popup callbacks, proficiency/ASI/feat/spell/infusion assignments or
+its popup callbacks, automatic proficiency/ASI/feat/spell/infusion effects or
 mechanic reversal. The UI requires acknowledgement of this boundary and
 retains a separate-choices checklist. Full automatic progression diagnostics
 remain accurate and are not suppressed. A successful command is not evidence

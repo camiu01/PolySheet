@@ -30,6 +30,7 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
   const [showUrl, setShowUrl] = useState(false);
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
+  const [importError, setImportError] = useState('');
   const [preparingGame, setPreparingGame] = useState(false);
   const busy = useRef(false);
   const [repository, setRepository] = useState<RepositoryDiscovery | null>(null);
@@ -48,8 +49,10 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
   async function load(action: () => Promise<void>) {
     if (busy.current) return;
     busy.current = true;
-    setLoading(true);
-    try { await action(); } finally { busy.current = false; setLoading(false); }
+    setLoading(true); setImportError('');
+    try { await action(); }
+    catch (error) { setImportError(error instanceof Error ? error.message : String(error)); throw error; }
+    finally { busy.current = false; setLoading(false); }
   }
   async function fromUrl() {
     await load(async () => {
@@ -82,7 +85,10 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
           '8788e3b18099e4a1b3510f02869d97f1488586b4');
         // The public PF2e source does not compile (weapon/stats.rpgs:928): open the repository step,
         // where the publisher's compiled file is uploaded and the catalogs still come from the commit.
-        if (compiledOnly.has(id)) { setRepository(discovered); setRepositoryPath(id); setRepositoryUpload(null); setShowUrl(true); return; }
+        if (compiledOnly.has(id)) {
+          setRepository(discovered); setRepositoryPath(id); setRepositoryUpload(null); setRepositoryLocalKey('');
+          setShowUrl(true); return;
+        }
         await prepareBundle(discovered, id);
       } finally { setPreparingGame(false); setCatalogProgress(''); }
     });
@@ -122,7 +128,7 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
       onUse={id => { const latest = systems.find(s => s.definition.id === id); if (latest) { selectSystem(latest.key); navigate('characters'); } }} />
     {preparingGame && <p className="notice" role="status">{catalogProgress || it.gamePreparing}</p>}
     <SystemImportOptions busy={loading} onFile={() => file.current?.click()}
-      onLink={() => { setRepository(null); setShowUrl(true); }}
+      onLink={() => { setRepository(null); setImportError(''); setShowUrl(true); }}
       onDemo={systems.some(s => s.definition.id === 'polysheet-sentieri') ? undefined
         : () => void run(() => prepare(demoOriginal, 'PolySheet · contenuto originale MIT'))} />
     <div className="footnote"><BookOpen size={18} /><div><strong>{it.versions}</strong><p>{it.versionHelp}</p></div></div>
@@ -140,11 +146,12 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
     {showUrl && <Modal title={repository ? it.repositoryChooseTitle : it.importUrl} onClose={() => { if (!busy.current) { setShowUrl(false); setRepository(null); } }}>
       {repository ? <form className="system-import-dialog" onSubmit={e => { e.preventDefault(); void run(fromRepository); }}>
         <div className="system-import-dialog-fields">
+        {importError && <p role="alert" className="error-text">{importError}</p>}
         <section className="import-repository-step">
         <h3>{repository.systems.length ? it.repositorySystemStep : it.repositoryFile}</h3>
-        <p>{repository.systems.length ? it.repositoryBundleHelp : it.repositoryHelp}</p>
+        <p>{!repository.systems.length ? it.repositoryHelp : sourceSystem && compiledOnly.has(sourceSystem.id) ? it.pathfinderBundleHelp : it.repositoryBundleHelp}</p>
         <label className="field"><span>{repository.systems.length ? it.repositorySystem : it.repositoryFile}</span><select value={repositoryPath} disabled={loading} onChange={e => {
-          setRepositoryPath(e.target.value); setRepositoryUpload(null); setRepositoryLocalKey('');
+          setRepositoryPath(e.target.value); setRepositoryUpload(null); setRepositoryLocalKey(''); setImportError('');
         }}>
           {repository.systems.length ? repository.systems.map(system => <option key={system.id} value={system.id}>{system.name} · v{system.version}</option>)
             : repository.snapshot.files.map(file => <option key={file.path} value={file.path}>{file.path} · {file.size} B</option>)}
@@ -152,8 +159,8 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
         </section>
         {sourceSystem && <>
           <section className="import-repository-step">
-          <h3>{it.repositoryFileStep}</h3>
-          <p>{matchingSystems.length ? it.repositoryReuseHelp : it.repositoryLocalHelp}</p>
+          <h3>{compiledOnly.has(sourceSystem.id) ? it.pathfinderFileStep : it.repositoryFileStep}</h3>
+          <p>{matchingSystems.length ? it.repositoryReuseHelp : compiledOnly.has(sourceSystem.id) ? it.pathfinderLocalHelp : it.repositoryLocalHelp}</p>
           {matchingSystems.length > 0 && <label className="field"><span>{it.repositoryLocalSystem}</span>
             <select disabled={loading} value={repositoryUpload ? '' : localSystem?.key ?? ''} onChange={e => {
               setRepositoryUpload(null); setRepositoryLocalKey(e.target.value);
@@ -163,8 +170,8 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
             </select>
           </label>}
           {repositoryUpload && <p>{it.repositoryCompiledFile}: <strong>{repositoryUpload.source}</strong></p>}
-          <details className="import-advanced" open={compiledOnly.has(sourceSystem.id) || undefined}><summary>{it.repositorySourceAdvanced}</summary>
-          {compiledOnly.has(sourceSystem.id) && <p className="muted">{it.pathfinderHelp}</p>}
+          <details className="import-advanced" open={compiledOnly.has(sourceSystem.id) || undefined}><summary>{compiledOnly.has(sourceSystem.id) ? it.pathfinderSourceAdvanced : it.repositorySourceAdvanced}</summary>
+          {compiledOnly.has(sourceSystem.id) && <p className="muted">{it.pathfinderSourceHelp}</p>}
           <input ref={repositoryFile} type="file" accept=".json,.rpg,application/json,application/gzip" className="sr-only"
             aria-label={it.repositoryCompiledFile} disabled={loading} onChange={e => {
               const f = e.target.files?.[0]; e.target.value = '';
@@ -177,9 +184,11 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
                 setRepositoryUpload(prepared);
               }));
             }} />
-          <div className="button-row"><button className="button secondary" type="button" disabled={loading}
-            onClick={() => repositoryFile.current?.click()}>{it.repositoryChooseSystem}</button>
-            {systemDownload && <a className="link-button" href={systemDownload} target="_blank" rel="noopener noreferrer">{it.repositoryDownloadSystem}</a>}
+          <div className="button-row">
+            {systemDownload && <a className="link-button" href={systemDownload} target="_blank" rel="noopener noreferrer">
+              {compiledOnly.has(sourceSystem.id) ? it.pathfinderDownload : it.repositoryDownloadSystem}</a>}
+            <button className="button secondary" type="button" disabled={loading}
+              onClick={() => repositoryFile.current?.click()}>{compiledOnly.has(sourceSystem.id) ? it.pathfinderUpload : it.repositoryChooseSystem}</button>
           </div>
           </details>
           {localSystem && <p className="repository-ready" role="status">{it.repositoryReady}</p>}
@@ -192,9 +201,11 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
         {loading && <p role="status">{catalogProgress || it.loading}</p>}
         </div>
         <div className="modal-actions"><button className="button secondary" type="button" disabled={loading} onClick={() => setRepository(null)}>{it.repositoryChange}</button>
-          <button className="button primary" disabled={loading}>{loading ? it.loading : repository.systems.length ? it.repositoryLoadBundle : it.repositoryLoad}</button></div>
+          <button className="button primary" disabled={loading || Boolean(sourceSystem && compiledOnly.has(sourceSystem.id) && !localSystem)}>
+            {loading ? it.loading : repository.systems.length ? it.repositoryLoadBundle : it.repositoryLoad}</button></div>
       </form> : <form className="system-import-dialog" onSubmit={e => { e.preventDefault(); void run(fromUrl); }}>
         <div className="system-import-dialog-fields">
+        {importError && <p role="alert" className="error-text">{importError}</p>}
         <p className="import-link-intro">{it.importLinkIntro}</p>
         <ul className="import-link-help"><li>{it.importDirectLink}</li><li>{it.importRepositoryLink}</li></ul>
         <label className="field"><span>{it.url}</span><input type="text" inputMode="url" autoCapitalize="none" spellCheck={false} value={url} disabled={loading} onChange={e => setUrl(e.target.value)} placeholder="https://github.com/owner/repository.git" required /></label>

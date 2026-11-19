@@ -564,11 +564,11 @@ test('URL imports report HTTP and CORS errors and import a permitted JSON respon
   await page.getByRole('button', { name: copy.importUrl }).click();
   await page.getByLabel('URL del sistema o repository GitHub').fill('https://fixtures.polysheet.test/missing.json');
   await page.getByRole('button', { name: 'Carica anteprima' }).click();
-  await expect(page.getByRole('alert')).toContainText('HTTP 404');
+  await expect(page.locator('p.error-text[role=alert]')).toContainText('HTTP 404');
   await page.route('https://fixtures.polysheet.test/cors.json', route => route.abort('failed'));
   await page.getByLabel('URL del sistema o repository GitHub').fill('https://fixtures.polysheet.test/cors.json');
   await page.getByRole('button', { name: 'Carica anteprima' }).click();
-  await expect(page.getByRole('alert')).toContainText('CORS');
+  await expect(page.locator('p.error-text[role=alert]')).toContainText('CORS');
   await page.route('https://fixtures.polysheet.test/system.json', route => route.fulfill({ status: 200, body: demoOriginal, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' } }));
   await page.getByLabel('URL del sistema o repository GitHub').fill('https://fixtures.polysheet.test/system.json');
   await page.getByRole('button', { name: 'Carica anteprima' }).click();
@@ -577,7 +577,8 @@ test('URL imports report HTTP and CORS errors and import a permitted JSON respon
   await expect(page.getByRole('heading', { name: 'Sentieri', exact: true })).toBeVisible();
 });
 
-for (const id of ['5e', '5e2024', 'pf2e']) {
+// PF2e cannot be prepared from its public source; pf2e-guided-import.spec.ts covers its compiled-file flow.
+for (const id of ['5e', '5e2024']) {
   test(`repository link imports ${id} and catalog originals with preview, private assignment and offline restore`, async ({ page, context }) => {
     const commit = '1'.repeat(40), treeSha = '2'.repeat(40);
     const files = new Map<string, string>();
@@ -709,7 +710,7 @@ test('GitHub clone URL discovers files, validates selection and retains an immut
   await expect(page.getByLabel('File di sistema nel repository').locator('option')).toHaveCount(2);
   await page.getByLabel('File di sistema nel repository').selectOption('a/system.json');
   await page.getByRole('button', { name: 'Carica file selezionato' }).click();
-  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(page.locator('p.error-text[role=alert]')).toBeVisible();
   await expect(page.getByRole('dialog', { name: 'Prima di importare' })).not.toBeVisible();
   await expect(page.locator('.system-card')).toHaveCount(0);
   await page.getByLabel('File di sistema nel repository').selectOption('5e/system.rpg');
@@ -747,13 +748,13 @@ test('GitHub discovery reports rate limits, missing repositories and authoring-o
   await page.getByRole('button', { name: copy.importUrl }).click();
   await page.getByLabel('URL del sistema o repository GitHub').fill('git@github.com:owner/repo.git');
   await page.getByRole('button', { name: 'Carica anteprima' }).click();
-  await expect(page.getByRole('alert')).toContainText('Limite di richieste GitHub');
+  await expect(page.locator('p.error-text[role=alert]')).toContainText('Limite di richieste GitHub');
   status = 404;
   await page.getByRole('button', { name: 'Carica anteprima' }).click();
-  await expect(page.getByRole('alert')).toContainText('non trovato o non pubblico');
+  await expect(page.locator('p.error-text[role=alert]')).toContainText('non trovato o non pubblico');
   status = 200;
   await page.getByRole('button', { name: 'Carica anteprima' }).click();
-  await expect(page.getByRole('alert')).toContainText('Nessun system.rpg');
+  await expect(page.locator('p.error-text[role=alert]')).toContainText('Nessun system.rpg');
   await expect(page.locator('.system-card')).toHaveCount(0);
 });
 

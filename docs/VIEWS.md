@@ -4,6 +4,17 @@ This is a tested subset, not full upstream UI/event compatibility. Source
 documents and version pins remain immutable. All application controls are
 Italian; imported labels retain their original language.
 
+## Selective 5e monsters
+
+In **Risorse → Importa cataloghi → Cerca mostri 5e**, search the original
+repository file names, then review and confirm one downloaded original.
+The centered picker reuses 50-item local pagination, a scrollable body and
+stable Cancel footer. Spaces also match underscores in file-name searches.
+Search/preview/cancel write nothing. Assigning the installed template in a
+companion form stages a private graph until the enclosing Save; encounter
+addition creates its own separate graph. No remote portraits are requested.
+See [combat use](COMBAT.md#use) and the [5e audit](DND5E_AUDIT.md) for limits.
+
 ## Guided local setup
 
 **Avanza livello** opens a centered, local-only level/HP assistant on compatible
@@ -13,9 +24,16 @@ higher-level character, create the first-level character and then advance it.
 The imported HP mode controls roll/average/max; current HP is not healed.
 New-class preview creates nothing in storage. Multiclass prerequisites require
 an explicit manual acknowledgement; no automatic ability checks are claimed.
+For compatible 5e sources, **Capacità selezionabili** offers Fighting Style,
+Artificer Infusions and analogous declared feature choices before confirmation.
+Native checkbox groups show the source allowance and keep selections local.
+Drafts are scoped to the class, target level and subclass, never applied to a
+different advancement; reopening seeds persisted selections. Source availability and limits are rechecked
+on confirmation. Other feature selections and other classes remain untouched.
 The separate-choices checklist and its acknowledgement remain visible because
-proficiency, ASI/feat, spell and infusion callbacks are not executed here.
-Save applies class/HP changes atomically; Cancel never rolls or writes.
+general proficiency, ASI/feat, spell and infusion effect callbacks do not run here.
+Save applies class/HP and submitted feature selections atomically; Cancel never
+rolls or writes. Invalid or stale requests leave every record unchanged.
 Reopening uses persisted values, not a cached advancement.
 
 **Nuovo personaggio** collects a name, optional compatible class/origin catalogs

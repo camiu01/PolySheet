@@ -1,5 +1,5 @@
 /** @file Catalog entries sharing a name are told apart by their real import source. */
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { expect, it } from 'vitest';
 import type { ResourceInstance } from '../src/domain/model';
 import { LocalResourcePicker, duplicateSourceLabels } from '../src/ui/LocalResourcePicker';
@@ -43,4 +43,13 @@ it('prefers upstream source-book codes over file names and lists options alphabe
   expect(Object.fromEntries(duplicateSourceLabels(resources))).toEqual({ a: 'MOM' });
   render(<LocalResourcePicker busy={false} onSelect={() => undefined} resources={resources} />);
   expect(screen.getAllByRole('button').map(button => button.textContent)).toEqual(['Aarakocra', 'TortleMOM', 'Tortle']);
+});
+
+it('finds multiword source file names without changing their labels', () => {
+  render(<LocalResourcePicker busy={false} onSelect={() => undefined} resources={[
+    record('a', 'monster_ancient_black_dragon.json'), record('b', 'Goblin')
+  ]} />);
+  fireEvent.change(screen.getByRole('searchbox'), { target: { value: '  ANCIENT   black_dragon  ' } });
+  expect(screen.getByRole('button', { name: 'monster_ancient_black_dragon.json' })).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Goblin' })).toBeNull();
 });

@@ -67,6 +67,8 @@ export async function advanceCharacter(characterId: string, expectedRevision: nu
     await saveResource(plan.wrapper, database);
     if (plan.values.base_hp !== character.values.base_hp) await setCharacterValue(characterId, 'base_hp', plan.values.base_hp, database);
     await setCharacterValue(characterId, 'temp_last_level_up_class_id', plan.values.temp_last_level_up_class_id, database);
+    if (JSON.stringify(plan.values.selected_selectable_feature_ids) !== JSON.stringify(character.values.selected_selectable_feature_ids))
+      await setCharacterValue(characterId, 'selected_selectable_feature_ids', plan.values.selected_selectable_feature_ids, database);
     const saved = (await database.characters.get(characterId))!;
     const after = progressionSnapshot(system, saved, await database.resources.where('systemKey').equals(system.key).toArray(), wrapperId);
     return { level: plan.level, maxHp: plan.maxHp, baseHpGain: plan.baseHpGain, summary: progressionSummary(snapshot, after) };

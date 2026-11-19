@@ -6,6 +6,7 @@ import { importCatalogUrl } from '../importing/catalog-url';
 import { installCatalogs, installRepositoryBundle } from '../persistence/catalog';
 import { it } from './it';
 import { Modal, Warning, readFile, type Run } from './shared';
+import { DndCatalogImport } from './DndCatalogImport';
 
 /** Show a preview before any catalog data is written. */
 export function CatalogImport({ system, run }: { system: StoredSystem; run: Run }) {
@@ -37,6 +38,8 @@ export function CatalogImport({ system, run }: { system: StoredSystem; run: Run 
     </form>
     <p className="muted">{it.catalogHelp}</p>
     <button className="button secondary" disabled={loading} onClick={() => file.current?.click()}>{it.importCatalog}</button>
+    <DndCatalogImport system={system} run={run} disabled={loading} onBusyChange={setLoading}
+      onPreview={preview => { setRemote(false); setPreviews([preview]); }} />
     <input ref={file} type="file" multiple accept=".json,application/json" className="sr-only" aria-label={it.catalogFiles} disabled={loading} onChange={event => {
       const files = Array.from(event.target.files ?? []); event.target.value = '';
       if (!files.length) return;
@@ -54,7 +57,7 @@ export function CatalogImport({ system, run }: { system: StoredSystem; run: Run 
       <Warning>{it.catalogWarning}</Warning>
       <ul>{previews.map(p => <li key={p.rootId}>{p.resources[0].name} · {p.resources[0].definitionId}
         {p.resources[0].catalogIssue && <p className="error-text">{it.catalogUnavailable}: {p.resources[0].catalogIssue}</p>}
-        <p className="muted">{p.resources[0].catalogSource?.source}</p>
+        <p className="resource-source-label">{p.resources[0].catalogSource?.source}</p>
       </li>)}</ul>
       <p>{previews.length} {it.catalogInstances}</p>
       <div className="modal-actions">

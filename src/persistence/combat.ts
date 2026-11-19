@@ -1,8 +1,10 @@
 /** @file Atomic encounter commands. Reloading a record never reruns on_create. */
-import { jsonValue, matchesType, type Combat, type Combatant } from '../domain/model';
+import { jsonValue, matchesType, MAX_STORED_RESOURCES, type Combat, type Combatant } from '../domain/model';
 import { checkReferences } from '../domain/references';
 import { advanceCombat, combatContext, eligibleCombatants, initializeCombatant, initiativeOrder, rollInitiatives } from '../engine/combat';
 import { db, initialValues } from './db';
+import { prepareAssignment, privateGraph } from './catalog';
+import { it } from '../ui/it';
 
 export type CombatCommand =
   | { type: 'add'; typeId: string; sourceId?: string }
@@ -27,8 +29,10 @@ export async function createCombat(systemKey: string, name: string, database = d
     await database.combats.add(combat); return combat;
   });
 }
-/** Re-read all affected records and commit the entire command or none of it. */
+/** Re-read all affected records; monster catalog copies and initialization commit together or not at all. */
 export async function commandCombat(id: string, command: CombatCommand, database = db, random?: (faces: number) => number) {
+  const selected = command.type === 'add' && command.sourceId ? await database.resources.get(command.sourceId) : undefined;
+  const prepared = selected?.catalogSource && selected.definitionId === 'monster' ? await prepareAssignment(selected.id, database) : undefined;
   await database.transaction('rw', [database.combats, database.systems, database.characters, database.resources], async () => {
     const combat = await database.combats.get(id);
     const system = combat ? await database.systems.get(combat.systemKey) : undefined;
@@ -49,8 +53,17 @@ export async function commandCombat(id: string, command: CombatCommand, database
         if (combat.combatants.some(f => f.characterId === command.sourceId)) throw new Error('Personaggio già presente nell’incontro.');
         fighter.characterId = command.sourceId;
       } else if (type.template_resource_id) {
-        const source = resources.find(r => r.id === command.sourceId && r.definitionId === type.template_resource_id);
-        if (!source || source.catalogSource) throw new Error('Risorsa di partenza non compatibile.');
+        let source = resources.find(r => r.id === command.sourceId && r.definitionId === type.template_resource_id);
+        if (!source || source.catalogSource && (!prepared || !type.instance_resource_id)) throw new Error('Risorsa di partenza non compatibile.');
+        if (source.catalogSource) {
+          if (!prepared?.materialized || prepared.system.key !== system.key || JSON.stringify(source) !== JSON.stringify(prepared.template))
+            throw new Error(it.missingResource);
+          const graph = privateGraph(system, prepared.materialized.rootId, prepared.materialized.resources);
+          if (await database.resources.count() + graph.additions.length > MAX_STORED_RESOURCES) throw new Error(it.resourceListLimit);
+          await database.resources.bulkAdd(graph.additions);
+          resources.push(...graph.additions);
+          source = graph.additions.find(r => r.id === graph.rootId)!;
+        }
         if (type.instance_resource_id) fighter.templateId = source.id; else fighter.resourceId = source.id;
       } else if (!type.instance_resource_id) throw new Error('Il combattente non definisce una sorgente né un’istanza.');
       if (type.instance_resource_id) {

@@ -4,8 +4,9 @@ import { createEvaluator, RuntimeResource } from './formulas';
 import { resolveCharacterOverrides } from './overrides';
 import { rollDice } from './dice';
 import { it } from '../ui/it';
+import { stageSelectableFeatures, type SelectableFeatureChoice } from './progression-selectable';
 
-/** A reviewed command changes one class; other source choices remain an explicit checklist. */
+/** A reviewed command changes one class and its selected features; other choices remain explicit. */
 export interface ProgressionRequest {
   wrapperId: string;
   targetLevel: number;
@@ -14,6 +15,8 @@ export interface ProgressionRequest {
   expectedClassLevel?: number;
   /** New value of the imported `hit_point_mode` choice, saved before the HP formulas run. */
   hitPointMode?: string;
+  /** Draft feature selections committed atomically with this advancement. */
+  selectableFeatures?: SelectableFeatureChoice[];
 }
 
 /** The imported HP methods (5e `hit_point_modes`: roll, average, max); empty when the system has none. */
@@ -151,7 +154,7 @@ function integer(value: unknown): number {
   return value;
 }
 
-/** Stage permanent manual advancement using imported increments, HP formulas and subclass identities.
+/** Stage permanent advancement using imported increments, HP formulas, subclass and feature identities.
  * @remarks This deliberately does not emulate addToStat override aggregation or execute popup callbacks.
  * Current HP stays unchanged, as in the inspected source branch. No randomness occurs without this command.
  */
@@ -175,6 +178,8 @@ export function planProgression(system: StoredSystem, character: Character, reso
     throw new Error(it.progressionArchetypeRequired);
   if (wrapper.values.archetype_id != null && request.archetypeId != null && request.archetypeId !== wrapper.values.archetype_id)
     throw new Error(it.progressionArchetypeRequired);
+  stageSelectableFeatures(system, { ...character, values }, staged, wrapper, request.selectableFeatures ?? [],
+    selected.level + request.targetLevel - start - (newClass ? 1 : 0), request.archetypeId);
   for (let next = start + 1; next <= request.targetLevel; next++) {
     const isNew = newClass && next === start + 1;
     if (!isNew) {

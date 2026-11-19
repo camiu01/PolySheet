@@ -1,4 +1,4 @@
-/** @file Explicit level/HP assistance, with unexecuted source choices kept visible. */
+/** @file Atomic level/HP and selectable-feature assistance, with remaining source choices visible. */
 import { useRef, useState } from 'react';
 import type { Character, ResourceInstance, StoredSystem } from '../domain/model';
 import { abilityIncreaseLevels, abilityIncreaseOptions, hitPointModes, levelChoiceCommit, pendingLevelChoices, progressionArchetypes, progressionClasses, progressionContract, progressionEvaluator, progressionPreview,
@@ -7,6 +7,8 @@ import { advanceCharacter, applyAbilityIncrease, applyLevelChoices, previewNewCl
 import { Modal, Warning } from './shared';
 import { it } from './it';
 import { RenderView, type RenderContext } from './renderer';
+import { selectableProgressionFeatures } from '../engine/progression-selectable';
+import { ProgressionFeatures } from './ProgressionFeatures';
 
 /** Keep drafts local until one guarded command; closing never advances or rolls dice. */
 export function CharacterProgression({ character, system, resources, onClose, sheet }: {
@@ -25,6 +27,7 @@ export function CharacterProgression({ character, system, resources, onClose, sh
   const [busy, setBusy] = useState(false), [loading, setLoading] = useState(false);
   const [error, setError] = useState(''), [result, setResult] = useState<{ text: string; summary: ProgressionSummary; increases: number[] }>();
   const [hpMode, setHpMode] = useState<string>();
+  const [featureDrafts, setFeatureDrafts] = useState<{ key: string; values: Record<string, string[]> }>({ key: '', values: {} });
   const lock = useRef(false), selection = useRef(0);
   const close = () => { if (!lock.current) { selection.current++; onClose(); } };
   try {
@@ -40,6 +43,11 @@ export function CharacterProgression({ character, system, resources, onClose, sh
     const staged = multiclass ? preview : { character: snapshot, resources, wrapperId: selected.record.id };
     const options = staged && progressionArchetypes(system, staged.character, staged.resources, staged.wrapperId,
       (multiclass ? 0 : selected.level) + total - level);
+    const featureKey = `${staged?.wrapperId}:${total}:${archetype}`;
+    const drafts = featureDrafts.key === featureKey ? featureDrafts.values : {};
+    const features = !result && rolled && staged && Number.isSafeInteger(total) && total > level && total <= contract.maxLevel
+      ? selectableProgressionFeatures(system, staged.character, staged.resources, staged.wrapperId,
+        (multiclass ? 0 : selected.level) + total - level, archetype || null) : [];
     async function selectTemplate(id: string) {
       const token = ++selection.current;
       setTemplate(id); setPreview(undefined); setArchetype(''); setError(''); setLoading(!!id);
@@ -66,6 +74,7 @@ export function CharacterProgression({ character, system, resources, onClose, sh
           void advanceCharacter(snapshot.id, snapshot.revision, {
             wrapperId: selected.record.id, expectedClassLevel: selected.level, targetLevel: total,
             archetypeId: archetype || null, acknowledgeChoices: acknowledged,
+            selectableFeatures: Object.entries(drafts).map(([featureId, selected]) => ({ featureId, selected })),
             ...(hpMode !== undefined && hpMode !== imported ? { hitPointMode: hpMode } : {}),
             ...(multiclass ? { newClassId: template, manualPrerequisites: manual } : {})
           }).then(saved => setResult({ text: `${it.progressionSaved} ${it.classLevel}: ${saved.level} · PF max ${saved.maxHp} (+${saved.baseHpGain})`, summary: saved.summary, increases }))
@@ -104,6 +113,8 @@ export function CharacterProgression({ character, system, resources, onClose, sh
             {mode === 'roll' && <p className="muted">{it.progressionRoll}</p>}
             {!multiclass && <ProgressionGains classLevel={selected.level + total - level}
               read={() => progressionPreview(system, snapshot, resources, selected.record.id, selected.level + total - level)} />}
+            <ProgressionFeatures features={features} drafts={drafts} onChange={(featureId, selected) =>
+              setFeatureDrafts({ key: featureKey, values: { ...drafts, [featureId]: selected } })} />
             <h3>{it.progressionChecklist}</h3><Warning>{it.progressionChoices}</Warning>
             <label className="check-field"><input type="checkbox" checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)} />{it.progressionAcknowledge}</label>
           </fieldset></div>

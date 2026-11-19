@@ -11,6 +11,7 @@ import { RenderView } from './renderer';
 import { Empty, Modal, PageHeading, SystemSelect, Warning, type Run } from './shared';
 import { useUi } from './store';
 import { it } from './it';
+import { isDndCatalogSystem } from '../importing/dnd-catalogs';
 
 /** List and reopen persisted encounters. No initialization runs on read. */
 export function CombatTracker({ systems, system, characters, run }: {
@@ -52,7 +53,8 @@ function CombatDetail({ system, combat, resources, characters, run }: {
     const definition = context.definition;
     const chosen = definition.combatant_types.find(t => t.id === typeId) ?? definition.combatant_types[0];
     const sources = chosen?.template_resource_id === 'character' ? characters
-      : resources.filter(r => !r.catalogSource && r.definitionId === chosen?.template_resource_id);
+      : resources.filter(r => r.definitionId === chosen?.template_resource_id && !r.catalogIssue
+        && (r.catalogSource ? r.definitionId === 'monster' && !!chosen?.instance_resource_id : r.catalogGroup !== r.id));
     const source = sources.find(s => s.id === sourceId) ?? sources[0];
     const order = initiativeOrder(combat);
     const eligible = eligibleCombatants(system, combat);
@@ -78,6 +80,7 @@ function CombatDetail({ system, combat, resources, characters, run }: {
         <button className="button secondary" disabled={!chosen || (!!chosen.template_resource_id && !source)}
           onClick={() => chosen && execute({ type: 'add', typeId: chosen.id, sourceId: source?.id })}>{it.addCombatant}</button>
       </div>}
+      {chosen?.template_resource_id === 'monster' && isDndCatalogSystem(system.definition.id) && <p className="muted">{it.monsterWhere}</p>}
       <div className="combat-toolbar">
         <button className="button secondary" disabled={!combat.combatants.length || combat.status === 'active'} onClick={() => execute({ type: 'roll' })}>{it.rollInitiative}</button>
         <button className="button primary" disabled={!combat.combatants.length || order.unresolved || combat.status === 'active'} onClick={() => execute({ type: 'start' })}>{it.startCombat}</button>

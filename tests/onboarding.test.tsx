@@ -31,17 +31,15 @@ it('requires a deliberate game choice and labels the demo before showing a creat
   expect(screen.getByRole('option', { name: /Sentieri.*Demo · non D&D/ })).toBeInTheDocument();
 });
 
-it('offers only verified D&D imports and explains unavailable games without promising rules support', () => {
+it('offers the same preparation entry for D&D and guided PF2e without promising automatic PF2e download', () => {
   const onChoose = vi.fn();
   const { rerender } = render(<GameChoices onChoose={onChoose} busy={false} />);
   for (const [name, id] of [[copy.game2014, '5e'], [copy.game2024, '5e2024']]) {
     fireEvent.click(screen.getByRole('button', { name: `${copy.gamePrepare} · ${name}` }));
     expect(onChoose).toHaveBeenLastCalledWith(id);
   }
-  // PF2e: the publisher's compiled file is a plain download, then the local file picker.
-  expect(screen.getByRole('link', { name: `${copy.pathfinderDownload} · Pathfinder 2e` }).getAttribute('href'))
-    .toBe('https://d2dmd8x0lyn9l8.cloudfront.net/pf2e/system.rpg');
-  fireEvent.click(screen.getByRole('button', { name: `${copy.pathfinderUpload} · Pathfinder 2e` }));
+  expect(screen.getByText(copy.pathfinderHelp)).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: `${copy.gamePrepare} · Pathfinder 2e` }));
   expect(onChoose).toHaveBeenLastCalledWith('pf2e');
   expect(screen.queryByRole('button', { name: /Daggerheart/ })).toBeNull();
   fireEvent.click(screen.getByText(`${copy.gameUnavailable}: Daggerheart`));
@@ -84,6 +82,14 @@ it('leads an installed game to its characters instead of preparing it again', ()
   fireEvent.click(screen.getByRole('button', { name: `${copy.useGame} · ${copy.game2014}` }));
   expect(onUse).toHaveBeenCalledWith('5e');
   expect(screen.getByRole('button', { name: `${copy.gamePrepare} · ${copy.game2024}` })).toBeEnabled();
+  expect(onChoose).not.toHaveBeenCalled();
+});
+
+it('opens installed PF2e characters rather than asking for another compiled file', () => {
+  const onChoose = vi.fn(), onUse = vi.fn();
+  render(<GameChoices busy={false} onChoose={onChoose} installed={['pf2e']} onUse={onUse} />);
+  fireEvent.click(screen.getByRole('button', { name: `${copy.useGame} · Pathfinder 2e` }));
+  expect(onUse).toHaveBeenCalledWith('pf2e');
   expect(onChoose).not.toHaveBeenCalled();
 });
 

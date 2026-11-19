@@ -16,8 +16,13 @@
 - [Backgrounds and subraces](COMPATIBILITY.md#background-and-subrace-selection)
   and [Druid snapshots](COMPATIBILITY.md#druid-removal-history): exact assignment contracts.
 - [Combat](COMBAT.md#use): encounters, initiative and turn controls.
+- [5e monsters](VIEWS.md#selective-5e-monsters): selective search/import for
+  companion assignments and separate encounter copies.
 
 ## Check compatibility
+
+- [Current D&D 5e audit](DND5E_AUDIT.md): tested workflows, missing catalogs,
+  partial rules and verified source mismatches.
 
 - [Remaining work](../todo.md): current priorities, reported diagnostic groups,
   completed work and verification gaps.

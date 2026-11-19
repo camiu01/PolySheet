@@ -404,7 +404,7 @@ export function diagnose(system: SystemDefinition): Diagnostic[] {
         const e = object(value);
         if (e.type === 'sequence') {
           fields(e, ['type', 'effects', 'synchronous'], at);
-          if (e.synchronous !== true) report(at, 'Inizializzazione supportata solo con synchronous=true esplicito.');
+          if (e.synchronous !== undefined && e.synchronous !== true) report(at, 'Inizializzazione supportata solo con synchronous=true, anche implicito.');
           if (!Array.isArray(e.effects)) report(at, 'Lista effetti richiesta', 'error');
           else e.effects.forEach((child, n) => effect(child, `${at}.effects[${n}]`));
         } else if (e.type === 'setStat') {

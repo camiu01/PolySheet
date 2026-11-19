@@ -25,8 +25,13 @@ Save status is visible and announced; an operation failure is not labeled saved.
 `src/engine/progression.ts` derives guided manual class/HP increments from the
 imported progression branches. `src/persistence/progression.ts` prepares new
 class graphs outside its write transaction and atomically validates/commits
-latest-owner class levels, subclass and base HP. It is not an override/effect
-interpreter. `CharacterProgression` keeps all inputs local until confirmation,
+latest-owner class levels, subclass, base HP and submitted feature selections.
+`src/engine/progression-selectable.ts` reads the owning wrapper's real feature
+references, source availability/limits and parent-derived selection destination.
+The assistant stages checkbox choices rather than writing calculated selects;
+the transaction replaces only each chosen feature's IDs and preserves other
+features/classes. It is not an override/effect interpreter.
+`CharacterProgression` keeps all inputs local until confirmation,
 requires acknowledgement of remaining choices and never heals current HP.
 
 `src/engine/ability-setup.ts` implements the explicit D&D generation helper;
@@ -87,6 +92,7 @@ Import-time bindings include only real, unambiguous inputs, not display labels.
 | `src/importing/repository.ts`, `src/importing/catalog.ts` | Source metadata discovery and strict, bounded catalog templates; no proxy |
 | `src/importing/source-repository.ts`, `src/importing/rpgscript/` | Commit-pinned JSON/RPGScript retrieval, bounded data-AST compilation and split-source composition; no imported code execution |
 | `src/importing/catalog-url.ts` | Direct JSON, commit-pinned GitHub file/folder and confined web-index catalog previews |
+| `src/importing/monsters.ts`, `src/ui/MonsterImport.tsx` | Metadata-only 5e monster search and one selected commit-pinned original through normal catalog review |
 | `src/persistence/catalog.ts` | Atomic compact templates, private character graphs and explicit manual assignment |
 | `src/engine/formulas.ts` | React-independent formula registry and bounded evaluator |
 | `src/engine/character-origins.ts` | Declared race/subrace contract and upstream-identity choices |
@@ -256,14 +262,14 @@ snapshot retries the view; no source values are fabricated to make it render.
 | Dependency chains | Maximum 64 before import error |
 | Roll | 1–100 dice; one expression and one signed modifier |
 | Global roll history | User-configurable 1–1,000 |
-| Backup records | 100 systems, 10,000 characters, 10,000 resources, 1,000 rolls, 1,000 encounters |
+| Backup records | 100 systems, 10,000 characters, 100,000 resources, 1,000 rolls, 1,000 encounters |
 | Encounter | 100 combatants, 100,000 rounds, 10,000 passes; initiative magnitude at most 1 billion |
 | Initialization | 1,000 effects, nesting 32, 100 roll expressions; atomic or no added instance |
 | Computed collections/text | 10,000 elements / 1 MiB text |
 | Local photo | 1 MiB PNG/JPEG; dimensions 1–4,096 per axis; remote URLs never requested |
 | URL import | HTTPS, no credentials, omitted cookies/referrer; 15 s timeout; streamed size bound |
 | GitHub discovery | 8 MiB per response; 20,000 tree entries, 100 candidates; complete tree required; no clone |
-| Repository catalogs | 1,000 files, 24 MiB total source bytes, four simultaneous reads; each file still at most 8 MiB |
+| Repository catalogs | 2,000 files, 24 MiB total source bytes, four simultaneous reads; each file still at most 8 MiB |
 | Resource links | Same remote batch/file caps; web index bytes included, sequential unknown-size reads and no recursive indexes |
 | Local catalog batch | 100 files, 8 MiB total |
 | Input text | Generally 10,000 characters; source `max_length` can tighten supported text inputs |
@@ -289,6 +295,10 @@ a schema reset. A template stores one exact original/digest, no mutable base
 graph, and any assignment-blocking diagnostic. Assignment materializes a private,
 bounded graph with remapped local references and retained upstream IDs.
 Templates cannot be edited or used directly as mutable references/combat sources.
+Explicit instanced-combat addition may materialize a compatible monster template
+into a new private graph; that graph and initialization share one transaction.
+The 5e bestiary search downloads only one chosen original after metadata
+discovery, rather than exceeding the existing remote-batch byte budget.
 Backup validation rehashes/reparses originals, checks template identity/shape and
 recomputes diagnostics. Bundle installation also checks the projected backup
 inside the transaction; failure rolls back both system and templates.

@@ -3,6 +3,130 @@
 [Documentation index](README.md) · [How to run checks](DEVELOPMENT.md) ·
 [Historical records](VERIFICATION_HISTORY.md) · [12:37 checkpoint](VERIFICATION_2026-11-16_1237.md)
 
+## Selective 5e monsters and compatibility audit, 2026-11-19
+
+- Reproduced the missing-monster path against the unchanged official Goblin:
+  `monster` was not an accepted catalog root, conventional discovery excluded
+  its `.json` filename, source photos omitted a nullable member, and combat
+  initialization incorrectly required explicit sequence synchrony. Regressions
+  now preserve the original and exercise the documented default, not a source
+  rewrite. Evidence: [monster contracts](COMPATIBILITY.md#selective-5e-monsters-2026-11-19).
+- Metadata-only search covers 1,416 pinned files without downloading their
+  29,301,904 bytes together. A local audit prepared every monster against
+  official 5e 0.9.1: **1,416 typed templates, zero assignment blockers**.
+  Inspected the complete 141-warning/zero-error diagnostic array. The
+  [5e audit](DND5E_AUDIT.md) separates missing workflows, partial effects,
+  unverified behavior and a confirmed source-definition type mismatch.
+  Successful mapping is not full monster view/action compatibility.
+- Always-on tests cover metadata-only discovery, exact commit/file/size guards,
+  strict photo validation without image requests, separate sheet/encounter
+  graphs, failed-initializer rollback and backup/HP isolation. The optional
+  unchanged Goblin test executed: name `Goblin #1`, AC 15, HP 6 for two d6
+  results of 3. Multiword search matches underscores without relabeling files.
+- Production desktop/mobile targeted acceptance: **2 passed, 15.1 seconds**.
+  Actual controls exercise pagination/focus, centered geometry/no horizontal
+  overflow/stable footer, preview cancellation, installation, companion
+  cancel/save, two isolated Goblins and byte-identical originals after offline
+  reopening. HTTP 503 initially reproduced a hidden error behind the modal;
+  it now stays visible inside the picker and retry preserves the query and
+  unchanged storage. No remote monster image request occurs.
+- Early acceptance failures were test-only: a text locator assumed a separate
+  leaf node, and three independent IndexedDB reads could span character
+  creation. Fixed the locator, waited for completed creation/save and read
+  all three stores in one snapshot transaction. A subsequent check caught
+  Playwright-only `exact` options in a Testing Library query; removed them.
+  An intermediate full browser run was deliberately stopped for the modal
+  error fix; it is not reported as a completed suite.
+- Live Chrome, isolated synthetic data on production localhost 4184 `/`:
+  searched the real public GitHub metadata, downloaded/reviewed/installed
+  Goblin, added two encounter instances and changed only the first HP to 2
+  (the second retained 6, both AC 15). Desktop reopening retained those values.
+  Saved a Goblin companion on the existing Fighter 2 / Artificer 2 QA character;
+  reload retained it and both classes. No storage reset or import migration.
+- Opened final desktop/mobile picker and combat captures under
+  `.reference/ui-review/`. Inline finish review: **ship**, limited to these
+  surfaces. No new review agent was started under the low-disk constraint;
+  this is not an independent review. DESIGN.md remains unchanged because the
+  addition reuses its typography, palette, dialogs and controls.
+  Source-only Impeccable detection exited 0 on four UI files, explicitly
+  skipping parsed-page contrast/type rules. No full accessibility certificate
+  or separate light-theme visual inspection is claimed.
+  Chrome screenshot output to the workspace was denied by the browser tool's
+  root policy; the inspected captures were produced by Playwright instead.
+- Final `npm run check`: **364 passed, 1 skipped, 47 files**;
+  `npm run build`: passed with existing Zod annotation and >500 kB chunk
+  warnings; `npm audit --omit=dev`: **0 vulnerabilities**.
+- Final full production Playwright suite, `PLAYWRIGHT_PORT=4183`,
+  `PLAYWRIGHT_BASE_PATH=/PolySheet/`,
+  `npm run test:e2e -- --max-failures=1`: **101 passed, 3 skipped, 6.1 minutes**.
+  Two skips require the absent user-uploaded HP/AC fixture; the mobile drawer
+  case deliberately skips desktop. The final targeted monster case also passed
+  on both profiles before this full run. No routing, asset, worker or deployment
+  behavior changed, so the full `/` target was not rerun; live manual checks
+  above used `/`. New local documentation links/anchors and `git diff --check`
+  passed.
+- Stopped only the isolated 4184 preview; preserved the user's 4173 preview.
+  No new dependencies, byte/count-limit increases, database/backup format
+  changes, commits or publication. Corrected stale documentation of existing
+  128 MiB backup and 2,000-file remote catalog bounds, without changing code.
+
+## Preconfirmation selectable 5e features, 2026-11-19
+
+- Reproduced ignored Fighting Style selection with the pinned official 5e
+  source: the wrapper retained `[]` instead of `['archery1']`. The assistant
+  now stages source-derived checkbox selections before confirmation and saves
+  them with level/HP changes in the existing transaction. Source evidence and
+  boundaries: [selectable features](COMPATIBILITY.md#selectable-5e-advancement-features-2026-11-19).
+- Real-source regressions cover Archery on the correct class wrapper,
+  invalid/duplicate/excessive/foreign choices with unchanged records, infusion
+  allowances of 4/6/12 at class levels 2/6/20, Radiant Weapon unavailable
+  before 6, reopening, and multiclass selection isolation. Original UI tests
+  cover local drafts, maximum disabling, clearing/replacement, empty groups,
+  accessible names and seeded values without implicit saving.
+- Chrome DevTools, isolated context on production localhost port 4184:
+  imported public 5e/catalogs through the application after file upload was
+  denied by the browser tool's workspace-root policy. Created the synthetic
+  character “QA capacità selezionabili”. On desktop, selected Archery, checked
+  that the other eight styles disabled, canceled and verified unchanged level
+  and selections; reopened and saved Fighter 2. Reload retained Archery.
+- At an emulated 390 × 844 mobile viewport, confirmed the checked saved style,
+  then added Artificer through the actual controls to reach Fighter 2 /
+  Artificer 2. Selected Enhanced Defense, Enhanced Weapon, Repeating Shot and
+  Returning Weapon: counter 4/4, ten remaining options disabled, Radiant Weapon
+  absent. Confirmation and reload retained all four IDs and Fighter's Archery;
+  reopening the Artificer advancement displayed all four checked again.
+  The dialog measured 358 × 796 at (16,24), without horizontal overflow;
+  the footer remained inside it at y=734 while the choices scrolled.
+- Inspected Playwright's desktop/mobile progression captures under
+  `.reference/ui-review/`. Independent read-only finish review returned
+  **ship**, with no material findings; a general worker substituted for the
+  unavailable named reviewer. This is an ordinary extension of DESIGN.md.
+  The Impeccable detector exited 1 on existing pinned Jakarta/type/color
+  advisories and the new 14px legend, which matches the project's source-text
+  scale. No detector suppression or unrelated redesign was applied.
+  A separate Chrome Infusions screenshot request timed out; its interactions,
+  geometry and persisted state were checked, but that capture was not obtained.
+  A mobile form batch also timed out after setting the manual acknowledgement;
+  a fresh snapshot confirmed its state before completing the remaining input.
+- Final `npm run check`: **357 passed, 1 skipped, 46 files**.
+  `npm run build`: passed, retaining the existing Zod annotation and >500 kB
+  chunk warnings. `npm audit --omit=dev`: **0 vulnerabilities**.
+- Production Playwright, `PLAYWRIGHT_PORT=4183`,
+  `PLAYWRIGHT_BASE_PATH=/PolySheet/`,
+  `npm run test:e2e -- --max-failures=1`: **99 passed, 3 skipped, 5.9 minutes**.
+  Two skips require the absent user-uploaded HP/AC fixture; the mobile-only
+  drawer test deliberately skips desktop. An initial run failed because its
+  new assertion inspected another character's first wrapper, not a product
+  failure. Corrected it to follow the created character's class reference;
+  the targeted desktop/mobile run then passed all six cases before the full run.
+- Documentation paths/anchor and `git diff --check` checked. No routing, asset,
+  worker or deployment changes; the full root `/` acceptance target was not
+  rerun, while the manual localhost flow above used `/`. Stopped only the
+  isolated 4184 preview; left the user's 4173 preview untouched.
+  No dependencies, database resets, import migrations, commits or publication.
+  General calculated-select writes, arbitrary parent event writes and
+  automatic infusion/equipment effects remain unsupported.
+
 ## Resource parent scope and progression polish, 2026-11-18
 
 - Reproduced the original official 5e case before the fix: after advancing
@@ -902,3 +1026,78 @@ installed. The scoped inline visual review is retained locally at
   and the form locks. Screenshots checked at desktop and mobile width.
 - `npm run check`: 354 passed, 1 skipped, 45 files. `npm run build`: passed.
 - Production Playwright `/PolySheet/`: 99 passed, 3 skipped (5.8 min).
+
+## 5e and PF2e catalog search for spells and equipment, 2026-11-19
+
+- Catalog search (`src/importing/dnd-catalogs.ts`) now covers `monster`, `spell`,
+  `weapon`, `armor` and `item` for both `5e` and `pf2e`; paths are accepted only
+  inside the installed system's own `systems/<id>/resource_instances/` folder.
+- PF2e local probe (measured, then removed): against the uploaded official
+  `pf2e-system.rpg`, all 2,168 pinned originals prepare with no catalog issues
+  (monster 1,164, spell 794, weapon 81, armor 16, item 113). The two PF2e blockers
+  stay unchanged and are not bypassed: the source parenthesis error at
+  `weapon/stats.rpgs:928:3` and the CORS-blocked official CDN.
+- `tests/dnd-catalogs.test.ts`: 5e and PF2e samples per kind map unchanged;
+  cross-system and non-catalog paths are rejected.
+- `tests/e2e/monster-catalogs.spec.ts` (desktop and mobile): for 5e
+  (spell/weapon/armor/item) and PF2e (all five kinds) selects the kind, finds one
+  file, previews and imports it; only the chosen files are downloaded and the
+  stored originals are unchanged; the other system's file is never listed.
+  Mobile picker screenshots checked.
+- `npm run check`: 382 passed, 1 skipped, 49 files. `npm run build`: passed.
+  Catalog e2e on 4183 under `/PolySheet/`: 6 passed (29.1 s). Full Playwright
+  suite not run: another agent was editing unrelated UI files concurrently.
+
+## PF2e guided copy, inventory catalog choice and final suite, 2026-11-19
+
+- PF2e guided import shows system-specific copy: step 1 and step 2 explain the
+  required compiled upload (no source preparation) and the file section is
+  labelled mandatory, not optional. `pf2e-guided-import.spec.ts` asserts the PF2e
+  texts and the absence of the generic source-preparation texts. Catalog help and
+  the monster hint now name the shared «Cerca mostri, incantesimi e oggetti»
+  action for 5e and PF2e.
+- Character setup inventory opens the catalog list first when imported
+  templates exist and keeps «Nuova risorsa» for manual creation
+  (`dnd-catalog-use.spec.ts`, desktop and mobile screenshots checked).
+- `app.spec.ts`: import errors now also appear inside the open dialog, so
+  assertions target the inline `p.error-text` alert instead of any alert; the
+  PF2e variant of the source-repository test was removed because PF2e
+  intentionally requires the compiled file (covered by the guided spec).
+- `npm run check`: 382 passed, 1 skipped, 49 files. `npm run build`: passed,
+  16 precache entries (1,051.05 KiB). `npm audit --omit=dev`: 0 vulnerabilities.
+- Full production Playwright on 4183 under `/PolySheet/`: first run 101 passed,
+  8 failed, 3 skipped (stale `app.spec.ts` expectations above); after the fix
+  `app.spec.ts` 72 passed, 2 skipped (4.1 min). Root-path smoke on 4184
+  (`onboarding`, `pf2e-guided-import`): 8 passed. Skips require absent
+  local-only fixtures. Port 4173 untouched.
+
+## Manual browser trial against the live public repository, 2026-11-19
+
+- Dev server on 5183, desktop width. D&D 5e (2014) prepared from the live
+  pinned repository and installed; «Cerca mostri, incantesimi e oggetti» listed
+  real catalogs. Searched and imported Fireball (spell) and Longsword (weapon);
+  previewed Goblin (monster) and cancelled. Manual character setup opened the
+  weapon picker on the imported Longsword with «Nuova risorsa locale» available;
+  assigning it showed the card (1d8 Slashing). The draft was cancelled.
+- Found and fixed: long commit-pinned URLs caused horizontal scrolling in the
+  catalog preview (now `resource-source-label`, scrollWidth equals clientWidth),
+  and the inventory help still said items are only created from definitions.
+- PF2e from the live repository showed the guided texts and kept
+  «Carica sistema e cataloghi» disabled without a compiled file. File upload is
+  not available in the browser pane; that path is covered by
+  `pf2e-guided-import.spec.ts`.
+- After the fixes: `npm run check` 382 passed, 1 skipped; build passed;
+  catalog, inventory, PF2e guided and sheet e2e on 4183: 16 passed.
+
+## Pre-commit final suite, 2026-11-19
+
+- Review of all uncommitted changes: no debug output or focused tests; the
+  combat monster hint now also appears for PF2e (`isDndCatalogSystem`).
+- `npm run build` passed; `npm audit --omit=dev`: 0 vulnerabilities.
+- Full production Playwright on 4183 under `/PolySheet/`: 103 passed, 3 skipped,
+  4 failed with Playwright trace-artifact `ENOENT` errors (files under
+  `test-results` disappeared during the run), not assertion failures. After a
+  rebuild including the combat hint change, the four tests plus
+  `monster-catalogs.spec.ts`: 16 passed. Root-path smoke earlier: 8 passed.
+- Mobile (375x812) catalog preview: long source URL wraps, dialog margins 16 px,
+  no dialog or page horizontal overflow.
