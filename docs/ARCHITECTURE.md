@@ -244,7 +244,8 @@ snapshot retries the view; no source values are fabricated to make it render.
 | --- | --- |
 | System text | 8 MiB UTF-8 |
 | Gzip system | 8 MiB compressed and independently 8 MiB expanded |
-| Backup text | 32 MiB UTF-8 |
+| Backup text | 128 MiB UTF-8; 4,000,000 visited values |
+| Stored resource records | 100,000 across the archive (a 5e character clones 300–2,300) |
 | Parsed document | 400,000 visited values; nesting depth 64 |
 | Character stats per system / stats per resource | 2,000 |
 | Resource definitions per system | 1,000 |

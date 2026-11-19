@@ -182,6 +182,11 @@ export function matchesType(value: unknown, type: string, subtype?: string | nul
   if (type === 'photo') return isPhoto(value);
   return false;
 }
+/**
+ * Stored resource records across the whole archive. Each 5e character privately clones its class
+ * graph (300–2,300 records measured on the official classes), so the bound is per archive, not per sheet.
+ */
+export const MAX_STORED_RESOURCES = 100000;
 /** PolySheet-owned resource link, deliberately not an upstream instance export. */
 export function isResourceReference(value: unknown): value is { resourceId: string } {
   return !!value && typeof value === 'object' && !Array.isArray(value)

@@ -622,6 +622,45 @@ a private graph, source duplicate-class rejection and explicit manual
 prerequisite acknowledgement. Subclass options/thresholds come from the class.
 Current HP stays unchanged. Subclass selection is applied at its threshold.
 
+PF2e (2026-11-19): the pinned PF2e confirm program is recognized by its
+single `forEach` over `level_up_selected_class_progression` that adds the
+evaluated increment to `$class_progression.class_level`. The assistant applies
+that increment per level and records `temp_last_level_up_class_id`; HP is not
+rolled or written, because PF2e `max_hp` is calculated from levels. PF2e
+classes declare no subclass list or threshold, so none is offered, and the
+dialog shows no multiclass or HP-method controls. The grant and proficiency
+popups that follow the increment are not executed; their choices stay on the
+sheet, where the source reports pending slots. All 9 pinned PF2e classes reach
+level 20 in a local check (Fighter maximum HP 181, Wizard 101).
+
+PF2e level choices (2026-11-19): after advancing, the dialog lists the grants
+of the current level that the source's `has_pending_interactive_slots` filter
+reports as open (feat slots, ability boosts, skill increases) and renders each
+with its own `progression_grant` edit view; each control writes that grant's
+base value. «Applica le scelte» runs the creation page `post_edit` that
+commits `all_interactive_progression_grants_for_current_level` (PF2e page 1:
+ability scores, `committed_*` values, feat slots) on draft copies of the owned
+grants under their own ids, then saves the changed values atomically; any
+skipped effect aborts the command. The program compares assigned with committed
+choices, so applying twice changes nothing more. Inferred, not verified
+upstream: that this creation-page commit is also the edit path after creation.
+Feats are now catalog roots (`feat` added to `CATALOG_ROOTS`; repository and
+link imports accept `feat_*.rpg.json`, up to 2,000 files): of the pinned
+catalogs, 1,034 of 1,089 PF2e feats and all 148 5e feats prepare; 55 PF2e feats
+stay visible as non-assignable with the format diagnostic. The PF2e game row
+opens the repository step for the publisher's compiled file, so classes,
+ancestries, heritages, backgrounds and feats come from the pinned commit.
+5e ability score improvements are offered after the advance, one form per
+class level the source's `should_show_asi` reports in the advanced range
+(evaluated with the wrapper staged at each level, as its level-up popup is;
+Fighter 1 → 20: 4, 6, 8, 12, 14, 16, 19). Each form applies +1 to two
+`ability` options (the same one twice for +2) to the `<id>_score` base values,
+or appends a chosen feat catalog to `feats`, mirroring `level_up_asi`. That
+source event adds without a score cap or feat prerequisite check, so neither is
+enforced here. 5e selectable features (Fighting Style,
+infusions and other `selectable_features`) are still not offered here: their
+source save writes through `$parent` and an unseeded calculated select.
+
 The dialog now allows an explicit source-defined Roll/Average/Max choice and
 saves that method with the advancement. Before confirmation it previews new
 class features (Fighter level 2: Action Surge); afterward it compares readable

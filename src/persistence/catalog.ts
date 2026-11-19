@@ -1,5 +1,5 @@
 /** @file Atomic catalog storage, private character graphs and dependent subrace selection. */
-import { isResourceReference, jsonValue, type ResourceInstance, type StoredSystem, type SystemDefinition } from '../domain/model';
+import { isResourceReference, jsonValue, type ResourceInstance, type StoredSystem, type SystemDefinition, MAX_STORED_RESOURCES } from '../domain/model';
 import { checkReferences, referencedIds } from '../domain/references';
 import { prepareCatalog, prepareCatalogTemplate, MAX_REPOSITORY_CATALOG_BYTES, MAX_REPOSITORY_CATALOG_FILES, type CatalogPreview } from '../importing/catalog';
 import { prepareImport, artifactBytes } from '../importing/package';
@@ -43,7 +43,7 @@ async function addTemplates(previews: CatalogPreview[], database: typeof db) {
       }
       roots.push(previous.id); continue;
     }
-    if (existing.length >= 10000) throw new Error(it.resourceListLimit);
+    if (existing.length >= MAX_STORED_RESOURCES) throw new Error(it.resourceListLimit);
     await database.resources.add(root);
     existing.push(root); roots.push(root.id);
   }
@@ -161,11 +161,19 @@ export async function assignPrepared(characterId: string, fieldId: string, prepa
       || JSON.stringify(latest) !== JSON.stringify(template)) throw new Error(it.missingResource);
     const fields = catalogFields(system.definition);
     const isClass = fields.classes?.id === fieldId;
-    const field = isClass ? fields.classes : fields.singular.find(s => s.id === fieldId && s.resource_type === template.definitionId);
+    // A plain resource list of the template's type (5e `feats`) gets the private copy appended.
+    const list = !isClass ? system.definition.character_stats.find(s => s.id === fieldId && s.type === 'base' && s.value_type === 'array'
+      && s.sub_value_type === 'resource' && s.resource_type === template.definitionId) : undefined;
+    const field = isClass ? fields.classes : list ?? fields.singular.find(s => s.id === fieldId && s.resource_type === template.definitionId);
     if (!field || (isClass && template.definitionId !== 'class')) throw new Error(it.missingResource);
     const existing = materialized?.resources ?? await database.resources.where('systemKey').equals(system.key).toArray();
     const { rootId, additions } = privateGraph(system, materialized?.rootId ?? resourceId, existing);
     let value: unknown = { resourceId: rootId };
+    if (list) {
+      const current = character.values[fieldId] ?? [];
+      if (!Array.isArray(current)) throw new Error(it.invalidValue);
+      value = [...current, { resourceId: rootId }];
+    }
     if (isClass) {
       const definition = system.definition.resources.find(d => d.id === field.resource_type)!;
       const wrapper: ResourceInstance = {
@@ -178,7 +186,7 @@ export async function assignPrepared(characterId: string, fieldId: string, prepa
       if (!Array.isArray(current)) throw new Error(it.invalidValue);
       value = [...current, { resourceId: wrapper.id }];
     }
-    if (await database.resources.count() + additions.length > 10000) throw new Error(it.resourceListLimit);
+    if (await database.resources.count() + additions.length > MAX_STORED_RESOURCES) throw new Error(it.resourceListLimit);
     await database.resources.bulkAdd(additions);
     await setCharacterValue(characterId, fieldId, value, database);
     const subrace = subraceFields(system.definition);

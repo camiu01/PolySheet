@@ -38,9 +38,14 @@ it('offers only verified D&D imports and explains unavailable games without prom
     fireEvent.click(screen.getByRole('button', { name: `${copy.gamePrepare} · ${name}` }));
     expect(onChoose).toHaveBeenLastCalledWith(id);
   }
-  expect(screen.queryByRole('button', { name: /Pathfinder|Daggerheart/ })).toBeNull();
-  fireEvent.click(screen.getByText(`${copy.gameUnavailable}: Pathfinder 2e, Daggerheart`));
-  expect(screen.getByText(copy.pathfinderUnavailable, { exact: false })).toBeVisible();
+  // PF2e: the publisher's compiled file is a plain download, then the local file picker.
+  expect(screen.getByRole('link', { name: `${copy.pathfinderDownload} · Pathfinder 2e` }).getAttribute('href'))
+    .toBe('https://d2dmd8x0lyn9l8.cloudfront.net/pf2e/system.rpg');
+  fireEvent.click(screen.getByRole('button', { name: `${copy.pathfinderUpload} · Pathfinder 2e` }));
+  expect(onChoose).toHaveBeenLastCalledWith('pf2e');
+  expect(screen.queryByRole('button', { name: /Daggerheart/ })).toBeNull();
+  fireEvent.click(screen.getByText(`${copy.gameUnavailable}: Daggerheart`));
+  expect(screen.getByText(copy.daggerheartUnavailable, { exact: false })).toBeVisible();
   rerender(<GameChoices onChoose={onChoose} busy />);
   for (const button of screen.getAllByRole('button')) expect(button).toBeDisabled();
 });

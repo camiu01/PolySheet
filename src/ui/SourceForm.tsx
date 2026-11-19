@@ -58,7 +58,7 @@ export function SourceForm({ input, context, onDone, onCancel = onDone, onBusyCh
       setDrafts(previous => ({ ...previous, ...Object.fromEntries(nodes.filter(v => inputStat(v, context.stats)?.id === id).map(v => [v.id, value])) }));
     }
     const formContext: RenderContext = {
-      ...environment, drafts, previewValues: { ...sourceValues, ...changes }, validationErrors: errors,
+      ...environment, drafts, previewValues: { ...sourceValues, ...changes }, validationErrors: errors, validationSummary: revealErrorsOnSubmit,
       hideValidation: revealErrorsOnSubmit ? !attempted : context.hideValidation, onChange: showSave ? update : undefined, onInput: showSave ? (_viewId, id, value) => update(id, value) : undefined,
       onCommit: showSave ? async (patch, created = []) => {
         const next = typeof patch === 'function' ? patch({ ...sourceValues, ...latestChanges.current }) : patch;
@@ -73,7 +73,7 @@ export function SourceForm({ input, context, onDone, onCancel = onDone, onBusyCh
         )}</div>
       </fieldset></div>
       {error && <p role="alert" className="error-text">{error}</p>}
-      {revealErrorsOnSubmit && attempted && Object.keys(errors).length > 0 && <p role="status" className="error-text form-summary">{it.completeHighlighted}</p>}
+      {revealErrorsOnSubmit && attempted && Object.keys(errors).length > 0 && <p role="status" tabIndex={-1} className="error-text form-summary">{it.completeHighlighted}</p>}
       {!autoApply && <div className="modal-actions">
         {showCancel && <button type="button" className="button secondary" disabled={busy} onClick={onCancel}>{cancelText}</button>}
         {showSave && <button type="submit" className="button primary" disabled={busy || !context.onCommit || (!revealErrorsOnSubmit && Object.keys(errors).length > 0)}>{busy ? it.saving : saveText}</button>}
@@ -87,7 +87,13 @@ export function SourceForm({ input, context, onDone, onCancel = onDone, onBusyCh
       if (lock.current) return;
       if (Object.keys(errors).length || form.querySelector('[aria-invalid="true"],[data-view-error],[data-invalid="true"]')) {
         setAttempted(true);
-        requestAnimationFrame(() => form.querySelector('.source-form-fields [role="alert"],[aria-invalid="true"],[data-view-error]')?.scrollIntoView({ block: 'center' }));
+        // Focus the first invalid control; with none mounted (collapsed or non-editable views), the summary.
+        requestAnimationFrame(() => {
+          const control = form.querySelector<HTMLElement>('.source-form-fields [aria-invalid="true"]:not(:disabled)');
+          const target = control && !control.closest('details:not([open])') ? control : form.querySelector<HTMLElement>('.form-summary');
+          form.querySelector('.source-form-fields .field-error,[aria-invalid="true"],[data-view-error]')?.scrollIntoView?.({ block: 'center' });
+          target?.focus({ preventScroll: !!control });
+        });
         return;
       }
       lock.current = true; setBusy(true); onBusyChange?.(true); setError('');

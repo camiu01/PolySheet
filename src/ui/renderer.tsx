@@ -2,10 +2,11 @@
  * @file Source-driven, text-only view rendering with explicit unsupported markers.
  * @remarks Sheet inputs commit on blur; source forms own explicit `$view` drafts.
  */
-import { Component, useState, type ReactNode, type CSSProperties } from 'react';
+import { Component, useEffect, useId, useRef, useState, type ReactNode, type CSSProperties } from 'react';
 import { createEvaluator, type EvaluationEnvironment } from '../engine/formulas';
 import { formula, object, view, type Stat, type View } from '../domain/model';
 import { unsupportedViewOptions, viewFields } from '../importing/system';
+import { ViewError } from './ViewErrors';
 import { it } from './it';
 import { PhotoInput } from './PhotoInput';
 import { inputValue, readableOn, saveInput, sourceColor, sourceIcons, textValue, viewColor } from './view-support';
@@ -43,6 +44,8 @@ export interface RenderContext extends EvaluationEnvironment {
   onCommit?: (patch: ValuePatch, additions?: ResourceInstance[]) => Promise<void>;
   drafts?: Record<string, unknown>;
   validationErrors?: Record<string, string>;
+  /** The owning form announces errors in one summary, so field messages are not live regions. */
+  validationSummary?: boolean;
   /** Source validation messages stay hidden until the user first tries to continue. */
   hideValidation?: boolean;
   onInput?: (viewId: string, statId: string, value: unknown) => void;
@@ -219,7 +222,7 @@ class ViewErrorBoundary extends Component<ViewProps & { children: ReactNode }, V
   }
   render() {
     return this.state.error !== null
-      ? <div role="status" data-view-error className="unsupported view-error" title={it.viewUnavailable}><span className="sr-only">{it.viewUnavailable} </span>{this.state.error}</div>
+      ? <ViewError message={this.state.error} title={it.viewUnavailable} />
       : this.props.children;
   }
 }
@@ -227,9 +230,38 @@ class ViewErrorBoundary extends Component<ViewProps & { children: ReactNode }, V
 export function RenderView(props: ViewProps) {
   return <ViewErrorBoundary input={props.input} context={props.context}><ViewContent {...props} /></ViewErrorBoundary>;
 }
+const editableControls = 'input:not([type=hidden]), select, textarea, [role=combobox], [role=listbox]';
+
+/**
+ * Mark the editable controls of a view with its validation message: `aria-invalid` plus
+ * `aria-describedby`, added and removed with the message. Source views build arbitrary
+ * control trees, so the controls are found in the rendered wrapper rather than threaded through.
+ */
+function useFieldValidation(message: string | undefined) {
+  const wrapper = useRef<HTMLDivElement>(null), id = useId();
+  useEffect(() => {
+    const controls = message ? [...wrapper.current?.querySelectorAll<HTMLElement>(editableControls) ?? []] : [];
+    for (const control of controls) {
+      control.setAttribute('aria-invalid', 'true');
+      control.setAttribute('aria-describedby', [control.getAttribute('aria-describedby'), id].filter(Boolean).join(' '));
+    }
+    return () => {
+      for (const control of controls) {
+        control.removeAttribute('aria-invalid');
+        const rest = (control.getAttribute('aria-describedby') ?? '').split(' ').filter(token => token && token !== id);
+        if (rest.length) control.setAttribute('aria-describedby', rest.join(' ')); else control.removeAttribute('aria-describedby');
+      }
+    };
+  }, [message, id]);
+  return { wrapper, id };
+}
+
 function ViewContent({ input, context }: ViewProps) {
   // `$edit_mode` is true only inside a real draft session, never during sheet rendering.
   const environment: RenderContext = { ...context, variables: { $edit_mode: context.drafts !== undefined, ...context.variables } };
+  const viewId = input && typeof input === 'object' && !Array.isArray(input) ? (input as { id?: unknown }).id : undefined;
+  const message = !context.hideValidation && typeof viewId === 'string' ? context.validationErrors?.[viewId] : undefined;
+  const validation = useFieldValidation(message);
   try {
     const v = view(input);
     const options = unsupportedViewOptions(v);
@@ -257,13 +289,14 @@ function ViewContent({ input, context }: ViewProps) {
       marginLeft: size(v.margin_left), marginRight: size(v.margin_right),
       marginTop: size(v.margin_top), marginBottom: size(v.margin_bottom)
     };
-    return <div className="view-wrapper" style={style}>
+    // Each message is tied to its controls; with a form summary it is not another alert.
+    return <div className="view-wrapper" style={style} ref={validation.wrapper}>
       {handler(v, environment, e)}
-      {!context.hideValidation && context.validationErrors?.[v.id] && <p role="alert" className="error-text">{context.validationErrors[v.id]}</p>}
+      {message && <p id={validation.id} role={context.validationSummary ? undefined : 'alert'} className="error-text field-error">{message}</p>}
       {v.validation_message != null && !context.drafts && <small className="unsupported-note">{it.validationRequiresForm}</small>}
       {ignored.length > 0 && <small className="unsupported-note">{it.unsupported}: {ignored.join(', ')}</small>}
     </div>;
   } catch (error) {
-    return <div role="status" data-view-error className="unsupported view-error">{error instanceof Error ? error.message : String(error)}</div>;
+    return <ViewError message={error instanceof Error ? error.message : String(error)} />;
   }
 }

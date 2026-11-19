@@ -1,5 +1,6 @@
 // @vitest-environment node
 /** @file Compact originals, immutable templates, private copies and atomic repository installation. */
+import { MAX_STORED_RESOURCES } from '../src/domain/model';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
@@ -200,22 +201,22 @@ for (const [id, expected, blocked] of [['5e', 208, 0], ['5e2024', 74, 19], ['pf2
   }, 90000);
 }
 
-it('rolls back an over-capacity import, accepts exactly 10,000 records and refuses overflowing assignment', async () => {
+it('rolls back an over-capacity import, accepts exactly the archive limit and refuses overflowing assignment', async () => {
   const { database, system } = await setup();
-  await database.resources.bulkAdd(Array.from({ length: 9999 }, (_, i) => ({
+  await database.resources.bulkAdd(Array.from({ length: MAX_STORED_RESOURCES - 1 }, (_, i) => ({
     id: `local-${i}`, systemKey: system.key, definitionId: 'race', name: `Local ${i}`, values: { name: `Local ${i}` }
   })));
   const a = await prepareCatalogTemplate(classOriginal, 'class.json', system);
   const b = await prepareCatalogTemplate(raceOriginal, 'race.json', system);
-  await expect(installRepositoryBundle(system, [a, b], database)).rejects.toThrow('10.000');
-  expect(await database.resources.count()).toBe(9999);
+  await expect(installRepositoryBundle(system, [a, b], database)).rejects.toThrow('100.000');
+  expect(await database.resources.count()).toBe(MAX_STORED_RESOURCES - 1);
   const [id] = await installCatalogs([a], database);
-  expect(await database.resources.count()).toBe(10000);
+  expect(await database.resources.count()).toBe(MAX_STORED_RESOURCES);
   const character = await createCharacter(system, 'At limit', database);
-  await expect(assignCatalog(character.id, id, 'classes', database)).rejects.toThrow('10.000');
-  expect(await database.resources.count()).toBe(10000);
+  await expect(assignCatalog(character.id, id, 'classes', database)).rejects.toThrow('100.000');
+  expect(await database.resources.count()).toBe(MAX_STORED_RESOURCES);
   expect((await database.characters.get(character.id))?.values.classes).toEqual([]);
-}, 30000);
+}, 180000);
 
 it('deletes an unused private graph together without dangling catalog groups', async () => {
   const { database, system } = await setup();

@@ -410,3 +410,57 @@ details:not(.sheet-section,.diagnostic-group,.source-collapsible)[open]>summary:
 .progression-summary section + section { padding-top: 12px; border-top: 1px solid var(--line); }
 .progression-summary li { overflow-wrap: anywhere; }
 .progression-saved { color: var(--success); }
+
+/* Resource archive: filters wrap on narrow screens; pager stays centered under the grid. */
+.archive-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-block: 16px 8px; }
+.archive-filters .field { flex: 1 1 180px; margin: 0; }
+.archive-pages { display: flex; justify-content: center; align-items: center; gap: 12px; margin-block: 16px; }
+
+/* Drawer close control: mobile only, where the sidebar is an overlay. */
+.drawer-close { display: none; position: absolute; top: 12px; right: 12px; }
+@media (max-width: 760px) { .drawer-close { display: inline-flex; } }
+
+/* Guided creation: like other source forms, only the fields scroll; Back/Next/Cancel stay in view. */
+.modal-body:has(>.creation-flow){display:flex;flex-direction:column;overflow:hidden}
+.modal-body>.creation-toolbar{flex-shrink:0}
+.creation-flow{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
+.creation-flow>:not(.source-form){flex-shrink:0}
+.creation-flow>.source-form{display:flex;flex-direction:column;min-height:0}
+.creation-flow>.source-form>.source-form-fields{min-height:0;overflow:auto;overscroll-behavior:contain;padding:4px}
+.creation-flow>.source-form>.modal-actions{flex-shrink:0}
+
+/* Grouped sheet errors: one expandable summary; fields keep a short marker. */
+.view-error-summary { display: block; margin-bottom: 16px; }
+.view-error-summary summary { cursor: pointer; font-weight: 600; }
+.view-error-summary ul { margin: 8px 0 0; padding-left: 1.2em; display: grid; gap: 4px; }
+.view-error-compact { font-size: 12px; }
+
+/* Sheet header and profile: same content, less vertical space before the playable values.
+   On wide screens the avatar section reads as one row: portrait and source text, then its stacks. */
+.back-link+.page-heading{margin-bottom:20px}
+.back-link+.page-heading~.notice{margin-bottom:12px}
+.source-avatar-section{padding:12px 16px}
+.source-avatar-center{gap:4px}
+.source-avatar-center .photo-field{margin:0;gap:6px}
+.source-avatar-stacks{margin-top:4px}
+@media(min-width:761px){
+  .source-avatar-section{display:flex;flex-wrap:wrap;align-items:center;gap:12px 24px}
+  .source-avatar-center{flex:1 1 320px;display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:8px 20px;text-align:left}
+  .source-avatar-center .photo-field{flex-direction:row;align-items:center}
+  .source-avatar-stacks{flex:0 0 auto;display:flex;gap:12px;margin-top:0}
+}
+@media(max-width:760px){
+  .source-avatar-center .photo-field{flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:center}
+  .source-avatar-stacks{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
+}
+
+/* Form rows that pair a source button with choice controls (5e "SEE DETAILS" + race/background):
+   the row takes the full form width, so the button stays beside the choice instead of wrapping above it.
+   The source `alignment: end` keeps them bottom-aligned with the control boxes. */
+.modal-body .view-wrapper:has(>.view-composite>.view-wrapper>:is(.field,.choice-field)){align-self:stretch;width:100%}
+.modal-body .view-composite:has(>.view-wrapper>:is(.field,.choice-field)){width:100%;justify-content:flex-start!important;align-items:flex-end}
+.modal-body .view-composite>.view-wrapper:has(>.choice-field){flex:1 1 220px}
+.modal-body .view-composite>.view-wrapper:has(>.choice-field)>.choice-field{width:100%}
+.progression-asi { border: 1px solid var(--line); border-radius: 8px; padding: 4px 16px 16px; margin: 12px 0 0; min-width: 0; }
+.progression-asi legend { padding: 0 6px; font-size: 13px; font-weight: 600; }
+.progression-asi-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); column-gap: 12px; }

@@ -40,11 +40,15 @@ export async function discoverRepository(input: string, ref = ''): Promise<Repos
   }
   return { snapshot, systems };
 }
+/** The known publisher's compiled `.rpg` for one system id, offered only as a user-initiated download. */
+export function officialSystemDownload(id: string) {
+  return `https://d2dmd8x0lyn9l8.cloudfront.net/${encodeURIComponent(id)}/system.rpg`;
+}
 /** Offer a normal user-initiated download for the known publisher; no cross-origin fetch. */
 export function repositorySystemDownload(discovery: RepositoryDiscovery, selected: string) {
   if (discovery.snapshot.repository.toLowerCase() !== 'https://github.com/blastervla/rpg-companion-app-systems'
     || !discovery.systems.some(s => s.id === selected)) return undefined;
-  return `https://d2dmd8x0lyn9l8.cloudfront.net/${encodeURIComponent(selected)}/system.rpg`;
+  return officialSystemDownload(selected);
 }
 /**
  * Prepare the selected repository's sources, or reuse an explicitly matching local system.

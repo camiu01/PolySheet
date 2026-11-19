@@ -19,6 +19,9 @@ import { GameChoices } from './GameChoices';
 import './library.css';
 
 /** Guide source selection and review before installing; preserve exact originals and validation limits. */
+/** Games whose pinned public source cannot be compiled here; they use the publisher's compiled file. */
+const compiledOnly = new Set(['pf2e']);
+
 export function Library({ systems, run }: { systems: StoredSystem[]; run: Run }) {
   const file = useRef<HTMLInputElement>(null);
   const repositoryFile = useRef<HTMLInputElement>(null);
@@ -77,6 +80,9 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
       try {
         const discovered = await discoverRepository('https://github.com/blastervla/rpg-companion-app-systems',
           '8788e3b18099e4a1b3510f02869d97f1488586b4');
+        // The public PF2e source does not compile (weapon/stats.rpgs:928): open the repository step,
+        // where the publisher's compiled file is uploaded and the catalogs still come from the commit.
+        if (compiledOnly.has(id)) { setRepository(discovered); setRepositoryPath(id); setRepositoryUpload(null); setShowUrl(true); return; }
         await prepareBundle(discovered, id);
       } finally { setPreparingGame(false); setCatalogProgress(''); }
     });
@@ -157,7 +163,8 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
             </select>
           </label>}
           {repositoryUpload && <p>{it.repositoryCompiledFile}: <strong>{repositoryUpload.source}</strong></p>}
-          <details className="import-advanced"><summary>{it.repositorySourceAdvanced}</summary>
+          <details className="import-advanced" open={compiledOnly.has(sourceSystem.id) || undefined}><summary>{it.repositorySourceAdvanced}</summary>
+          {compiledOnly.has(sourceSystem.id) && <p className="muted">{it.pathfinderHelp}</p>}
           <input ref={repositoryFile} type="file" accept=".json,.rpg,application/json,application/gzip" className="sr-only"
             aria-label={it.repositoryCompiledFile} disabled={loading} onChange={e => {
               const f = e.target.files?.[0]; e.target.value = '';

@@ -40,7 +40,16 @@ async function create(page: Page, name: string, systemKey?: string) {
   const manual = page.getByText(copy.manual, { exact: true });
   const useManual = page.getByRole('button', { name: copy.useManualSetup, exact: true });
   await expect(manual.or(useManual)).toBeVisible();
-  if (await useManual.isVisible()) await useManual.click();
+  if (await useManual.isVisible()) {
+    // The guided flow keeps its actions in view: only its fields scroll (desktop and mobile).
+    const next = page.getByRole('dialog').getByRole('button', { name: copy.next, exact: true });
+    if (await next.count()) {
+      await expect(next).toBeInViewport({ ratio: 1 });
+      await page.locator('.creation-flow > .source-form > .source-form-fields').evaluate(node => { node.scrollTop = node.scrollHeight; });
+      await expect(next).toBeInViewport({ ratio: 1 });
+    }
+    await useManual.click();
+  }
   await expect(manual).toBeVisible();
   await page.getByLabel('Nome del personaggio').fill(name);
   await page.getByRole('button', { name: 'Crea personaggio', exact: true }).click();
@@ -1001,6 +1010,8 @@ for (const [id, expected, blocked] of [['5e', 208, 0], ['5e2024', 74, 19], ['pf2
       }));
       await context.setOffline(true); await page.reload();
       await navigate(page, 'Risorse');
+      // The archive mounts one 50-card page; search reaches entries beyond it.
+      await page.getByLabel(copy.searchResources, { exact: true }).fill('Druid');
       const druid = page.locator('.resource-card').filter({ has: page.getByRole('heading', { name: 'Druid', exact: true }) });
       await expect(druid).toHaveCount(1);
       await expect(druid).not.toContainText(copy.catalogUnavailable);
@@ -1029,6 +1040,46 @@ for (const [id, expected, blocked] of [['5e', 208, 0], ['5e2024', 74, 19], ['pf2
     await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 30000 });
     await page.getByRole('button', { name: /Cataloghi originali/ }).click();
     await expect(level).toHaveValue('1');
+    if (id === '5e2024') return;
+    // One command reaches the maximum level and summarizes the gains: 5e with the imported subclass,
+    // PF2e with HP derived from levels and no dice or subclass list.
+    await page.getByRole('button', { name: copy.progression, exact: true }).click();
+    const advance = page.getByRole('dialog', { name: copy.progression });
+    await advance.getByRole('button', { name: copy.progressionMax(20), exact: true }).click();
+    await expect(advance.getByLabel(copy.progressionTarget, { exact: true })).toHaveValue('20');
+    if (id === '5e') await advance.getByRole('combobox', { name: copy.progressionArchetype }).selectOption({ index: 1 });
+    else await expect(advance.getByText(copy.progressionHpDerived)).toBeVisible();
+    await expect(advance.getByText(copy.progressionGains(20))).toBeVisible();
+    await advance.getByLabel(copy.progressionAcknowledge).check();
+    await advance.locator('button[type=submit]').click();
+    await expect(advance.locator('.progression-saved')).toContainText(copy.progressionSaved);
+    await expect(advance.getByText(id === '5e' ? 'Archdruid' : 'Weapon Legend', { exact: true }).first()).toBeVisible();
+    if (id === 'pf2e') {
+      // Open level choices are the source's grants; a boost is assigned there and applied by its commit program.
+      const choices = advance.locator('.progression-choices');
+      await expect(choices.getByText(/scelte aperte fino al tuo livello/)).toBeVisible();
+      // A completed grant leaves the open list, so the open count drops once the write lands.
+      const open = async () => Number((await choices.getByText(/scelte aperte fino al tuo livello/).innerText()).match(/^\d+/)![0]);
+      const before = await open();
+      await choices.getByRole('checkbox', { name: 'Strength', exact: true }).first().click();
+      await expect.poll(open).toBe(before - 1);
+      await choices.getByRole('button', { name: copy.progressionApplyChoices, exact: true }).click();
+      await expect(choices.getByRole('status')).toHaveText(copy.progressionChoicesApplied);
+    } else {
+      // Druid ASI levels from the source's should_show_asi: 4, 8, 12, 16, 19; the first takes +2 Wisdom.
+      const increases = advance.locator('.progression-asi');
+      await expect(increases).toHaveCount(5);
+      const first = increases.first();
+      await expect(first.locator('legend')).toHaveText(copy.progressionAsiLevel(4));
+      await first.getByLabel(copy.progressionAsiFirst).selectOption({ label: 'Wisdom' });
+      await first.getByLabel(copy.progressionAsiSecond).selectOption({ label: 'Wisdom' });
+      await first.getByRole('button', { name: copy.progressionApplyChoices, exact: true }).click();
+      await expect(first.getByRole('status')).toHaveText(copy.progressionChoicesApplied);
+      await expect(first.getByRole('button', { name: copy.progressionApplyChoices, exact: true })).toBeDisabled();
+    }
+    await expect(advance.getByText(copy.progressionNothingRecovered)).toBeVisible();
+    await advance.locator('.modal-actions').getByRole('button', { name: copy.close, exact: true }).click();
+    await expect(level).toHaveValue('20');
   });
 }
 
@@ -1052,14 +1103,18 @@ if (process.env.LIVE_REPOSITORY_IMPORT === '1') {
     await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 30000 });
     await navigate(page, 'Risorse');
     const before = 74;
-    await expect(page.locator('.resource-card')).toHaveCount(before);
+    // Only one 50-card page is mounted; the status line carries the full count.
+    await expect(page.getByTestId('resource-count')).toHaveText(`${before} risorse`);
+    await expect(page.locator('.resource-card')).toHaveCount(50);
     await openCatalogImport(page);
     await page.getByLabel(copy.catalogUrl, { exact: true }).fill(`https://github.com/blastervla/rpg-companion-app-systems/tree/${pinnedCommit}/systems/5e2024/resource_instances`);
     await page.getByRole('button', { name: copy.catalogFromUrl, exact: true }).click();
     await expect(page.getByRole('dialog', { name: copy.catalogPreview, exact: true })).toBeVisible({ timeout: 60000 });
     await page.getByRole('dialog').getByRole('button', { name: copy.confirmImport, exact: true }).click();
     await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 30000 });
-    await expect(page.locator('.resource-card')).toHaveCount(before);
+    // Only one 50-card page is mounted; the status line carries the full count.
+    await expect(page.getByTestId('resource-count')).toHaveText(`${before} risorse`);
+    await expect(page.locator('.resource-card')).toHaveCount(50);
     await create(page, 'Repository live');
     const aside = page.locator('.sheet-aside');
     await aside.getByRole('combobox', { name: 'Classe da aggiungere', exact: true }).selectOption({ label: 'Wizard' });

@@ -1,5 +1,6 @@
 /** @file Recognizable remote game choices, without bundled third-party rules. */
-import { BookOpen } from 'lucide-react';
+import { BookOpen, Download, Upload } from 'lucide-react';
+import { officialSystemDownload } from '../importing/repository';
 import { it } from './it';
 
 /** Only verified importable sources offer an action; availability is not full rule support. */
@@ -19,8 +20,20 @@ export function GameChoices({ busy, onChoose, installed = [], onUse }: {
           : <button className="button primary" disabled={busy} onClick={() => onChoose(game.id)}
             aria-label={`${it.gamePrepare} · ${game.name}`}>{it.gamePrepare}</button>}
       </div>)}
-    <details className="import-format-help"><summary>{it.gameUnavailable}: Pathfinder 2e, Daggerheart</summary>
-      <p><strong>Pathfinder 2e:</strong> {it.pathfinderUnavailable}</p>
+    {/* The public PF2e source has a syntax error (resources/weapon/stats.rpgs:928), so the row uses the
+        publisher's compiled file: a normal download, then the same local import as «Ho già un file». */}
+    <div className="import-source-row">
+      <BookOpen size={22} aria-hidden="true" /><div><h3>Pathfinder 2e</h3><p>{it.pathfinderHelp}</p></div>
+      {installed.includes('pf2e') && onUse
+        ? <button className="button secondary" disabled={busy} onClick={() => onUse('pf2e')} aria-label={`${it.useGame} · Pathfinder 2e`}>{it.useGame}</button>
+        : <div className="button-row">
+          <a className="button secondary" href={officialSystemDownload('pf2e')} target="_blank" rel="noopener noreferrer"
+            aria-label={`${it.pathfinderDownload} · Pathfinder 2e`}><Download size={16} aria-hidden="true" />{it.pathfinderDownload}</a>
+          <button className="button primary" disabled={busy} onClick={() => onChoose('pf2e')}
+            aria-label={`${it.pathfinderUpload} · Pathfinder 2e`}><Upload size={16} aria-hidden="true" />{it.pathfinderUpload}</button>
+        </div>}
+    </div>
+    <details className="import-format-help"><summary>{it.gameUnavailable}: Daggerheart</summary>
       <p><strong>Daggerheart:</strong> {it.daggerheartUnavailable}</p>
     </details>
   </section>;

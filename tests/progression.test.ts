@@ -7,8 +7,8 @@ import { prepareSystem } from '../src/importing/system';
 import { prepareCatalogTemplate } from '../src/importing/catalog';
 import { configureCharacter, installCatalogs } from '../src/persistence/catalog';
 import { installSystem, SheetDatabase } from '../src/persistence/db';
-import { advanceCharacter } from '../src/persistence/progression';
-import { hitPointModes, progressionClasses, progressionEvaluator, progressionArchetypes, progressionContract, progressionPreview } from '../src/engine/progression';
+import { advanceCharacter, applyAbilityIncrease, applyLevelChoices } from '../src/persistence/progression';
+import { abilityIncreaseLevels, abilityIncreaseOptions, hitPointModes, levelChoiceCommit, pendingLevelChoices, progressionClasses, progressionEvaluator, progressionArchetypes, progressionContract, progressionPreview } from '../src/engine/progression';
 import { catalogSystem } from './fixtures/catalog';
 
 it('recognizes imported advancement branches and ceiling without a bundled game fixture', async () => {
@@ -122,3 +122,86 @@ it.skipIf(!existsSync(fixture))('advances imported Fighter repeatedly, preserves
       { $details: { resourceId: highClass.record.id } }).get('$details.attacks_per_action')).toBe(4);
   } finally { await database.delete(); }
 }, 20000);
+
+it.skipIf(!existsSync(fixture))('offers 5e ability score improvements at the source levels and applies +2 or a feat', async () => {
+  const system = await prepareSystem(gunzipSync(readFileSync(fixture)).toString('utf8'), 'Local ASI fixture');
+  const database = new SheetDatabase(`asi-${crypto.randomUUID()}`);
+  try {
+    await installSystem(system, database);
+    const read = (name: string) => readFileSync(`.reference/rpg-companion-app-systems/systems/5e/resource_instances/${name}.rpg.json`, 'utf8');
+    const [fighter] = await installCatalogs([await prepareCatalogTemplate(read('class_fighter_fighter'), 'local.json', system)], database);
+    const [acrobat] = await installCatalogs([await prepareCatalogTemplate(read('feat_acrobat_acrobat'), 'local.json', system)], database);
+    const character = await configureCharacter(system, 'ASI', { constitution_score: 14, strength_score: 15, hit_point_mode: 'average' },
+      { classes: fighter }, undefined, database, true);
+    const resources = await database.resources.toArray();
+    const wrapper = progressionClasses(system, character, resources)[0];
+    expect(abilityIncreaseLevels(system, character, resources, wrapper.record.id, 1, 20)).toEqual([4, 6, 8, 12, 14, 16, 19]);
+    expect(abilityIncreaseLevels(system, character, resources, wrapper.record.id, 1, 3)).toEqual([]);
+    expect(abilityIncreaseOptions(system).map(option => option.id)).toContain('strength');
+    await applyAbilityIncrease(character.id, { abilities: ['strength', 'strength'] }, database);
+    expect((await database.characters.get(character.id))!.values.strength_score).toBe(17);
+    await expect(applyAbilityIncrease(character.id, { abilities: ['strength', 'luck'] }, database)).rejects.toThrow();
+    expect((await database.characters.get(character.id))!.values.strength_score).toBe(17);
+    await applyAbilityIncrease(character.id, { featId: acrobat }, database);
+    expect((await database.characters.get(character.id))!.values.feats).toHaveLength(1);
+    expect(progressionEvaluator(system, (await database.characters.get(character.id))!, await database.resources.toArray()).get('strength_score')).toBe(17);
+  } finally { await database.delete(); }
+}, 20000);
+
+const pf2e = '.reference/official-releases-2026-11-16/pf2e-system.rpg';
+const pf2eClasses = '.reference/rpg-companion-app-systems/systems/pf2e/resource_instances';
+it.skipIf(!existsSync(pf2e) || !existsSync(pf2eClasses))('advances PF2e classes to level 20 through class_progression, with HP derived from levels', async () => {
+  const system = await prepareSystem(gunzipSync(readFileSync(pf2e)).toString('utf8'), 'Local PF2e fixture');
+  expect(progressionContract(system)).toMatchObject({ kind: 'class_progression', maxLevel: 20, health: [] });
+  for (const [file, hp] of [['class_fighter__pc1_.rpg.json', 181], ['class_wizard__pc1_.rpg.json', 101]] as const) {
+    const database = new SheetDatabase(`pf2e-progression-${crypto.randomUUID()}`);
+    try {
+      await installSystem(system, database);
+      const [id] = await installCatalogs([await prepareCatalogTemplate(readFileSync(`${pf2eClasses}/${file}`, 'utf8'), 'local.json', system)], database);
+      const character = await configureCharacter(system, file, {}, { classes: id }, undefined, database, false);
+      const resources = await database.resources.toArray();
+      const wrapper = progressionClasses(system, character, resources)[0];
+      expect(progressionArchetypes(system, character, resources, wrapper.record.id, 20)).toMatchObject({ required: false, options: [] });
+      // PF2e boosts are progression grants, not 5e ASI forms, even though it defines should_show_asi.
+      expect(abilityIncreaseLevels(system, character, resources, wrapper.record.id, 1, 20)).toEqual([]);
+      let draws = 0;
+      const result = await advanceCharacter(character.id, character.revision, { wrapperId: wrapper.record.id, expectedClassLevel: 1,
+        targetLevel: 20, archetypeId: null, acknowledgeChoices: true }, database, () => { draws++; return 1; });
+      expect(result).toMatchObject({ level: 20, maxHp: hp });
+      expect(draws).toBe(0);
+      expect(result.summary.features.length).toBeGreaterThan(5);
+      expect(result.summary.improved.some(row => /color/i.test(row.name))).toBe(false);
+      const saved = (await database.characters.get(character.id))!;
+      expect(saved.values.base_hp).toBe(character.values.base_hp);
+    } finally { await database.delete(); }
+  }
+}, 120000);
+
+it.skipIf(!existsSync(pf2e) || !existsSync(pf2eClasses))('applies PF2e level choices with the source commit program, once', async () => {
+  const system = await prepareSystem(gunzipSync(readFileSync(pf2e)).toString('utf8'), 'Local PF2e fixture');
+  expect(levelChoiceCommit(system)).toBeDefined();
+  const database = new SheetDatabase(`pf2e-choices-${crypto.randomUUID()}`);
+  try {
+    await installSystem(system, database);
+    const [id] = await installCatalogs([await prepareCatalogTemplate(readFileSync(`${pf2eClasses}/class_fighter__pc1_.rpg.json`, 'utf8'), 'local.json', system)], database);
+    const character = await configureCharacter(system, 'Choices', {}, { classes: id }, undefined, database, false);
+    const wrapper = progressionClasses(system, character, await database.resources.toArray())[0];
+    await advanceCharacter(character.id, character.revision, { wrapperId: wrapper.record.id, expectedClassLevel: 1, targetLevel: 5,
+      archetypeId: null, acknowledgeChoices: true }, database);
+    let saved = (await database.characters.get(character.id))!, resources = await database.resources.toArray();
+    const pending = pendingLevelChoices(system, saved, resources);
+    const boost = pending.map(ref => resources.find(record => record.id === ref.resourceId)!)
+      .find(record => record.values.bucket === 'ability_boost' && record.values.level === 5);
+    expect(boost).toBeDefined();
+    const strength = progressionEvaluator(system, saved, resources).get('strength_score');
+    await database.resources.put({ ...boost!, values: { ...boost!.values, assigned_ability_boosts: ['strength'] } });
+    await applyLevelChoices(character.id, database);
+    saved = (await database.characters.get(character.id))!; resources = await database.resources.toArray();
+    const after = progressionEvaluator(system, saved, resources).get('strength_score');
+    expect(after).not.toBe(strength);
+    expect(resources.find(record => record.id === boost!.id)!.values.committed_ability_boosts).toEqual(['strength']);
+    await applyLevelChoices(character.id, database);
+    saved = (await database.characters.get(character.id))!;
+    expect(progressionEvaluator(system, saved, await database.resources.toArray()).get('strength_score')).toBe(after);
+  } finally { await database.delete(); }
+}, 120000);

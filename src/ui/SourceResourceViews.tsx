@@ -167,7 +167,7 @@ export function SourceResourceArray({ node: v, context: ctx }: { node: View; con
 		void ctx.onCommit(latest => {
 			const items = latest[field.id];
 			const current = Array.isArray(items) ? items : [];
-			if (current.length >= 10000) throw new Error(it.resourceListLimit);
+			if (current.length >= 10000) throw new Error(it.resourceItemsLimit);
 			return { [field.id]: [...current, { resourceId: record.id }] };
 		}, created).catch(fail);
 	}

@@ -10,8 +10,10 @@ export interface CatalogPreview {
   resources: ResourceInstance[];
 }
 export const MAX_REPOSITORY_CATALOG_BYTES = 24 * 1024 * 1024;
-export const MAX_REPOSITORY_CATALOG_FILES = 1000;
-export const CATALOG_ROOTS = ['class', 'race', 'ancestry', 'heritage', 'background'];
+/** PF2e publishes 1,089 feat files besides its classes, ancestries, heritages and backgrounds. */
+export const MAX_REPOSITORY_CATALOG_FILES = 2000;
+/** Feats are catalog roots so level choices (PF2e feat slots, 5e feats) can pick them like origins. */
+export const CATALOG_ROOTS = ['class', 'race', 'ancestry', 'heritage', 'background', 'feat'];
 /**
  * Read a complete snapshot, validating optional resource-array removal history.
  * @remarks No prior graph is merged. Conflicting current/deleted IDs are ambiguous
@@ -75,7 +77,7 @@ export async function prepareCatalog(original: string, source: string, system: S
   if (!CATALOG_ROOTS.includes(String(input.resource_id))) throw new Error(it.catalogFormat);
   const rootId = crypto.randomUUID(), resources: ResourceInstance[] = [];
   function convert(input: unknown, path: string, id = crypto.randomUUID()): { resourceId: string } {
-    if (resources.length >= 10000) throw new Error(it.resourceListLimit);
+    if (resources.length >= 10000) throw new Error(it.resourceItemsLimit);
     const node = object(input, path);
     if (Object.keys(node).some(k => !['system', 'resource_id', 'stats'].includes(k))
       || (node.system != null && node.system !== system.definition.id)) throw new Error(`${path}: ${it.catalogFormat}`);

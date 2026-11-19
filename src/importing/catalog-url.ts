@@ -42,7 +42,7 @@ async function fromGithub(input: string, system: StoredSystem, ref: string): Pro
   let files = snapshot.files.filter(f => /\.json$/i.test(f.path)
     && (file ? f.path === folder : !folder || f.path.startsWith(folder.replace(/\/$/, '') + '/')));
   const conventional = files.filter(f => f.path.startsWith(`systems/${system.definition.id}/resource_instances/`)
-    && /\/(?:class|race|species|ancestry|heritage|background)_[^/]+\.rpg\.json$/i.test(f.path));
+    && /\/(?:class|race|species|ancestry|heritage|background|feat)_[^/]+\.rpg\.json$/i.test(f.path));
   if (!file && (!folder || folder === `systems/${system.definition.id}/resource_instances`) && conventional.length) files = conventional;
   checkCount(files.length);
   if (files.some(f => f.size > MAX_SYSTEM_BYTES) || files.reduce((n, f) => n + f.size, 0) > MAX_REPOSITORY_CATALOG_BYTES)

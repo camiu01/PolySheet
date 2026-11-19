@@ -74,13 +74,13 @@ export function decodeUtf8(bytes: BufferSource): string {
  * Parse JSON with byte, node, depth, and prototype-key limits before validation.
  * @throws On malformed, oversized, excessively nested, or unsafe documents.
  */
-export function boundedJson(text: string, maxBytes = MAX_SYSTEM_BYTES): unknown {
+export function boundedJson(text: string, maxBytes = MAX_SYSTEM_BYTES, maxNodes = 400000): unknown {
   if (new TextEncoder().encode(text).length > maxBytes) throw new Error(`$: file troppo grande (massimo ${maxBytes / 1024 / 1024} MB)`);
   let parsed: unknown;
   try { parsed = JSON.parse(text.startsWith('\ufeff') ? text.slice(1) : text); } catch { throw new Error('$: JSON malformato. Controlla virgole e parentesi.'); }
   let nodes = 0;
   function visit(value: unknown, depth: number) {
-    if (++nodes > 400000 || depth > 64) throw new Error('$: documento troppo complesso (400.000 nodi, profondità 64)');
+    if (++nodes > maxNodes || depth > 64) throw new Error(`$: documento troppo complesso (${maxNodes.toLocaleString('it')} nodi, profondità 64)`);
     if (value && typeof value === 'object') {
       for (const [key, child] of Object.entries(value)) {
         if (['__proto__', 'prototype', 'constructor'].includes(key)) throw new Error(`$: chiave vietata ${key}`);

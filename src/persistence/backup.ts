@@ -5,12 +5,17 @@
 import { z } from 'zod';
 import { boundedJson, prepareSystem } from '../importing/system';
 import { artifactBytes, prepareImport } from '../importing/package';
-import { matchesType, object, type Character, type Combat, type ResourceInstance } from '../domain/model';
+import { matchesType, MAX_STORED_RESOURCES, object, type Character, type Combat, type ResourceInstance } from '../domain/model';
 import { checkReferences } from '../domain/references';
 import { eligibleCombatants, initiativeOrder } from '../engine/combat';
 import { db, type SheetDatabase } from './db';
 import { catalogDigest, prepareCatalogTemplate } from '../importing/catalog';
 
+/**
+ * Whole-archive backup bounds, sized for MAX_STORED_RESOURCES: one official 5e cleric character
+ * measured 2,264 records, 1.27 MB and 33,000 JSON nodes.
+ */
+const BACKUP_MAX_BYTES = 128 * 1024 * 1024, BACKUP_MAX_NODES = 4000000;
 const record = z.record(z.string(), z.unknown());
 const id = z.string().min(1).max(500);
 const date = z.string().datetime();
@@ -37,7 +42,7 @@ const schema = z.object({
     catalogIssue: z.string().max(100000).optional(),
     overrides: record.optional(),
     catalogSource: z.object({ original: z.string(), source: z.string().max(2000), digest: z.string().regex(/^[a-f0-9]{64}$/) }).strict().optional()
-  })).max(10000),
+  })).max(MAX_STORED_RESOURCES),
   combats: z.array(z.object({
     id, systemKey: id, name: z.string().min(1).max(100), difficulty: id.nullable(),
     status: z.enum(['preparing', 'active', 'finished']), round: z.number().int().min(0).max(100000),
@@ -67,10 +72,10 @@ export async function exportBackup(database = db) {
     characters: await database.characters.toArray(),
     resources: await database.resources.toArray(), rolls: await database.rolls.toArray(),
     preferences: await database.preferences.toArray(), combats: await database.combats.toArray()
-  // Compact output: indentation roughly doubled size and hit the 32 MiB restore bound.
+  // Compact output: indentation roughly doubled size against the restore bound.
   }));
   // Do not produce a backup that this version cannot read back.
-  schema.parse(boundedJson(text, 32 * 1024 * 1024));
+  schema.parse(boundedJson(text, BACKUP_MAX_BYTES, BACKUP_MAX_NODES));
   return text;
 }
 /**
@@ -79,7 +84,7 @@ export async function exportBackup(database = db) {
  * @throws Before any mutation if even one supplied record is invalid.
  */
 export async function validateBackup(text: string) {
-  const parsed = schema.safeParse(boundedJson(text, 32 * 1024 * 1024));
+  const parsed = schema.safeParse(boundedJson(text, BACKUP_MAX_BYTES, BACKUP_MAX_NODES));
   if (!parsed.success) throw new Error(parsed.error.issues.slice(0, 10).map(i => `$.${i.path.join('.')}: ${i.message}`).join('\n'));
   const data = parsed.data;
   if (data.version < 3 && data.combats.length) throw new Error('I combattimenti richiedono un backup v3.');

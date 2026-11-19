@@ -1,5 +1,5 @@
 /** @file Responsive grimoire shell. Persistent domain data is read directly from Dexie. */
-import { Component, useCallback, useEffect, useState, type ReactNode } from 'react';
+import { Component, useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { BookOpen, Check, Dices, Download, FolderOpen, Hexagon, LayoutGrid, Menu, Settings2, ShieldCheck, X } from 'lucide-react';
@@ -38,6 +38,45 @@ export default function App() {
   const [notification, setNotification] = useState<{ text: string; error: boolean } | null>(null);
   useEffect(connectNavigation, []);
   useEffect(() => { setMenu(false); }, [page, characterId]);
+  const entered = useRef(false);
+  // A new destination starts at its top with focus on its heading (or main), never at the old scroll offset.
+  useEffect(() => {
+    if (!entered.current) { entered.current = true; return; }
+    window.scrollTo({ top: 0 });
+    const frame = requestAnimationFrame(() => {
+      const main = document.getElementById('main');
+      const heading = main?.querySelector<HTMLElement>('h1');
+      if (heading && !heading.hasAttribute('tabindex')) heading.setAttribute('tabindex', '-1');
+      (heading ?? main)?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [page, characterId]);
+  const drawer = useRef<HTMLElement>(null), opener = useRef<HTMLElement | null>(null);
+  // The drawer is modal only below the shell breakpoint; widening the window closes it.
+  useEffect(() => {
+    if (!menu) return;
+    const query = window.matchMedia('(max-width: 760px)');
+    const close = () => { if (!query.matches) setMenu(false); };
+    query.addEventListener('change', close);
+    drawer.current?.querySelector<HTMLElement>('.drawer-close')?.focus();
+    return () => {
+      query.removeEventListener('change', close);
+      // The close button unmounts with the drawer, so focus may already have dropped to <body>.
+      const lost = document.activeElement === document.body || drawer.current?.contains(document.activeElement);
+      if (opener.current?.isConnected && lost) opener.current.focus();
+    };
+  }, [menu]);
+  // A tap does not focus the trigger on touch devices, so remember it explicitly for focus return.
+  const toggleMenu = (event: { currentTarget: HTMLElement }) => { opener.current = event.currentTarget; setMenu(!menu); };
+  function trapDrawer(event: KeyboardEvent<HTMLElement>) {
+    if (!menu) return;
+    if (event.key === 'Escape') { event.preventDefault(); setMenu(false); return; }
+    if (event.key !== 'Tab') return;
+    const focusable = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), a[href]')].filter(item => item.offsetParent !== null);
+    const first = focusable[0], last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+  }
   const [installEvent, setInstallEvent] = useState<InstallEvent | null>(null);
   const { needRefresh: [needRefresh], offlineReady: [offlineReady, setOfflineReady], updateServiceWorker } = useRegisterSW({
     onRegisterError(error) { setNotification({ text: `Service worker: ${String(error)}`, error: true }); }
@@ -69,7 +108,9 @@ export default function App() {
   return <div className="app-shell">
     <a className="skip-link" href="#main">{it.skipToContent}</a>
     {menu && <button className="nav-backdrop" aria-label={it.close} onClick={() => setMenu(false)} />}
-    <aside id="main-navigation" className={`sidebar ${menu ? 'sidebar-open' : ''}`}>
+    <aside id="main-navigation" ref={drawer} className={`sidebar ${menu ? 'sidebar-open' : ''}`} onKeyDown={trapDrawer}
+      role={menu ? 'dialog' : undefined} aria-modal={menu || undefined} aria-label={menu ? it.mainNavigation : undefined}>
+      {menu && <button type="button" className="icon-button drawer-close" aria-label={it.closeNavigation} onClick={() => setMenu(false)}><X size={20} /></button>}
       <button className="brand" onClick={() => go('characters')} aria-label={`${it.brand} · ${it.characters}`}><span className="brand-symbol"><Hexagon size={27} /><span /></span><strong>{it.brand}<span>{it.tagline}</span></strong></button>
       <div className="nav-section-label">{it.atTheTable}</div>
       <nav aria-label={it.mainNavigation}>{pages.map(p => <button key={p.id} onClick={() => go(p.id)} className={`nav-item ${page === p.id ? 'active' : ''}`} aria-current={page === p.id ? 'page' : undefined}><p.icon size={19} />{p.label}{p.id === 'characters' && <span className="nav-count">{characters.length}</span>}</button>)}</nav>
@@ -79,7 +120,7 @@ export default function App() {
         { id: 'settings', label: it.settings, icon: Settings2 }
       ].map(p => <button key={p.id} onClick={() => go(p.id as Page)} className={`nav-item ${page === p.id ? 'active' : ''}`} aria-current={page === p.id ? 'page' : undefined}><p.icon size={19} />{p.label}</button>)}</nav>
     </aside>
-    <div className="main-shell"><header className="topbar"><div className="breadcrumb"><button className="icon-button mobile-menu" aria-label={it.mainNavigation} aria-expanded={menu} onClick={() => setMenu(!menu)}><Menu size={21} /></button><span>{it.mySpace}</span><span className="breadcrumb-slash">/</span><strong>{it[page]}</strong></div>
+    <div className="main-shell" inert={menu || undefined}><header className="topbar"><div className="breadcrumb"><button className="icon-button mobile-menu" aria-label={it.mainNavigation} aria-expanded={menu} onClick={toggleMenu}><Menu size={21} /></button><span>{it.mySpace}</span><span className="breadcrumb-slash">/</span><strong>{it[page]}</strong></div>
       <button className="mobile-brand" onClick={() => go('characters')}><Hexagon size={22} />{it.brand}</button>
       <span className="save-status" data-testid="save-status" role="status">{pending ? it.saving : notification?.error ? it.error : it.saved}</span>
       {installEvent && <button className="icon-button" aria-label={it.install} onClick={() => void run(async () => { await installEvent.prompt(); await installEvent.userChoice; setInstallEvent(null); })}><Download size={18} /></button>}</header>
@@ -97,10 +138,10 @@ export default function App() {
         <footer className="main-footer"><span>{it.brand} <span className="footer-separator">/</span> {it.footerTagline}</span><span>LOCAL-FIRST · OPEN SOURCE</span></footer>
       </main>
     </div>
-    <nav className="mobile-tabs" aria-label={it.mobileNavigation}>
+    <nav className="mobile-tabs" aria-label={it.mobileNavigation} inert={menu || undefined}>
       {pages.filter(p => ['characters', 'systems', 'dice'].includes(p.id)).map(p => <button key={p.id}
         aria-current={page === p.id ? 'page' : undefined} onClick={() => go(p.id)}><p.icon size={21} /><span>{p.label}</span></button>)}
-      <button aria-label={it.more} aria-expanded={menu} aria-controls="main-navigation" onClick={() => setMenu(!menu)}><Menu size={21} /><span>{it.more}</span></button>
+      <button aria-label={it.more} aria-expanded={menu} aria-controls="main-navigation" onClick={toggleMenu}><Menu size={21} /><span>{it.more}</span></button>
     </nav>
   </div>;
 }

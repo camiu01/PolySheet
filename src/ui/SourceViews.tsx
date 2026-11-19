@@ -73,7 +73,7 @@ export function SourceResourceSelect({ node: v, context: ctx }: { node: View; co
     await ctx.onCommit(latest => {
       const current = latest[fieldId];
       const previous = v.should_append === true && Array.isArray(current) ? current : [];
-      if (previous.length >= 10000) throw new Error(it.resourceListLimit);
+      if (previous.length >= 10000) throw new Error(it.resourceItemsLimit);
       return { [fieldId]: arrayField ? [...previous, { resourceId: record.id }] : { resourceId: record.id } };
     }, created);
     setOpen(false); setCreating(false);

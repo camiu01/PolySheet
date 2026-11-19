@@ -104,8 +104,8 @@ it('checks count and byte limits at the boundary before downloading catalog file
   for (const [count, size, expected] of [
     [4, MAX_REPOSITORY_CATALOG_BYTES / 4 + 1, '24 MiB'],
     [3, MAX_REPOSITORY_CATALOG_BYTES / 3, 'HTTP 404'],
-    [1001, 1, '24 MiB'],
-    [1000, 1, 'HTTP 404']
+    [2001, 1, '24 MiB'],
+    [2000, 1, 'HTTP 404']
   ] as const) {
     const fetch = fixture({ entries: [...metadata, ...Array.from({ length: count }, (_, i) => ({
       path: `systems/5e/resource_instances/class_${i}.rpg.json`, size, mode: '100644', type: 'blob'

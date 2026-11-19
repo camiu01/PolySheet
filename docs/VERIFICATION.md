@@ -777,3 +777,128 @@ references passed validation; fenced code blocks are balanced. `git diff --check
 passed, with existing LF/CRLF conversion notices only. No Markdown linter was
 installed. The scoped inline visual review is retained locally at
 `.reference/ui-review/review.md`; no independent review is claimed.
+
+## UX backlog P1: resource archive and mobile drawer, 2026-11-19
+
+- Resource archive (`src/ui/Tools.tsx`): name search (accent- and
+  case-insensitive), type and origin filters (catalog = `catalogSource`),
+  result count, clear filters and 50-card pages; filters reset per system and
+  the page clamps after filtering or deletion. Only one page is mounted.
+  `tests/resource-archive.test.tsx` covers 60 records, paging, search, origin
+  and the no-match state; the live 5e2024 browser assertion now checks the full
+  count text and 50 mounted cards.
+- Mobile drawer (`src/App.tsx`): opening focuses a new close control, Tab and
+  Shift+Tab wrap inside, Escape closes, the main shell and bottom tabs are
+  `inert` while open, focus returns to the trigger (recorded on click, since a
+  tap does not focus it), and widening past 760 px closes it.
+  `tests/e2e/navigation.spec.ts` (mobile project) covers these; checked by hand
+  in the dev preview at 375 x 812.
+- `npm run check`: 348 passed, 1 skipped, 44 files. `npm run build`: passed.
+- Production Playwright `/PolySheet/` after P1: 97 passed, 3 skipped (5.6 min);
+  the live repository test now searches for Druid, which is past the first page.
+
+## UX backlog P2: creation footer, navigation reset, grouped errors, validation, 2026-11-19
+
+- Guided creation (`src/styles.css`): the wizard uses the constrained form
+  scrollport, so only fields scroll. The shared e2e `create` helper asserts
+  that Next is fully in the viewport before and after scrolling the fields;
+  passed for the real 5e, 5e2024 and PF2e repositories on desktop and mobile.
+- Destination changes (`src/App.tsx`): scroll returns to the top and focus moves
+  to the page `h1` (or `main`), also after browser Back;
+  `tests/e2e/navigation.spec.ts` covers both projects.
+- Grouped sheet errors (`src/ui/ViewErrors.tsx`): on the character sheet each
+  failed view shows a short "Non calcolabile" marker (full message in its
+  title and for screen readers) without its own live region; one expandable
+  summary at the top lists each message with its count.
+  `tests/view-errors.test.tsx`.
+- Validation (`src/ui/renderer.tsx`, `src/ui/SourceForm.tsx`): a shown message
+  gets a per-instance id and marks the view's editable controls with
+  `aria-invalid` and `aria-describedby`. In forms with a submit summary the
+  messages are not extra alerts, a rejected submit focuses the first invalid
+  control, and the summary is focused when no control is reachable (collapsed
+  section or no input). Dice formula errors appear beside the formula instead of
+  the app-wide notice. `tests/view-session.test.tsx`.
+- Compact sheet profile (`src/styles.css`, CSS only, no content dropped): on
+  wide screens the avatar section is one row (portrait, photo action, source
+  text, stacks); on mobile portrait and photo action share a row; the sheet
+  heading and its notices use less spacing. Measured with Playwright on the
+  official 5e 0.9.1 with a new manual character: desktop avatar section
+  390 → 98 px, first stat block y=1536 → 1204; mobile avatar section
+  354 → 280 px. Screenshots inspected; the temporary capture spec was removed.
+- `npm run check`: 351 passed, 1 skipped, 45 files. `npm run build`: passed.
+- Production Playwright `/PolySheet/` before the profile change: 99 passed, 3 skipped (5.3 min).
+- Production Playwright `/PolySheet/` after the profile change: 99 passed, 3 skipped (5.4 min).
+  The skips are the desktop run of the mobile-only drawer test and the fixture-gated HP/AC recovery test on both projects.
+
+## 5e level 20, PF2e entry, archive limits and creation rows, 2026-11-19
+
+- 5e level 20: with the official 5e 0.9.1 and each of 14 official class
+  catalogs, `advanceCharacter` from level 1 to 20 succeeded for every class in
+  a fresh database (measured, then removed). The dialog now offers "Livello N"
+  and "Livello massimo (20)"; the real-repository e2e advances a Druid to 20
+  with a subclass and checks the summary (Archdruid, nothing recovered).
+- Archive limits: one character clones its class graph; an official cleric
+  measured 2,264 records, 1.27 MB, 33,000 JSON nodes. The old 10,000-record and
+  400,000-node backup caps blocked new characters after a few. Stored records
+  are now bounded at 100,000 (`MAX_STORED_RESOURCES`) and backups at 128 MiB and
+  4,000,000 nodes; per-list and per-graph bounds stay at 10,000 with their own
+  message. `tests/catalog.test.ts` checks the new limit.
+- PF2e: preparing the public source fails at
+  `systems/pf2e/system/resources/weapon/stats.rpgs:928` (a `)` without an
+  opening parenthesis), reproduced locally at commit 8788e3b; PolySheet does not
+  guess a fix. The game list now shows a PF2e row: download the publisher's
+  compiled `.rpg`, then upload it (the same import already covered by the
+  real-repository PF2e e2e). Advancement for PF2e was added afterwards (next
+  section).
+- Guided creation: a source button beside choice controls (5e/5e2024 "SEE
+  DETAILS" with race/species) now shares the row with the choice on desktop and
+  aligns with it when wrapping on mobile; screenshots inspected with the
+  5e2024 Astral Elf catalog.
+- `npm run check`: 351 passed, 1 skipped, 45 files. `npm run build`: passed.
+- Production Playwright `/PolySheet/`: 99 passed, 3 skipped (5.4 min).
+
+## PF2e advancement, 2026-11-19
+
+- `progressionContract` recognizes the PF2e `class_progression` increment;
+  HP stays derived from levels (no dice, no `base_hp` write), no subclass list,
+  no multiclass or HP-method controls. Summary features fall back to
+  `class.current_level_features`; `*_color` sheet stats are not listed as gains.
+- Local check over the 9 pinned PF2e classes: all reach level 20 (measured,
+  then removed). `tests/progression.test.ts` keeps Fighter (max HP 181) and
+  Wizard (101), zero dice draws and unchanged `base_hp`.
+- The real-repository e2e now advances the PF2e Fighter to 20 through
+  "Livello massimo (20)" on desktop and mobile, and still the 5e Druid.
+- `npm run check`: 352 passed, 1 skipped, 45 files. `npm run build`: passed.
+- Production Playwright `/PolySheet/`: 99 passed, 3 skipped (5.4 min).
+
+## PF2e level choices and feat catalogs, 2026-11-19
+
+- `tests/progression.test.ts`: a PF2e Fighter at level 5 lists open grants;
+  assigning Strength to the level-5 boost and applying commits
+  `committed_ability_boosts` and changes the Strength score; a second apply
+  leaves it unchanged.
+- Real-repository e2e (desktop and mobile): after "Livello massimo (20)" the
+  Fighter shows the open choices ("60 scelte aperte"); assigning a one-boost
+  grant removes it from the list and «Applica le scelte» reports success.
+- Feat catalogs prepared locally (measured, then removed): PF2e 1,034/1,089,
+  5e 148/148; limits and copy updated to 2,000 files (`repository.test.ts`,
+  `catalog-url.test.ts`).
+- `npm run check`: 353 passed, 1 skipped, 45 files. `npm run build`: passed.
+- Production Playwright `/PolySheet/`: 99 passed, 3 skipped (5.6 min).
+
+## 5e ability score improvements in level up, 2026-11-19
+
+- `tests/progression.test.ts`: an imported Fighter reports ASI class levels
+  4, 6, 8, 12, 14, 16, 19 for 1 → 20 and none for 1 → 3; Strength + Strength
+  takes 15 to 17; an unknown ability is rejected without writing; the Acrobat
+  feat catalog is appended to `feats`. PF2e also defines `should_show_asi`;
+  the first full e2e run showed 19 ASI forms beside its grants (strict-mode
+  failure), so ASI levels are limited to `class_details` sources and the PF2e
+  test asserts none.
+- Source check: `level_up_asi` in the pinned 5e release adds +1 per selection
+  or sets the feat, with no cap or prerequisite condition.
+- Real-repository e2e (desktop and mobile): after "Livello massimo (20)" the
+  Druid shows five ASI forms (class level 4 first); Wisdom + Wisdom applies
+  and the form locks. Screenshots checked at desktop and mobile width.
+- `npm run check`: 354 passed, 1 skipped, 45 files. `npm run build`: passed.
+- Production Playwright `/PolySheet/`: 99 passed, 3 skipped (5.8 min).

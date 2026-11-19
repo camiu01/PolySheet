@@ -8,7 +8,7 @@ request. Evidence comes from production screenshots at 1440 x 1000 and
 Preserve the charcoal/brass design, Italian application copy, original source
 labels, local-first data ownership and visible compatibility limits.
 
-- [ ] **P1 — Make the resource archive searchable and bounded.**
+- [x] **P1 — Make the resource archive searchable and bounded.**
   The reviewed archive renders 212 cards and a roughly 58,106 px mobile page.
   Add name search, definition-type and catalog/local filters, result counts,
   clear filters and 50-record pagination. Classify catalogs by `catalogSource`,
@@ -20,7 +20,7 @@ labels, local-first data ownership and visible compatibility limits.
   `src/ui/it.ts`. Update existing browser assertions that expect 74 mounted
   cards to check bounded rendering and the full result count instead.
 
-- [ ] **P1 — Make the mobile navigation drawer keyboard-accessible.**
+- [x] **P1 — Make the mobile navigation drawer keyboard-accessible.**
   Opening currently leaves focus on the trigger; Escape does not close the
   drawer, and background controls remain keyboard-reachable. Move focus inside,
   contain Tab/Shift+Tab, isolate the background, provide an accessible close
@@ -28,7 +28,7 @@ labels, local-first data ownership and visible compatibility limits.
   resizing to desktop without leaving inert content or a locked scroll.
   Relevant file: `src/App.tsx`.
 
-- [ ] **P2 — Keep guided creation actions visible.**
+- [x] **P2 — Keep guided creation actions visible.**
   The initial wizard footer was below the viewport on desktop (y=1318) and
   mobile (y=1754). Extend the existing constrained form/scrollport layout to
   `CreationFlow`, so only fields scroll and Back/Next/Cancel remain visible.
@@ -36,7 +36,7 @@ labels, local-first data ownership and visible compatibility limits.
   Relevant files: `src/ui/CreationFlow.tsx`, `src/ui/CharacterCreator.tsx`,
   `src/styles.css`. Test footer geometry before and after scrolling.
 
-- [ ] **P2 — Prioritize playable sheet information above profile space.**
+- [x] **P2 — Prioritize playable sheet information above profile space.**
   The profile/photo panel, headings and warnings occupy almost the whole first
   desktop viewport before HP, armor class and initiative. Compact the profile
   and surrounding spacing without dropping source content, photo actions,
@@ -45,7 +45,7 @@ labels, local-first data ownership and visible compatibility limits.
   Relevant files: `src/ui/Characters.tsx`, `src/ui/SheetSections.tsx`,
   `src/ui/renderer.tsx`, `src/styles.css`.
 
-- [ ] **P2 — Group repeated incomplete-sheet errors without hiding them.**
+- [x] **P2 — Group repeated incomplete-sheet errors without hiding them.**
   The intentionally incomplete Human Fighter 20, missing Background, renders
   20 errors for `background.current_level_features`. Retain the existing
   "Completa ora" recovery action and honest non-calculable field markers;
@@ -55,7 +55,7 @@ labels, local-first data ownership and visible compatibility limits.
   Relevant files: `src/ui/Characters.tsx`, `src/ui/renderer.tsx`.
   This evidence does not establish failure of a fully configured character.
 
-- [ ] **P2 — Reset scroll and focus on local destination changes.**
+- [x] **P2 — Reset scroll and focus on local destination changes.**
   Navigating between mobile screens retained scroll (observed y=44), leaving
   headings partly behind the top bar. Put the new destination at its readable
   beginning and move focus to its heading/main content. Cover sheet entry,
@@ -63,7 +63,7 @@ labels, local-first data ownership and visible compatibility limits.
   section-anchor scrolling and deployment base paths working.
   Relevant files: `src/App.tsx`, `src/ui/navigation.ts`.
 
-- [ ] **P2 — Associate validation with its fields and screen.**
+- [x] **P2 — Associate validation with its fields and screen.**
   Rejected guided creation shows three alerts but no corresponding
   `aria-invalid`/`aria-describedby`, and focus stays on Next. Use unique
   per-rendered-instance description IDs, mark the actual editable controls

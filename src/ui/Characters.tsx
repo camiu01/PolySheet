@@ -9,6 +9,7 @@ import { it } from './it';
 import { useUi } from './store';
 import { commitCharacterView, commitResourceView } from '../persistence/views';
 import { setResourceOverride } from '../persistence/resources';
+import { ViewErrorGroup } from './ViewErrors';
 import { manualFieldGroup, sessionViews } from '../engine/view-session';
 import { SourceForm } from './SourceForm';
 import { CharacterCatalog } from './CharacterCatalog';
@@ -121,10 +122,10 @@ export const CharacterSheet = memo(function CharacterSheet({ character, system, 
       <button type="button" className="button secondary" onClick={() => setSetup(true)}>{it.completeSetup}</button></div>}
     {setup && <CharacterCreator systems={[system]} character={character} onSystemChange={() => undefined}
       run={run} onClose={() => setSetup(false)} onDone={() => setSetup(false)} />}
-    {progression && <CharacterProgression character={character} system={system} resources={resources} onClose={() => setProgression(false)} />}
+    {progression && <CharacterProgression character={character} system={system} resources={resources} sheet={context} onClose={() => setProgression(false)} />}
     <div className="sheet-layout"><div className="sheet-main">
       <h2 className="sr-only">{it.sheet}</h2>
-      <SheetSections sections={system.definition.character_sheet_sections} context={context} />
+      <ViewErrorGroup><SheetSections sections={system.definition.character_sheet_sections} context={context} /></ViewErrorGroup>
       {groups.length > 0 && <details className="base-editor"><summary>{it.sourceFormGroups}</summary><p className="muted">{it.sourceFormHelp}</p>
         {groups.map((v, i) => <button className="button secondary" key={`${v.id}:${i}`} onClick={() => setSourceGroup(v)}>{it.edit} · {v.id}</button>)}
       </details>}
