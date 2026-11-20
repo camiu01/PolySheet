@@ -235,6 +235,15 @@ it('accepts repeated ids on static views, as in the official 5e About page, but 
   expect(() => sessionViews({ id: 'list', type: 'list', subviews: [heading, input] })).toThrow('duplicato');
 });
 
+it('accepts a static container sharing its id with the one input it encloses, as in the 5e armor edit view', () => {
+  const select = { type: 'select', id: 'armor_edit_rarity', options: 'item_rarity', stat: 'rarity' };
+  const label = { type: 'text', id: 'armor_edit_rarity_label', text: { type: 'constant', value: 'Rarity: ', value_type: 'string' } };
+  const composite = { type: 'composite', id: 'armor_edit_rarity', subviews: [label, select] };
+  expect(sessionViews({ id: 'list', type: 'list', subviews: [composite] }).map(v => v.type)).toEqual(['list', 'composite', 'text', 'select']);
+  expect(() => sessionViews({ id: 'list', type: 'list', subviews: [{ ...composite, subviews: [select, select] }] })).toThrow('duplicato');
+  expect(() => sessionViews({ id: 'list', type: 'list', subviews: [composite, select] })).toThrow('duplicato');
+});
+
 it('ties a revealed validation message to its control and focuses it on a rejected submit', async () => {
   const stats = [base('title', 'string', '')];
   render(<SourceForm revealErrorsOnSubmit input={{ id: 'title_view', type: 'stat', stat: 'title', validation_message: constant('Scrivi un titolo') }}

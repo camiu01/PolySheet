@@ -3,6 +3,17 @@
 [Documentation index](README.md) · [How to run checks](DEVELOPMENT.md) ·
 [Historical records](VERIFICATION_HISTORY.md) · [12:37 checkpoint](VERIFICATION_2026-11-16_1237.md)
 
+## 5e armor edit view, 2026-11-20
+
+- The official 5e armor edit view wraps the `armor_edit_rarity` select in a
+  static composite with the same id, so creating or editing an armor failed
+  with "ID vista duplicato". Form sessions now accept a static container that
+  shares its id with the one input it encloses; sibling duplicates and two
+  inputs with one id are still rejected.
+- `npm run check`: 401 passed, 1 skipped.
+- Browser check on the dev server: Risorse → Nuova risorsa locale → Armor now
+  opens the source form (Name, Type, Rarity, …) without the error.
+
 ## Spell levels in the resource picker, 2026-11-20
 
 - The local resource picker labels 5e spells with their level (cantrip or

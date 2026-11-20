@@ -8,22 +8,27 @@ const inputKeys = ['stat', 'edit_stat', 'photo_stat', 'resource_stat', 'resource
  * @remarks Official sources reuse ids on static views (5e About subheaders). Only an id
  * shared with a view that can hold a draft is ambiguous, so only that is rejected; a read-only
  * card (`strict` false) keeps the first such view instead (5e feat display repeats `feat_display_effects`).
+ * A static container may share its id with the single input it encloses (5e armor edit view wraps
+ * the `armor_edit_rarity` select in a composite of the same id): drafts are read only by inputs.
  */
 export function sessionViews(input: unknown, strict = true): View[] {
-  const result: View[] = [], ids = new Set<string>(), inputIds = new Set<string>();
+  const result: View[] = [], ids = new Set<string>(), inputIds = new Set<string>(), staticAncestors: string[] = [];
   function walk(input: unknown, depth: number) {
     if (depth > 64 || result.length >= 10000) throw new Error('Vista troppo complessa');
     const node = view(input);
     const holdsInput = inputKeys.some(key => node[key] != null);
-    if (ids.has(node.id) && (holdsInput || inputIds.has(node.id))) {
+    const enclosed = holdsInput && !inputIds.has(node.id) && staticAncestors.includes(node.id);
+    if (ids.has(node.id) && (holdsInput || inputIds.has(node.id)) && !enclosed) {
       if (strict) throw new Error(`ID vista duplicato: ${node.id}`);
       return;
     }
     ids.add(node.id); if (holdsInput) inputIds.add(node.id);
     result.push(node);
+    if (!holdsInput) staticAncestors.push(node.id);
     for (const field of ['subviews', 'header', 'content', 'center_content', 'bottom_left_stack', 'bottom_right_stack'])
       if (Array.isArray(node[field])) node[field].forEach(v => walk(v, depth + 1));
     for (const field of ['header_view', 'left_view']) if (node[field]) walk(node[field], depth + 1);
+    if (!holdsInput) staticAncestors.pop();
   }
   walk(input, 0); return result;
 }
