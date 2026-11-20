@@ -16,9 +16,9 @@
  * (5e `use`), a plain string a global one (5e `short_rest`).
  */
 import { isResourceReference, jsonValue, matchesType, object, type Character, type Json, type ResourceInstance, type SystemDefinition } from '../domain/model';
-import { createEvaluator, RuntimeResource } from './formulas';
+import { createEvaluator, resourceParent, RuntimeResource } from './formulas';
 import { eventNames, executeEffect, validateEffect, writeCharacterStat, type EffectContext, type EffectTerminal, type ResourceWriteMode } from './effects';
-import { initialDrafts } from './view-session';
+import { initialDrafts, sessionViews } from './view-session';
 
 type ResourceDefinition = SystemDefinition['resources'][number];
 
@@ -56,6 +56,27 @@ function ownedIds(character: Character, resources: ResourceInstance[]) {
     for (const item of references(record.values)) queue.push(item.resourceId);
   }
   return owned;
+}
+
+/** Base-value stat ids from the character to `id`, breadth-first over owned references. */
+function referencePath(character: Character, resources: ResourceInstance[], id: string) {
+  const byId = new Map(resources.map(record => [record.id, record]));
+  const seen = new Set<string>();
+  const queue: { values: Record<string, unknown>; path: { stat: string; id: string }[] }[] = [{ values: character.values, path: [] }];
+  while (queue.length && seen.size < 10000) {
+    const { values, path } = queue.shift()!;
+    for (const [stat, value] of Object.entries(values)) {
+      for (const item of (Array.isArray(value) ? value : [value]).filter(isResourceReference)) {
+        const next = [...path, { stat, id: item.resourceId }];
+        if (item.resourceId === id) return next;
+        const record = byId.get(item.resourceId);
+        if (seen.has(item.resourceId) || !record || record.catalogSource) continue;
+        seen.add(item.resourceId);
+        queue.push({ values: record.values, path: next });
+      }
+    }
+  }
+  return undefined;
 }
 
 function targetId(target: unknown) {
@@ -143,13 +164,39 @@ export function resourceDispatcher(system: SystemDefinition, character: Characte
     if (!owned.has(id)) throw new Error('Effetto su una risorsa che non appartiene al personaggio.');
     return { id, record, definition };
   }
+  const parents = new Map<string, RuntimeResource | undefined>();
+  /**
+   * The `$parent` a sheet card of `id` sees: re-walk its reference path through evaluated stats so the
+   * final reference carries the same owner chain (5e feature → class → `current_class_details`).
+   */
+  function parentOf(id: string) {
+    if (parents.has(id)) return parents.get(id);
+    const path = referencePath(character, resources, id);
+    let parentScope: RuntimeResource | undefined;
+    // Only a path through declared character stats can be re-evaluated; otherwise the card keeps no `$parent`, as before.
+    if (path && path[0] && system.character_stats.some(stat => stat.id === path[0].stat)) {
+      const evaluator = (variables: Record<string, unknown>) => createEvaluator(system.character_stats, character.values, undefined, {
+        resources: withWrites(resources, writes), resourceDefinitions: system.resources, createdAt: character.createdAt,
+        enumerations: system.enumerated_types, character: characterScope(), variables });
+      let reference: unknown;
+      for (const [index, step] of path.entries()) {
+        const value = index === 0 ? evaluator({}).get(step.stat)
+          : evaluator({ $step: reference }).evaluate({ type: 'stat', stat: `$step.${step.stat}` });
+        reference = (Array.isArray(value) ? value : [value]).find(item => isResourceReference(item) && item.resourceId === step.id);
+        if (!reference) break;
+      }
+      parentScope = reference ? resourceParent(reference) : undefined;
+    }
+    parents.set(id, parentScope);
+    return parentScope;
+  }
   function evaluateIn(id: string, definition: ResourceDefinition, variables: Record<string, unknown>, value: unknown,
     stats = definition.stats) {
     const current = withWrites(resources, writes), self = current.find(item => item.id === id)!;
     return createEvaluator(stats, self.values, undefined, {
       resources: current, resourceDefinitions: system.resources, createdAt: self.createdAt,
       instanceId: self.sourceId ?? self.id, enumerations: system.enumerated_types, variables,
-      overrides: self.overrides, character: characterScope()
+      overrides: self.overrides, character: characterScope(), parent: parentOf(id)
     }).evaluate(value);
   }
   function subscriptions(id: string, definition: ResourceDefinition) {
@@ -211,11 +258,11 @@ export function resourceDispatcher(system: SystemDefinition, character: Characte
   }
   return {
     dispatch: (target: unknown, name: string, payload?: Record<string, unknown>) => dispatchResource(target, name, parent.ancestors, payload),
-    /** A card button: the card's own inputs are its `$view` (5e item `item_quantity` edits `edit_quantity`). */
-    card(target: unknown, name: string, payload?: Record<string, unknown>) {
+    /** A card button: the card's own inputs, plus its unsaved local choices, are its `$view` (5e item `item_quantity` edits `edit_quantity`). */
+    card(target: unknown, name: string, payload?: Record<string, unknown>, view?: Record<string, unknown>) {
       const { id, definition } = ownedRecord(target);
       const self = withWrites(resources, writes).find(item => item.id === id)!;
-      return dispatchResource(target, name, parent.ancestors, payload, cardView(definition, self.values));
+      return dispatchResource(target, name, parent.ancestors, payload, { ...cardView(definition, self.values), ...localView(definition, view) });
     },
     /**
      * Deliver a character event to every owned instance subscribed to it by name (5e effect
@@ -245,7 +292,28 @@ export function resourceDispatcher(system: SystemDefinition, character: Characte
 }
 
 function cardView(definition: ResourceDefinition, values: Record<string, unknown>) {
-  return definition.display_view == null ? {} : initialDrafts(definition.display_view, definition.stats, values);
+  return definition.display_view == null ? {} : initialDrafts(definition.display_view, definition.stats, values, false);
+}
+
+/**
+ * Card-local choices: a `select` on a calculated stat holds an unsaved selection the card's own button
+ * reads as `$view` (5e feat `feat_display_selectable_features_select` with SAVE).
+ */
+export function cardLocalInputs(definition: ResourceDefinition) {
+  if (definition.display_view == null) return [];
+  return sessionViews(definition.display_view, false).filter(node => node.type === 'select' && typeof node.stat === 'string'
+    && definition.stats.some(stat => stat.id === node.stat && stat.type === 'calculated')).map(node => node.id);
+}
+
+/** Accept only declared local selections, as one id or a bounded id list. */
+function localView(definition: ResourceDefinition, view: Record<string, unknown> = {}) {
+  const allowed = cardLocalInputs(definition);
+  for (const [key, value] of Object.entries(view)) {
+    const ids = Array.isArray(value) ? value : [value];
+    if (!allowed.includes(key) || ids.length > 100 || ids.some(item => typeof item !== 'string' || item.length > 200))
+      throw new Error('Scelta della scheda non valida.');
+  }
+  return view;
 }
 
 /** Static gate for a resource-card button: one valid handler on that resource type, nothing executed. */
@@ -258,7 +326,7 @@ export function resourceEventSupported(system: SystemDefinition, definitionId: s
     if (!mechanic) return false;
     validateEffect(object(mechanic.effects), system, [input.name], { nodes: 0, defer: true });
     // A required `$view.` value must be one of the card's own inputs; any other comes from a popup form.
-    const inputs = Object.keys(cardView(definition, {}));
+    const inputs = [...Object.keys(cardView(definition, {})), ...cardLocalInputs(definition)];
     return [...JSON.stringify(mechanic.effects).matchAll(/"\$view\.([\w-]+)/g)].every(match => inputs.includes(match[1]));
   } catch { return false; }
 }

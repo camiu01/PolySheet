@@ -1,5 +1,5 @@
 /** @file Manual character creation and source-generated character sheets. */
-import { memo, useState } from 'react';
+import { memo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ArrowLeft, ArrowUpRight, BookOpen, Check, ListChecks, Plus, ScrollText, Search, Trash2 } from 'lucide-react';
 import { isResourceReference, object, type Character, type StoredSystem, type View } from '../domain/model';
@@ -82,12 +82,14 @@ export const CharacterSheet = memo(function CharacterSheet({ character, system, 
   const [setup, setSetup] = useState(false);
   const [progression, setProgression] = useState(false);
   const events = useCharacterEvents(system, character);
+  // Unsaved card selections live with this sheet only; a reload starts from the saved values.
+  const cardInputs = useRef(new Map<string, Record<string, unknown>>());
   const resources = useLiveQuery(() => db.resources.where('systemKey').equals(system.key).toArray(), [system.key]) ?? [];
   const overrides = resolveCharacterOverrides(character.overrides);
   const change = (id: string, value: unknown) => { void run(() => setCharacterValue(character.id, id, value)); };
   const context = {
     canEvent: events.canEvent, onEvent: events.onEvent, eventBusy: events.eventBusy,
-    canResourceEvent: events.canResourceEvent, onResourceEvent: events.onResourceEvent,
+    canResourceEvent: events.canResourceEvent, onResourceEvent: events.onResourceEvent, cardInputs: cardInputs.current,
     onResourceChange: (resourceId: string, statId: string, value: unknown) => { void run(() => commitResourceView(resourceId, { [statId]: value })); },
     onResourceOverride: (resourceId: string, statId: string, value: number) => { void run(() => setResourceOverride(resourceId, statId, value)); },
     character: new RuntimeResource(`character:${character.id}`, system.definition.character_stats,

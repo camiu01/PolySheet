@@ -29,7 +29,8 @@ const flowSystem = {
         { type: 'setStat', stat: 'appunti', new_value: constant('aperta'), aggregation_type: 'set' },
         { type: 'showMessage', message: constant('Ciao') }] },
       post_edit: { type: 'when', clauses: [{ condition: stat('$is_new'),
-        effect: { type: 'addToStat', stat: 'scorte', value: stat('vigore') } }] }, view: { id: 'traits_list', type: 'list', subviews: [
+        // Reads the confirmed page input as `$view`, as 5e `creator_ability_score_increases` does.
+        effect: { type: 'addToStat', stat: 'scorte', value: stat('$view.vigore_input') } }] }, view: { id: 'traits_list', type: 'list', subviews: [
       { id: 'new_label', type: 'text', text: constant('Personaggio nuovo'), is_visible: stat('$is_new') },
       { id: 'vigore_input', type: 'stat', stat: 'vigore' }
     ] } }
@@ -77,7 +78,7 @@ it('walks source pages in one draft and saves the character only on the last pag
   fireEvent.click(screen.getByRole('button', { name: copy.create }));
   await waitFor(() => expect(onDone).toHaveBeenCalled());
   const [saved] = await db.characters.toArray();
-  // on_page_open wrote `appunti`; post_edit added vigore (4) to the default scorte (6).
+  // on_page_open wrote `appunti`; post_edit added $view.vigore_input (4) to the default scorte (6).
   expect(saved).toMatchObject({ name: 'Ilaria', values: { nome: 'Ilaria', vigore: 4, appunti: 'aperta', scorte: 10 } });
   expect(onDone).toHaveBeenCalledWith(saved.id);
 });

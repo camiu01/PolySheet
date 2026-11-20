@@ -6,6 +6,8 @@ export interface ResourceFilter {
   stat: string;
   name: string;
   values: (string | number | boolean)[];
+  /** Declared resource-typed options shown by a display stat (5e spell `classes`: class records by `name`). */
+  options?: { definitionId: string; displayStat: string };
 }
 
 /** Evaluate source prefilters in the parent scope; reject unknown filters and unsupported types. */
@@ -26,7 +28,9 @@ export function resourceFilters(input: unknown, definition: ResourceDefinition, 
     if (values.length > 10000 || !values.every((v): v is string | number | boolean =>
       v !== null && matchesType(v, type) && (typeof v === 'string' || typeof v === 'boolean' || typeof v === 'number' && Number.isFinite(v))))
       throw new Error(`Valore del filtro non valido: ${id}`);
-    return { stat: id, name: filter.name, values };
+    const options = typeof filter.options === 'string' && typeof filter.options_display_stat === 'string'
+      ? { definitionId: filter.options, displayStat: filter.options_display_stat } : undefined;
+    return { stat: id, name: filter.name, values, ...options ? { options } : {} };
   }).filter(filter => filter.values.length > 0);
 }
 
@@ -52,14 +56,30 @@ function filterValues(record: ResourceInstance, definition: ResourceDefinition):
   return values;
 }
 
-/** Match every active field, with any selected value within an array field; no coercion. */
+/**
+ * Values that select records: with resource-typed options, a shown label also selects the ids of the
+ * local option records displaying it (the 5e sheet filters spells by class name; spells store `bard`).
+ */
+function acceptedValues(filter: ResourceFilter, environment: EvaluationEnvironment) {
+  const options = filter.options, optionDefinition = options && environment.resourceDefinitions?.find(d => d.id === options.definitionId);
+  if (!options || !optionDefinition) return filter.values;
+  const ids = (environment.resources ?? []).filter(record => record.definitionId === options.definitionId).flatMap(record => {
+    const shown = filterValues(record, optionDefinition)[options.displayStat];
+    return filter.values.includes(shown as string) ? [record.sourceId ?? record.id] : [];
+  });
+  return [...new Set([...filter.values, ...ids])];
+}
+
+/** Match every active field, with any selected value within an array field; no coercion beyond declared option labels. */
 export function filterResources(resources: ResourceInstance[], definition: ResourceDefinition, filters: ResourceFilter[], environment: EvaluationEnvironment) {
   if (!filters.length) return resources;
+  const accepted = new Map(filters.map(filter => [filter, acceptedValues(filter, environment)]));
   return resources.filter(record => {
     const engine = createEvaluator(definition.stats, filterValues(record, definition), undefined, { ...environment, createdAt: record.createdAt, instanceId: record.sourceId ?? record.id, variables: undefined, overrides: undefined });
     return filters.every(filter => {
       const value = engine.get(filter.stat);
-      return Array.isArray(value) ? value.some(v => filter.values.includes(v)) : filter.values.some(v => v === value);
+      const values = accepted.get(filter)!;
+      return Array.isArray(value) ? value.some(v => values.includes(v)) : values.some(v => v === value);
     });
   });
 }

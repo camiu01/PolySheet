@@ -326,7 +326,7 @@ No initializer, roll, event or mechanic runs during form rendering or restore.
 | `viewPager` | One page at a time with source page names and the declared palette/hex color; page state is local presentation only |
 | `ticker` | Numeric base stat with `plusMinus`/`upDown` buttons, `left`/`right`/`sideToSide` placement, label and alignment, fixed or calculated bounds, `allowed_values`, `change_amount` (including 0), `always_show_sign`, `hide_value`, direct edit and headline/title/section/subhead text styles |
 | `select` | Enumerated `options` with `extends_type` inheritance and `allowed_options`, local `resource_options` or resource-type instances, `multi_select`, `max_selection_amount`, dropdown/list styles, `meta_stat`, `options_display_stat` and `resource_saved_stat` |
-| `menuButton` | Source icon name/size/color and enumeration entries; choosing an entry cannot execute its declared event |
+| `menuButton` | Source icon name/size/color and enumeration entries; choosing an entry fires the event named by its id when a supported handler exists, otherwise a visible not-executed note |
 | `button` | Source text and `enabled` state; declared `event`/`event_names` stay disabled with a visible note |
 | `resource` | One referenced instance through its `display`, `edit` or `list` view; direct field edits outside a draft session; an empty `create_if_empty` is reported, not executed |
 | `resourceArray` | Referenced instances with `display`/`edit`/`list` views, `left_view`, centered detail dialogs for either source variant, create/remove, `auto_add_first`, `hide_line` and hidden content lines |

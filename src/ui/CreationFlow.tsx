@@ -14,6 +14,7 @@ import { db, initialValues } from '../persistence/db';
 import { configureCharacter } from '../persistence/catalog';
 import { RuntimeResource } from '../engine/formulas';
 import { runCreationHook, type CreationDraft } from '../engine/creation-hooks';
+import { popupView } from '../engine/view-session';
 import { mergeStaged, SourceForm } from './SourceForm';
 import { Warning, type Run } from './shared';
 import { runCharacterEvent } from '../persistence/character-events';
@@ -43,8 +44,8 @@ export function CreationFlow({ system, run, onDone, onClose }: {
   const [draft, setDraft] = useState<CreationDraft>({ values: defaults, staged: [], skipped: [] });
   const [hookError, setHookError] = useState('');
   const records = useLiveQuery(() => db.resources.where('systemKey').equals(system.key).toArray(), [system.key]);
-  const hook = (field: string, at: number, from: CreationDraft, updatedStats: string[] = []) =>
-    runCreationHook(pages[at]?.[field], definition, from, records ?? [], definition.enumerated_types, { updatedStats });
+  const hook = (field: string, at: number, from: CreationDraft, updatedStats: string[] = [], view?: Record<string, unknown>) =>
+    runCreationHook(pages[at]?.[field], definition, from, records ?? [], definition.enumerated_types, { updatedStats, view });
 
   /** Show page `at`, running its open hook; a failing hook leaves the draft unchanged and visible. */
   function open(at: number, from: CreationDraft) {
@@ -90,7 +91,8 @@ export function CreationFlow({ system, run, onDone, onClose }: {
         onCommit: async (patch, created = []) => {
           const changes = typeof patch === 'function' ? patch({ ...draft.values }) : patch;
           let next: CreationDraft = { ...draft, values: { ...draft.values, ...changes }, staged: mergeStaged(draft.staged, created) };
-          try { next = hook('on_page_close', index, hook('post_edit', index, next, Object.keys(changes))); }
+          const view = popupView(page.view, definition.character_stats, draft.values, changes);
+          try { next = hook('on_page_close', index, hook('post_edit', index, next, Object.keys(changes), view), [], view); }
           catch (cause) {
             // A source hook reading an unanswered choice fails on the missing value; say what to do, keep the detail.
             const message = cause instanceof Error ? cause.message : String(cause);

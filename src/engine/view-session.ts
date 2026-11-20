@@ -6,15 +6,19 @@ const inputKeys = ['stat', 'edit_stat', 'photo_stat', 'resource_stat', 'resource
 /**
  * Walk only the current form; nested popups own independent sessions.
  * @remarks Official sources reuse ids on static views (5e About subheaders). Only an id
- * shared with a view that can hold a draft is ambiguous, so only that is rejected.
+ * shared with a view that can hold a draft is ambiguous, so only that is rejected; a read-only
+ * card (`strict` false) keeps the first such view instead (5e feat display repeats `feat_display_effects`).
  */
-export function sessionViews(input: unknown): View[] {
+export function sessionViews(input: unknown, strict = true): View[] {
   const result: View[] = [], ids = new Set<string>(), inputIds = new Set<string>();
   function walk(input: unknown, depth: number) {
     if (depth > 64 || result.length >= 10000) throw new Error('Vista troppo complessa');
     const node = view(input);
     const holdsInput = inputKeys.some(key => node[key] != null);
-    if (ids.has(node.id) && (holdsInput || inputIds.has(node.id))) throw new Error(`ID vista duplicato: ${node.id}`);
+    if (ids.has(node.id) && (holdsInput || inputIds.has(node.id))) {
+      if (strict) throw new Error(`ID vista duplicato: ${node.id}`);
+      return;
+    }
     ids.add(node.id); if (holdsInput) inputIds.add(node.id);
     result.push(node);
     for (const field of ['subviews', 'header', 'content', 'center_content', 'bottom_left_stack', 'bottom_right_stack'])
@@ -31,11 +35,20 @@ export function inputStat(node: View, stats: Stat[]) {
   return stats.find(s => s.id === id && s.type === 'base');
 }
 /** Seed only real writable input IDs; subsequent edits stay session-local. */
-export function initialDrafts(input: unknown, stats: Stat[], values: Record<string, unknown>) {
-  return Object.fromEntries(sessionViews(input).flatMap(v => {
+export function initialDrafts(input: unknown, stats: Stat[], values: Record<string, unknown>, strict = true) {
+  return Object.fromEntries(sessionViews(input, strict).flatMap(v => {
     const s = inputStat(v, stats);
     return s ? [[v.id, Object.hasOwn(values, s.id) ? values[s.id] : s.default_value ?? null]] : [];
   }));
+}
+/** Form inputs by view id for `$view`: edited values over the current ones (popup actions, creation page hooks). */
+export function popupView(input: unknown, stats: Stat[], values: Record<string, unknown>, patch: Record<string, unknown>) {
+  const result = initialDrafts(input, stats, values);
+  for (const node of sessionViews(input)) {
+    const s = inputStat(node, stats);
+    if (s && Object.hasOwn(patch, s.id)) result[node.id] = patch[s.id];
+  }
+  return result;
 }
 /** Nested sessions shadow matching input IDs without losing the parent's other live inputs. */
 export function scopedDrafts(parent: unknown, drafts: Record<string, unknown>) {

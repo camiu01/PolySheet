@@ -16,7 +16,7 @@ import { it } from '../ui/it';
 export const MAX_SYSTEM_BYTES = 8 * 1024 * 1024;
 /** Renderer field allowlist; unhandled fields remain in the original document. */
 export const viewFields: Record<string, string[]> = {
-  text: ['text', 'edit_stat', 'style', 'label', 'hint', 'max_length', 'bold', 'max_lines', 'signed', 'color', 'resource_id', 'resource_instance_ids_stat', 'resource_display_stat'],
+  text: ['text', 'edit_stat', 'style', 'label', 'hint', 'max_length', 'bold', 'markdown', 'max_lines', 'signed', 'color', 'resource_id', 'resource_instance_ids_stat', 'resource_display_stat'],
   stat: ['stat', 'edit_stat', 'change_amount', 'min_value_allowed', 'max_value_allowed', 'calculated_min_value_allowed', 'calculated_max_value_allowed', 'style', 'always_show_sign', 'override_label',
     'bottom_sheet_view', 'bottom_sheet_in_edit_mode', 'sheet_title', 'stat_color', 'name_color', 'edit_bottom_sheet_title'],
   section: ['header', 'content', 'show_divider', 'collapsible', 'start_collapsed', 'always_show_collapse_icon', 'content_item_min_width', 'alignment'],

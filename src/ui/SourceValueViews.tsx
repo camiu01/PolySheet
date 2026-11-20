@@ -199,11 +199,13 @@ function selectOptions(v: View, ctx: RenderContext, evaluate: (value: unknown) =
 	return entries.map(entry => ({ id: entry.id, label: entry.name, value: entry.id }));
 }
 
-/** Source `select`: single or multiple options from an enumeration or local resources. */
+/** Source `select`: single or multiple options from an enumeration or local resources; on a resource card
+ * a calculated target is an unsaved local choice for that card's own button (`onCardInput`). */
 export function SourceSelect({ node: v, context: ctx, evaluate }: {
 	node: View; context: RenderContext; evaluate: (value: unknown) => unknown;
 }) {
 	const [error, setError] = useState('');
+	const [local, setLocal] = useState<string[]>();
 	const targetId = typeof v.stat === 'string' ? v.stat
 		: v.meta_stat != null ? textValue(evaluate(v.meta_stat)) : '';
 	if (!targetId || targetId.includes('.')) throw new Error('Il selettore richiede un campo base diretto');
@@ -211,22 +213,25 @@ export function SourceSelect({ node: v, context: ctx, evaluate }: {
 	if (!stat) throw new Error(`Statistica mancante: ${targetId}`);
 	const multi = v.multi_select === true;
 	const options = selectOptions(v, ctx, evaluate);
-	const raw = inputValue(v, ctx, stat);
+	// On a resource card a calculated choice is an unsaved local selection for the card's own button (5e feat SAVE).
+	const cardLocal = stat.type === 'calculated' && ctx.onCardInput !== undefined;
+	const raw = cardLocal ? local ?? evaluate({ type: 'stat', stat: stat.id }) : inputValue(v, ctx, stat);
 	// Stored values may be resource ids from `resource_saved_stat`; map them back to option ids.
 	const stored = (Array.isArray(raw) ? raw : [raw]).filter((item): item is string => typeof item === 'string');
 	const selected = options.filter(option => stored.includes(option.value)).map(option => option.id);
 	const maximum = v.max_selection_amount == null ? undefined : numberValue(evaluate(v.max_selection_amount), it.selectMaximum);
-	const editable = ctx.onChange !== undefined;
+	const editable = cardLocal || ctx.onChange !== undefined;
 	// A single-choice select with exactly one option has no decision to make; in a draft form it is
 	// filled with that option so source page hooks (5e granted proficiencies) never read an empty choice.
 	const only = !multi && options.length === 1 && !selected.length && editable && ctx.drafts ? options[0] : undefined;
 	useEffect(() => { if (only) saveInput(v, ctx, stat.id, only.value); }, [only?.id]);
-	const explicitSaveNote = ctx.onChange && !ctx.drafts && v.should_auto_save !== true
+	const explicitSaveNote = !cardLocal && ctx.onChange && !ctx.drafts && v.should_auto_save !== true
 		? <small className="unsupported-note">{it.explicitSave}</small> : null;
 	function choose(ids: string[]) {
 		if (maximum !== undefined && ids.length > maximum) { setError(it.selectMaximumReached); return; }
 		setError('');
 		const values = ids.map(id => options.find(option => option.id === id)?.value ?? id);
+		if (cardLocal) { setLocal(values); ctx.onCardInput!(v.id, multi ? values : values[0] ?? null); return; }
 		saveInput(v, ctx, stat!.id, multi ? values : values[0] ?? null);
 	}
 	function toggle(option: SelectOption) {
@@ -255,7 +260,11 @@ export function SourceSelect({ node: v, context: ctx, evaluate }: {
 	</label>;
 }
 
-/** Source `menuButton`: enumeration menu; selecting an entry cannot fire events yet. */
+/**
+ * Source `menuButton`: selecting an entry fires the event named by its id (5e `trigger_long_rest`);
+ * entries without a supported handler keep a visible not-executed note.
+ * @see https://docs.rpg-companion.app/Views/menuButton
+ */
 export function SourceMenuButton({ node: v, context: ctx, evaluate }: {
 	node: View; context: RenderContext; evaluate: (value: unknown) => unknown;
 }) {
@@ -273,7 +282,11 @@ export function SourceMenuButton({ node: v, context: ctx, evaluate }: {
 		</button>
 		{open && <div role="menu" className="source-menu-list">
 			{entries.map(entry => <button key={entry.id} type="button" role="menuitem" className="link-button"
-				onClick={() => { setFired(entry.id); setOpen(false); }}>{entry.name}</button>)}
+				disabled={ctx.eventBusy} onClick={() => {
+					const event = { name: entry.id, payload: {} };
+					setOpen(false);
+					if (canSourceEvent(ctx, event)) { setFired(''); ctx.onEvent?.(event); } else setFired(entry.id);
+				}}>{entry.name}</button>)}
 			{!entries.length && <small className="muted">{it.noOptions}</small>}
 		</div>}
 		{fired && <small className="unsupported-note">{it.eventNotExecuted} · {fired}</small>}

@@ -55,6 +55,21 @@ export function repositorySystemDownload(discovery: RepositoryDiscovery, selecte
  * @remarks Source ID/version must match. No local record changes until confirmation;
  * network failures abort the entire preview rather than hiding missing files.
  */
+const spellCatalog = /\/resource_instances\/spell_[^/]+$/i;
+
+/**
+ * Catalogs a game bundle installs. Spells are added only within the unchanged budget (5e: 894 files);
+ * otherwise they stay available through the selective catalog search (PF2e would need 2,024 files).
+ * @throws When even the character catalogs exceed the count or byte budget.
+ */
+export function bundleCatalogFiles<T extends { path: string; size: number }>(all: T[]) {
+  const fits = (list: T[]) => list.length <= MAX_REPOSITORY_CATALOG_FILES
+    && list.reduce((n, f) => n + f.size, 0) <= MAX_REPOSITORY_CATALOG_BYTES;
+  const files = fits(all) ? all : all.filter(f => !spellCatalog.test(f.path));
+  if (!fits(files)) throw new Error(it.repositoryCatalogLimit);
+  return files;
+}
+
 export async function prepareRepositoryBundle(discovery: RepositoryDiscovery, selected: string, localSystem?: StoredSystem,
   progress: (done: number, total: number) => void = () => {}): Promise<RepositoryBundle> {
   const { snapshot } = discovery;
@@ -65,9 +80,7 @@ export async function prepareRepositoryBundle(discovery: RepositoryDiscovery, se
   if (localSystem.definition.id !== source.id || localSystem.definition.version !== source.version
     || localSystem.diagnostics.some(d => d.severity === 'error')) throw new Error(it.repositoryLocalMismatch);
   const base = rawBase(snapshot);
-  const files = (snapshot.catalogFiles ?? []).filter(f => f.path.startsWith(`systems/${source.id}/resource_instances/`));
-  if (files.length > MAX_REPOSITORY_CATALOG_FILES || files.reduce((n, f) => n + f.size, 0) > MAX_REPOSITORY_CATALOG_BYTES)
-    throw new Error(it.repositoryCatalogLimit);
+  const files = bundleCatalogFiles((snapshot.catalogFiles ?? []).filter(f => f.path.startsWith(`systems/${source.id}/resource_instances/`)));
   const catalogs: CatalogPreview[] = [];
   let done = 0;
   progress(0, files.length);

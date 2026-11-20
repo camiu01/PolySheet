@@ -471,3 +471,17 @@ details:not(.sheet-section,.diagnostic-group,.source-collapsible)[open]>summary:
 .progression-feature .check-field:has(input:checked) { color: var(--accent); }
 .progression-feature .check-field:has(input:disabled) { color: var(--muted); }
 .progression-features p { margin-block: 0 8px; }
+.markdown { min-width: 0; }
+.markdown p, .markdown ul { margin: 0 0 10px; }
+.markdown ul { padding-left: 20px; }
+.markdown-table { max-width: 100%; overflow-x: auto; margin: 0 0 10px; }
+.markdown-table table { border-collapse: collapse; font-size: 13px; }
+.markdown-table th, .markdown-table td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+.markdown-table th { font-weight: 600; background: var(--surface-soft); }
+/* Resource cards preview a long source subtitle in a few lines; «Dettagli» shows the full text. */
+.source-resource-item .source-list-item p { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.source-resource-item>.button-row { margin-top: auto; }
+/* Charges listed inside a feature card (5e Bardic Inspiration) use the card's width, not a second inset box. */
+.source-resource-section .source-resource-item .source-resource-array .source-resource-item { padding: 0; background: none; border: 0; box-shadow: none; }
+/* A source list with `hide_line` (5e `classes` in Traits & Features) shows its entries flat, like Racial traits. */
+.source-resource-array.no-line > .source-resource-item { padding: 0; background: none; border: 0; box-shadow: none; }

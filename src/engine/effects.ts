@@ -32,6 +32,10 @@ export interface EffectContext {
   pendingRolls?: PreparedRoll[];
   evaluate(value: unknown): unknown;
   dispatch(event: unknown): EffectTerminal | undefined;
+  /** Draw these rolls now, record them for display and return their summed total; absent where results cannot be shown. */
+  rollNow?(rolls: PreparedRoll[]): number;
+  /** Replace a character base value when the running mechanic cannot be reverted; false keeps an override. */
+  writeBase?(statId: string, value: Json): boolean;
   /** Run the mechanics of one resource for a scoped event name. */
   dispatchResource?(target: unknown, name: string): EffectTerminal | undefined;
   /** Write a base stat of an owned resource reached through `$variable.stat` or `resourceStat.stat`. */
@@ -134,7 +138,18 @@ function assertFireNames(effect: Record<string, unknown>) {
 
 function assertPopUp(effect: Record<string, unknown>) {
   fields(effect, ['type', 'pop_up_view', 'pop_up_title', 'pop_up_type', 'display_cancel_button',
-    'display_save_button', 'should_persist_on_save']);
+    'display_save_button', 'should_persist_on_save', 'extra_buttons', 'in_edit_mode']);
+  if (effect.in_edit_mode != null && typeof effect.in_edit_mode !== 'boolean') throw new Error('Popup non valido.');
+  if (effect.extra_buttons != null) {
+    // One action button that fires an event with the popup inputs as `$view` (5e rest popups); more need ordering UI.
+    if (!Array.isArray(effect.extra_buttons) || effect.extra_buttons.length !== 1
+      || effect.display_save_button === true || effect.should_persist_on_save === true)
+      throw new Error('Popup con pulsanti multipli o salvataggio non supportato.');
+    const button = object(effect.extra_buttons[0]);
+    fields(button, ['text', 'event']);
+    if (button.text == null) throw new Error('Testo del pulsante mancante.');
+    assertEvent(button.event);
+  } else if (effect.in_edit_mode === true) throw new Error('Popup modificabile senza azione non supportato.');
   if (!effect.pop_up_view || !effect.pop_up_title
     || effect.pop_up_type != null && !['bottomSheet', 'alert'].includes(String(effect.pop_up_type))
     || effect.display_cancel_button != null && typeof effect.display_cancel_button !== 'boolean')
@@ -233,8 +248,8 @@ export function validateEffect(effect: Record<string, unknown>, definition: Syst
       return;
     case 'roll':
       fields(effect, ['type', 'rolls', 'on_result_effect']);
-      if (effect.on_result_effect != null) throw new Error('Effetto successivo al tiro non supportato.');
       assertRollList(effect);
+      if (effect.on_result_effect != null) validateEffect(object(effect.on_result_effect), definition, ancestors, budget, true);
       return;
     case 'showPopUp':
       assertPopUp(effect);
@@ -252,13 +267,17 @@ function resourceWriteMode(type: unknown, aggregation: AggregationType): Resourc
   throw new Error('Sulle risorse sono supportati solo setStat (set) e addToStat.');
 }
 
-/** Write one character stat as a reversible override owned by the current character mechanic. */
-export function writeCharacterStat(ctx: EffectContext, type: unknown, statId: string, aggregation: AggregationType, value: Json) {
+/** Write one character stat as a reversible override owned by the current character mechanic,
+ * or, for a `direct` character-mechanic write (not `$character` from a resource), as a base
+ * replacement when that mechanic cannot be reverted (see `EffectContext.writeBase`). */
+export function writeCharacterStat(ctx: EffectContext, type: unknown, statId: string, aggregation: AggregationType, value: Json,
+  direct = false) {
   if (statId.includes('.') || statId.startsWith('$')) throw new Error('Destinazione annidata non supportata.');
   const stat = ctx.definition.character_stats.find(candidate => candidate.id === statId);
   if (!stat) throw new Error(`Statistica mancante: ${statId}`);
   if (!matchesType(value, stat.value_type, stat.sub_value_type))
     throw new Error(`Valore non valido per ${stat.id} (${stat.value_type}).`);
+  if (direct && type === 'setStat' && aggregation === 'set' && stat.type === 'base' && ctx.writeBase?.(stat.id, value)) return;
   const override = { aggregation, value };
   if (type === 'addToStat') {
     if (!['integer', 'decimal'].includes(stat.value_type) || typeof value !== 'number')
@@ -272,7 +291,8 @@ export function writeCharacterStat(ctx: EffectContext, type: unknown, statId: st
 /**
  * Route one stat write: a character stat, a base stat of the resource scope,
  * `$character.stat` from a resource scope, `$variable.stat` on a bound owned resource,
- * or `resourceStat.stat` through a resource-valued stat of the resource scope.
+ * `resourceStat.stat` through a resource-valued stat of the resource scope, or a deeper owned path
+ * such as `$parent.current_class_details.stat`.
  */
 function applyStatEffect(effect: Record<string, unknown>, ctx: EffectContext) {
   const raw = effect.stat != null ? effect.stat : ctx.evaluate(effect.meta_stat);
@@ -285,9 +305,27 @@ function applyStatEffect(effect: Record<string, unknown>, ctx: EffectContext) {
     return ctx.writeResource(ctx.variables[nested[1]], nested[2], value, resourceWriteMode(effect.type, aggregation));
   if (nested && ctx.writeResource && ctx.scope && !nested[1].startsWith('$'))
     return ctx.writeResource(ctx.evaluate({ type: 'stat', stat: nested[1] }), nested[2], value, resourceWriteMode(effect.type, aggregation));
-  if (!ctx.scope) return writeCharacterStat(ctx, effect.type, raw, aggregation, value);
+  // A deeper owned path from a resource scope (5e feat `$parent.current_class_details.selected_selectable_feature_ids`).
+  const owner = /^(\$?[\w-]{1,100}(?:\.[\w-]{1,200}){0,4})\.([\w-]{1,200})$/.exec(raw);
+  if (owner && ctx.writeResource && ctx.scope)
+    return ctx.writeResource(ctx.evaluate({ type: 'stat', stat: owner[1] }), owner[2], value, resourceWriteMode(effect.type, aggregation));
+  if (!ctx.scope) return writeCharacterStat(ctx, effect.type, raw, aggregation, value, true);
   if (raw.includes('.') || raw.startsWith('$')) throw new Error('Destinazione annidata non supportata.');
   ctx.scope.write(raw, value, resourceWriteMode(effect.type, aggregation));
+}
+
+/**
+ * Roll immediately and expose the sum of every rolled formula as `$event.result` to `on_result_effect`
+ * (5e short rest heals by the hit dice total). The command stays atomic: nothing persists if a later step fails.
+ * @see https://docs.rpg-companion.app/Effects/roll
+ */
+function runRollResult(effect: Record<string, unknown>, rolls: PreparedRoll[], ctx: EffectContext, depth: number) {
+  if (!ctx.rollNow) throw new Error('Effetto successivo al tiro non supportato.');
+  const result = ctx.rollNow(rolls);
+  const previous = ctx.variables.$event;
+  ctx.variables.$event = { ...object(previous ?? {}), result };
+  try { return executeEffect(object(effect.on_result_effect), ctx, depth + 1); }
+  finally { ctx.variables.$event = previous; }
 }
 
 function runForEach(effect: Record<string, unknown>, ctx: EffectContext, depth: number) {
@@ -373,6 +411,7 @@ export function executeEffect(effect: Record<string, unknown>, ctx: EffectContex
     }
     case 'roll': {
       const rolls = preparedRolls(effect, ctx);
+      if (effect.on_result_effect != null) return runRollResult(effect, rolls, ctx, depth);
       if (!ctx.pendingRolls) return { kind: 'roll', rolls };
       if (ctx.pendingRolls.length + rolls.length > 20) throw new Error('Troppi tiri per evento.');
       ctx.pendingRolls.push(...rolls);

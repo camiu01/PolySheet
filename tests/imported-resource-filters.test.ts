@@ -43,11 +43,12 @@ it.skipIf(!existsSync(file))('runs original race weapons and Spells filters usin
     const input = nodes.find(n => n.filters != null)?.filters;
     expect(input).toBeDefined();
     const filters = resourceFilters(input, spell, engine.evaluate);
-    expect(filters).toEqual([{ stat: 'classes', name: 'Class', values: ['Fighter'] }]);
-    const candidates = ['Fighter', 'Wizard'].map(name => ({
+    expect(filters).toEqual([{ stat: 'classes', name: 'Class', values: ['Fighter'], options: { definitionId: 'class', displayStat: 'name' } }]);
+    // Original spells store class ids (`fighter`); the sheet filters by the class name shown for that option.
+    const candidates = ['Fighter', 'Wizard', 'fighter', 'wizard'].map(name => ({
       id: name, name, definitionId: 'spell', systemKey: system.key, values: { classes: [name] }
     }));
-    expect(filterResources(candidates, spell, filters, context).map(r => r.name)).toEqual(['Fighter']);
+    expect(filterResources(candidates, spell, filters, context).map(r => r.name)).toEqual(['Fighter', 'fighter']);
     expect((await database.systems.get(system.key))?.original).toBe(system.original);
     expect(character.values).not.toHaveProperty('all_weapons');
   } finally { await database.delete(); }

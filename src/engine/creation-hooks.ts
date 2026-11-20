@@ -38,6 +38,11 @@ export interface CreationHookOptions {
    * Upstream semantics are not documented locally; this is the conservative reading.
    */
   updatedStats?: string[];
+  /**
+   * The confirmed page's inputs by view id, read as `$view` (5e `creator_ability_score_increases`
+   * reads the chosen race from `$view.edit_character_basics_race_select`).
+   */
+  view?: Record<string, unknown>;
   /** Hooks run only on explicit navigation, so source `roll` formulas may roll here. */
   random?: (faces: number) => number;
 }
@@ -92,7 +97,8 @@ function evaluate(ctx: HookContext, input: unknown) {
     resourceDefinitions: ctx.definition.resources, enumerations: ctx.enumerations,
     // Resource formulas read the owner as `$character`; during creation that is the draft itself.
     character: new RuntimeResource('character:creation', ctx.definition.character_stats, ctx.draft.values, undefined, { $is_new: true }),
-    variables: { $is_new: true, $updated_stats: ctx.options.updatedStats ?? [], ...ctx.variables },
+    variables: { $is_new: true, $updated_stats: ctx.options.updatedStats ?? [],
+      ...ctx.options.view ? { $view: ctx.options.view } : {}, ...ctx.variables },
     roll: expression => rollEventDice(expression, ctx.options.random).total,
     copyResource: (value, preserveIds) => copyGraph(ctx, value, preserveIds)
   }).evaluate(input);

@@ -7,16 +7,18 @@ function sameOverrides(left: unknown, right: unknown) {
   return JSON.stringify(left ?? {}) === JSON.stringify(right ?? {});
 }
 
-/** Run one command in a write transaction and persist changed overrides and owned resource values. */
-export async function runCharacterEvent(characterId: string, event: unknown, database = db, targetResource?: string) {
+/** Run one command in a write transaction and persist changed overrides, base values and owned resource values. */
+export async function runCharacterEvent(characterId: string, event: unknown, database = db, targetResource?: string,
+  view?: Record<string, unknown>) {
   return database.transaction('rw', database.characters, database.systems, database.resources, async () => {
     const character = await database.characters.get(characterId);
     const system = character && await database.systems.get(character.systemKey);
     if (!character || !system) throw new Error(it.eventOwnerMissing);
     const resources = await database.resources.where('systemKey').equals(system.key).toArray();
-    const result = executeCharacterEvent(system, character, resources, event, undefined, targetResource);
-    if (!sameOverrides(character.overrides, result.overrides) || result.resources.length) {
+    const result = executeCharacterEvent(system, character, resources, event, undefined, targetResource, view);
+    if (!sameOverrides(character.overrides, result.overrides) || result.resources.length || Object.keys(result.values).length) {
       character.overrides = result.overrides;
+      character.values = { ...character.values, ...result.values };
       character.updatedAt = new Date().toISOString();
       character.revision++;
       await database.characters.put(character);
@@ -41,8 +43,9 @@ export async function saveCharacterEvent(characterId: string, event: unknown, ex
       || Object.hasOwn(patch, expectedField) && (typeof patch[expectedField] !== 'string'
         || !result.edit.options.includes(patch[expectedField])))
       throw new Error(it.invalidValue);
-    if (!sameOverrides(character.overrides, result.overrides) || result.resources.length) {
+    if (!sameOverrides(character.overrides, result.overrides) || result.resources.length || Object.keys(result.values).length) {
       character.overrides = result.overrides;
+      character.values = { ...character.values, ...result.values };
       character.updatedAt = new Date().toISOString();
       character.revision++;
       await database.characters.put(character);

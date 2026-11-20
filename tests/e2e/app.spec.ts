@@ -144,7 +144,9 @@ test('reported original HP, AC and description recover with manual class and rac
   await expect(page.getByText(/Non supportato: .*bottom_right_button_event/)).toHaveCount(0);
   await page.locator('.source-avatar-section').getByRole('button', { name: 'Menu della sorgente', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Long rest', exact: true }).click();
-  await expect(page.getByText(/Azione non ancora disponibile in PolySheet.*trigger_long_rest/)).toBeVisible();
+  const longRest = page.getByRole('dialog', { name: 'Long Rest', exact: true });
+  await expect(longRest.getByRole('button', { name: 'REST', exact: true })).toBeVisible();
+  await longRest.getByRole('button', { name: copy.cancel, exact: true }).click();
   await navigate(page, 'Risorse');
   for (const [definitionId, archiveName] of [['class', 'Classe manuale'], ['class_details', 'Dettagli classe manuale'], ['race', 'Razza manuale']]) {
     await page.getByRole('button', { name: 'Nuova risorsa locale', exact: true }).click();

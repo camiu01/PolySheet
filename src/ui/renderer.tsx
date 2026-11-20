@@ -13,6 +13,7 @@ import { inputValue, readableOn, saveInput, sourceColor, sourceIcons, textValue,
 import { SourcePopup, SourceResourceSelect, SourceResourceSection, DeferredResourceSelect } from './SourceViews';
 import { BalancedGrid, SourceCollapsible, SourceViewPager } from './SourceLayoutViews';
 import { SourceButton, SourceMenuButton, SourceSelect, SourceTicker } from './SourceValueViews';
+import { Markdown } from './Markdown';
 import { SourceResourceArray, SourceResourceView } from './SourceResourceViews';
 import type { ValuePatch } from '../persistence/views';
 import type { ResourceInstance } from '../domain/model';
@@ -31,7 +32,11 @@ export interface RenderContext extends EvaluationEnvironment {
   eventScope?: 'resource';
   /** Sheet-level gates handed down so nested resource cards can build their own event scope. */
   canResourceEvent?: (definitionId: string, event: unknown) => boolean;
-  onResourceEvent?: (resourceId: string, event: unknown) => void;
+  onResourceEvent?: (resourceId: string, event: unknown, view?: Record<string, unknown>) => void;
+  /** Sheet-owned unsaved card choices by resource id, read by that card's buttons as `$view`. */
+  cardInputs?: Map<string, Record<string, unknown>>;
+  /** Set on a resource card: record one unsaved local choice (a `select` on a calculated stat). */
+  onCardInput?: (viewId: string, value: unknown) => void;
   /** Persist a base input on the owning resource card, using the sheet's save/error status. */
   onResourceChange?: (resourceId: string, statId: string, value: unknown) => void;
   onResourceOverride?: (resourceId: string, statId: string, value: number) => void;
@@ -66,6 +71,10 @@ export function ScalarInput({ stat, value, onSave, onDraft, label, min, max, max
   const caption = label ?? stat.name;
   function change(text: string) {
     setDraft(text);
+    // Flag an out-of-range draft at once: a form can submit drafts before this input blurs.
+    const number = Number(text);
+    if (stat.value_type !== 'string') setError(text.trim() && Number.isFinite(number)
+      && (min !== undefined && number < min || max !== undefined && number > max) ? it.invalidNumber : '');
     if (onDraft) onDraft(stat.value_type === 'string' ? text : text.trim() ? Number(text) : NaN);
   }
   if (stat.value_type === 'bool') return <label className="check-field">
@@ -176,6 +185,7 @@ export const rendererRegistry = new Map<string, Renderer>([
         onSave={value => saveInput(v, ctx, stat.id, value)} />;
     }
     const value = resourceText(v, ctx) ?? (v.text ? e(v.text) : '');
+    if (v.markdown === true) return <Markdown text={textValue(value)} className={`view-text view-text-${String(v.style ?? 'text')}`} />;
     return <p className={`view-text view-text-${String(v.style ?? 'text')}`} style={{ fontWeight: v.bold === true ? 700 : undefined, color: viewColor(v.color, e),
       ...(typeof v.max_lines === 'number' && v.max_lines > 0 ? { display: '-webkit-box', WebkitLineClamp: Math.min(100, Math.floor(v.max_lines)), WebkitBoxOrient: 'vertical', overflow: 'hidden' } : {})
     }}>{typeof value === 'number' && v.signed === true && value >= 0 ? `+${value}` : textValue(value)}</p>;

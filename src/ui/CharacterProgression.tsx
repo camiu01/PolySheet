@@ -136,7 +136,7 @@ function ProgressionGains({ classLevel, read }: { classLevel: number; read: () =
   const { features, choices } = read();
   return <section className="progression-summary">
     <h3>{it.progressionGains(classLevel)}</h3>
-    {features.length ? <ul>{features.map(name => <li key={name}>{name}{choices.includes(name) && <small className="muted"> · {it.progressionOpenChoices}</small>}</li>)}</ul>
+    {features.length ? <ul>{features.map(name => <li key={name}>{name}{choices.includes(name) && <small className="muted"> · {it.progressionChoiceToMake}</small>}</li>)}</ul>
       : <p className="muted">{it.progressionNoGains}</p>}
   </section>;
 }
@@ -203,6 +203,7 @@ function ProgressionResult({ summary }: { summary: ProgressionSummary }) {
     {summary.features.length > 0 && <section><h3>{it.progressionNewFeatures}</h3>
       <ul>{summary.features.map(name => <li key={name}>{name}</li>)}</ul></section>}
     {summary.choices.length > 0 && <section><h3>{it.progressionOpenChoices}</h3>
+      <p className="muted">{it.progressionOpenChoicesHelp}</p>
       <ul>{summary.choices.map(name => <li key={name}>{name}</li>)}</ul></section>}
     <section><h3>{it.progressionRecovered}</h3><p className="muted">{it.progressionNothingRecovered}</p></section>
     <Warning>{it.progressionChoices}</Warning>

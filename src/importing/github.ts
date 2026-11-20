@@ -90,7 +90,7 @@ export async function listGithubFiles(input: string, ref = ''): Promise<GithubSn
 export async function discoverGithub(input: string, ref = ''): Promise<GithubSnapshot> {
   const snapshot = await listGithubFiles(input, ref);
   const files = snapshot.files.filter(f => systemName.test(f.path.split('/').at(-1)!));
-  const catalogFiles = snapshot.files.filter(f => /^systems\/[a-z0-9_-]+\/resource_instances\/(?:class|race|species|ancestry|heritage|background|feat)_[^/]+\.rpg\.json$/i.test(f.path));
+  const catalogFiles = snapshot.files.filter(f => /^systems\/[a-z0-9_-]+\/resource_instances\/(?:class|race|species|ancestry|heritage|background|feat|spell)_[^/]+\.rpg\.json$/i.test(f.path));
   const sourceFiles = snapshot.files.filter(f => /\.rpgs$/i.test(f.path) || /^systems\/[a-z0-9_-]+\/system\/.*\.json$/i.test(f.path));
   if ([...files, ...catalogFiles].some(f => f.size > MAX_SYSTEM_BYTES)) throw new Error(it.repositoryFileTooLarge);
   if (files.length > 100) throw new Error(it.repositoryTooMany);

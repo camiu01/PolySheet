@@ -1,7 +1,7 @@
 // @vitest-environment node
 /** @file Source discovery and automatic catalogs with an explicitly chosen local system. */
 import { afterEach, expect, it, vi } from 'vitest';
-import { discoverRepository, prepareRepositoryBundle, repositorySystemDownload } from '../src/importing/repository';
+import { bundleCatalogFiles, discoverRepository, prepareRepositoryBundle, repositorySystemDownload } from '../src/importing/repository';
 import { MAX_REPOSITORY_CATALOG_BYTES } from '../src/importing/catalog';
 import { prepareSystem } from '../src/importing/system';
 import { catalogSystem, classOriginal, raceOriginal } from './fixtures/catalog';
@@ -113,4 +113,14 @@ it('checks count and byte limits at the boundary before downloading catalog file
     await expect(prepareRepositoryBundle(await discoverRepository(repository), '5e', await localSystem('5e'))).rejects.toThrow(expected);
     if (expected === '24 MiB') expect(fetch.mock.calls.filter(([url]) => url.pathname.includes('resource_instances'))).toHaveLength(0);
   }
+});
+
+it('adds spell catalogs to a game bundle only within the unchanged count and byte budget', () => {
+  const file = (kind: string, i: number, size = 1) => ({ path: `systems/5e/resource_instances/${kind}_${i}.rpg.json`, size });
+  const classes = (count: number) => Array.from({ length: count }, (_, i) => file('class', i));
+  const spells = (count: number, size = 1) => Array.from({ length: count }, (_, i) => file('spell', i, size));
+  expect(bundleCatalogFiles([...classes(1462), ...spells(538)])).toHaveLength(2000);
+  expect(bundleCatalogFiles([...classes(1230), ...spells(794)])).toHaveLength(1230);
+  expect(bundleCatalogFiles([...classes(1), ...spells(1, MAX_REPOSITORY_CATALOG_BYTES)])).toHaveLength(1);
+  expect(() => bundleCatalogFiles(classes(2001))).toThrow('24 MiB');
 });

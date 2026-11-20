@@ -1119,3 +1119,50 @@ installed. The scoped inline visual review is retained locally at
 
 - `npm run check`: 383 passed, 1 skipped, 49 files. `npm run build`: passed.
 - Production Playwright `/PolySheet/`: 109 passed, 3 skipped (6.3 min).
+
+## 5e rests, lasting mechanic writes and racial increases, 2026-11-20
+
+- `tests/rest-events.test.ts`: non-revertible mechanics replace base values
+  (successive writers no longer conflict; revertible ones keep overrides);
+  one popup action runs with `$view`; `on_result_effect` gets the summed roll as
+  `$event.result`. Real 5e Fighter: long rest restores HP 3 → 12 and hit dice;
+  short rest with one d10 and a fixed roll of 7 heals 3 → 10 and spends one die;
+  temporary popup inputs stay unsaved; sorting skills twice works.
+- Updated expectations in `resource-events.test.ts` (`on_shared`, 5e
+  `remove_empty_items`, PF2e daily preparations now write base values).
+- `tests/e2e/rest-flow.spec.ts` (desktop and mobile): avatar menu → Long rest
+  (cancel keeps HP, REST restores it), Short rest refuses more hit dice than
+  available, then spends one d10; values persist offline. Mobile screenshot
+  checked. `app.spec.ts` long-rest expectation updated but skipped (needs the
+  absent `.reference/reported-system.rpg`).
+- Racial increases: reproduced and fixed in the guided flow in the browser
+  (Human 8 → 9 in all scores). `creation-flow.test.tsx` now reads a page input
+  through `$view` in `post_edit`; it fails without the fix.
+- `npm run check`: 386 passed, 1 skipped, also after the creation fix. Build passed.
+  Creation-related e2e after the fix (onboarding, PF2e guided, rest, catalogs): 18 passed. Affected
+  production e2e (rest, sheet, app, catalog specs): 88 passed, 2 skipped.
+
+## Bard feature choices, feature layout, markdown and spells, 2026-11-20
+
+- `tests/selectable-features-sheet.test.ts` (real 5e Bard): a choice made in the
+  level-up form leaves no open choice; left open, the feature card SAVE writes
+  `magic_inspiration` to the class wrapper, never the character; undeclared view
+  keys are refused. `tests/e2e/selectable-features.spec.ts` (desktop, mobile):
+  level up without choosing, open the card, check, SAVE, reload; Jack of All
+  Trades shows its markdown description. Screenshots compared with Racial traits.
+- Layout: card subtitles clamp to 4 lines, footers sit at the bottom, and the
+  `hide_line` class list is flat, so class features match Racial traits.
+- `tests/markdown.test.tsx`, `tests/repository.test.ts` (spell budget boundary),
+  `tests/imported-resource-filters.test.ts` (class name selects `fighter`).
+- Live repository in the dev browser: 5e installs 538 spells; the Bard sheet
+  filter lists 153 spells; Healing Word is added as a private copy and shown.
+- `npm run check`: 389 passed, 1 skipped, 52 files.
+- Full production Playwright on 4183 under `/PolySheet/`: 113 passed, 3 skipped (6.6 min).
+
+## 5e multiclass spellcasting, 2026-11-20
+
+- Added `tests/rest-events.test.ts` case with the unchanged official 5e release plus the Bard and Wizard class sources:
+  Bard 3 / Wizard 2 reaches `spellcaster_level` 5, a long rest sets 4/3/2/0 slots, the original Spells
+  `selectResources` filter resolves to `['Bard', 'Wizard']` and matches spells stored as `bard` or `wizard` but not
+  `cleric`, and each `class_details` card reports its own casting ability (CHA, INT). No application change was needed.
+- `npm run check`: 52 files, 390 passed, 1 skipped.

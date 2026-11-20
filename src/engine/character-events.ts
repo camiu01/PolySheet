@@ -2,18 +2,19 @@
  * @file Character event dispatch over the validated effect subset.
  * @remarks Exactly one matching character mechanic runs per event; multiple
  * handlers or dynamic subscriptions remain explicit errors. Reverting an event
- * removes that mechanic's reversible overrides without touching base values.
+ * removes that mechanic's reversible overrides without touching base values;
+ * non-revertible mechanics replace base values directly (see `permanentMechanic`).
  * Resource-scoped names run resource mechanics (see `resource-events.ts`); their
  * base-value writes are returned as `resources` for the caller to persist.
  * @see https://docs.rpg-companion.app/Mechanic/
  */
-import { object, type Character, type CharacterOverrides, type ResourceInstance, type StoredSystem, type SystemDefinition } from '../domain/model';
+import { object, type Character, type CharacterOverrides, type Json, type ResourceInstance, type StoredSystem, type SystemDefinition } from '../domain/model';
 import { createEvaluator, RuntimeResource } from './formulas';
 import { rollDice } from './dice';
 import { enumerationEntries } from './enumerations';
-import { cloneOverrides, resolveCharacterOverrides, revertMechanic } from './overrides';
+import { clearValueOverrides, cloneOverrides, resolveCharacterOverrides, revertMechanic } from './overrides';
 import {
-  eventNames, executeEffect, validateEffect, type EffectContext, type EventMessage
+  eventNames, executeEffect, validateEffect, type EffectContext, type EventMessage, type PreparedRoll
 } from './effects';
 import { changedResources, resourceDispatcher, withWrites, type ResourceWrites } from './resource-events';
 
@@ -60,6 +61,9 @@ export function characterEventPlan(system: SystemDefinition, event: unknown,
     if (typeof mechanic.id !== 'string' || !mechanic.id) throw new Error('Meccanica senza identificatore.');
     effect = object(mechanic.effects);
     validateEffect(effect, system, [...ancestors, input.name], budget);
+    // A popup action fires its event later; an unsupported target must hide the whole entry now.
+    if (effect.type === 'showPopUp' && Array.isArray(effect.extra_buttons))
+      for (const button of effect.extra_buttons) characterEventPlan(system, object(button).event, [...ancestors, input.name], budget);
   }
   return {
     name: input.name, payload: input.payload == null ? {} : object(input.payload),
@@ -103,15 +107,38 @@ export function rollEventDice(expression: string, random?: (faces: number) => nu
   return { expression, dice: roll.results, modifier, total: kept + modifier };
 }
 
+/** Check every expression and the dice budget before drawing randomness, so an unsupported later roll cannot partly execute. */
+function preflightRolls(rows: PreparedRoll[]) {
+  let dice = 0;
+  for (const row of rows) for (const expression of row.formulas) {
+    rollEventDice(expression, () => { if (++dice > 100) throw new Error('Troppi dadi per evento.'); return 1; });
+  }
+}
+
 export type CharacterEventResult = (
   | { kind: 'roll'; title: string; rolls: { text: string; results: ReturnType<typeof rollEventDice>[] }[] }
-  | { kind: 'popup'; title: string; input: unknown; variables: Record<string, unknown>; edit?: ReturnType<typeof editablePopup> }
+  | { kind: 'popup'; title: string; input: unknown; variables: Record<string, unknown>; edit?: ReturnType<typeof editablePopup>;
+      /** The single source button; its event runs with the popup inputs as `$view`, which are never saved. */
+      action?: { label: string; event: unknown } }
   | { kind: 'effects' }
 ) & {
   messages: EventMessage[]; overrides: CharacterOverrides; reverted: string[];
+  /** Base character values replaced by non-revertible mechanics; persisted like a manual edit. */
+  values: Record<string, Json>;
   /** Owned resource instances whose base values the command changed. */
   resources: ResourceInstance[];
 };
+
+/**
+ * A character mechanic without revert subscriptions can never undo its writes, so its `set` on a
+ * base stat is a lasting replacement: the latest event wins, as a manual edit would (5e rests,
+ * skill sort toggles, death saves). Resource and revertible mechanics keep reversible overrides.
+ */
+function permanentMechanic(system: SystemDefinition, mechanicId: string) {
+  const mechanic = Array.isArray(system.mechanics)
+    ? system.mechanics.map(item => object(item)).find(item => item.id === mechanicId) : undefined;
+  return !!mechanic && !eventNames(mechanic.revert_event_names).length && mechanic.calculated_revert_event_names == null;
+}
 
 /** A resource-card event: the named mechanic of that resource runs instead of a character mechanic. */
 function resourceEventPlan(event: unknown): CharacterEventPlan {
@@ -126,28 +153,46 @@ function resourceEventPlan(event: unknown): CharacterEventPlan {
 /**
  * Evaluate against one immutable command snapshot; randomness is drawn only at explicit roll execution.
  * @param targetResource Local id of an owned resource whose card fired the event, if any.
+ * @param view Inputs of the popup whose action fired this event, or the unsaved local choices of the
+ * firing resource card, exposed as `$view` (never persisted).
  */
 export function executeCharacterEvent(system: StoredSystem, character: Character, resources: ResourceInstance[],
-  event: unknown, random?: (faces: number) => number, targetResource?: string): CharacterEventResult {
+  event: unknown, random?: (faces: number) => number, targetResource?: string,
+  view?: Record<string, unknown>): CharacterEventResult {
   if (character.systemKey !== system.key) throw new Error('Sistema evento non corrispondente.');
   const plan = targetResource ? resourceEventPlan(event) : characterEventPlan(system.definition, event);
-  const variables: Record<string, unknown> = { $event: plan.payload, $edit_mode: false };
+  const variables: Record<string, unknown> = { $event: plan.payload, $edit_mode: false, ...view ? { $view: view } : {} };
   const reverted: string[] = [];
   const budget = { nodes: 0, rolls: 0 };
   const writes: ResourceWrites = new Map();
+  const values: Record<string, Json> = { ...character.values };
+  const baseWrites: Record<string, Json> = {};
+  const executedRolls: { text: string; results: ReturnType<typeof rollEventDice>[] }[] = [];
   const characterScope = () => {
     const resolved = resolveCharacterOverrides(ctx.overrides);
     return new RuntimeResource(`character:${character.id}`, system.definition.character_stats,
-      character.values, character.createdAt, {}, resolved.values, undefined, resolved.modifiers);
+      values, character.createdAt, {}, resolved.values, undefined, resolved.modifiers);
   };
   const ctx: EffectContext = {
     pendingRolls: [],
-    definition: system.definition, values: character.values, resources, createdAt: character.createdAt, variables,
+    definition: system.definition, values, resources, createdAt: character.createdAt, variables,
     overrides: cloneOverrides(character.overrides), messages: [], reverted, mechanicId: plan.mechanicId ?? '',
     ancestors: [plan.name], budget,
+    rollNow(rows: PreparedRoll[]) {
+      preflightRolls(rows);
+      const rolled = rows.map(row => ({ text: row.text, results: row.formulas.map(expression => rollEventDice(expression, random)) }));
+      executedRolls.push(...rolled);
+      return rolled.reduce((sum, row) => sum + row.results.reduce((total, roll) => total + roll.total, 0), 0);
+    },
+    writeBase(statId: string, value: Json) {
+      if (!permanentMechanic(system.definition, ctx.mechanicId)) return false;
+      values[statId] = value; baseWrites[statId] = value;
+      ctx.overrides = clearValueOverrides(ctx.overrides, statId) ?? ctx.overrides;
+      return true;
+    },
     evaluate(value: unknown) {
       const resolved = resolveCharacterOverrides(ctx.overrides);
-      return createEvaluator(system.definition.character_stats, character.values, undefined, {
+      return createEvaluator(system.definition.character_stats, values, undefined, {
         resources: withWrites(resources, writes), resourceDefinitions: system.definition.resources, createdAt: character.createdAt,
         enumerations: system.definition.enumerated_types, variables,
         overrides: resolved.values, modifiers: resolved.modifiers, character: characterScope()
@@ -179,31 +224,36 @@ export function executeCharacterEvent(system: StoredSystem, character: Character
   for (const id of plan.revert) ctx.overrides = revertMechanic(ctx.overrides, id);
   reverted.push(...plan.revert);
   const updated = () => changedResources(resources, writes);
-  const terminal = targetResource ? resourceEvents.card({ resourceId: targetResource }, plan.name, plan.payload)
+  const terminal = targetResource ? resourceEvents.card({ resourceId: targetResource }, plan.name, plan.payload, view)
     : plan.effect ? executeEffect(plan.effect, ctx) : undefined;
   if (!targetResource && plan.effect && terminal?.kind !== 'popup') resourceEvents.broadcast(plan.name);
   const rolls = ctx.pendingRolls!;
   if (terminal?.kind === 'popup') {
     // A popup ends the command; rolls collected before it would never be shown.
-    if (rolls.length) throw new Error('Tiro seguito da popup non supportato.');
+    if (rolls.length || executedRolls.length) throw new Error('Tiro seguito da popup non supportato.');
     const effect = terminal.effect;
     const title = ctx.evaluate(effect.pop_up_title);
     if (typeof title !== 'string') throw new Error('Il titolo evento deve essere testo.');
     const edit = effect.should_persist_on_save === true ? editablePopup(effect, system.definition, ctx.evaluate) : undefined;
-    return { kind: 'popup', title, input: edit?.input ?? effect.pop_up_view, variables: ctx.variables,
-      edit, messages: ctx.messages, overrides: ctx.overrides, reverted, resources: updated() };
-  }
-  if (rolls.length) {
-    let dice = 0;
-    // Preflight every expression before drawing randomness, so unsupported later rolls cannot partly execute.
-    for (const row of rolls) for (const expression of row.formulas) {
-      rollEventDice(expression, () => { if (++dice > 100) throw new Error('Troppi dadi per evento.'); return 1; });
+    let action: { label: string; event: unknown } | undefined;
+    if (Array.isArray(effect.extra_buttons)) {
+      const button = object(effect.extra_buttons[0]), label = ctx.evaluate(button.text);
+      if (typeof label !== 'string' || !label || label.length > 100) throw new Error('Testo del pulsante non valido.');
+      characterEventPlan(system.definition, button.event, [plan.name]);
+      action = { label, event: button.event };
     }
+    return { kind: 'popup', title, input: edit?.input ?? effect.pop_up_view,
+      variables: { ...ctx.variables, $edit_mode: effect.in_edit_mode === true },
+      edit, action, messages: ctx.messages, overrides: ctx.overrides, reverted, values: baseWrites, resources: updated() };
+  }
+  if (rolls.length || executedRolls.length) {
+    preflightRolls(rolls);
     return {
       kind: 'roll', title: plan.name,
-      rolls: rolls.map(row => ({ text: row.text, results: row.formulas.map(expression => rollEventDice(expression, random)) })),
-      messages: ctx.messages, overrides: ctx.overrides, reverted, resources: updated()
+      rolls: [...executedRolls,
+        ...rolls.map(row => ({ text: row.text, results: row.formulas.map(expression => rollEventDice(expression, random)) }))],
+      messages: ctx.messages, overrides: ctx.overrides, reverted, values: baseWrites, resources: updated()
     };
   }
-  return { kind: 'effects', messages: ctx.messages, overrides: ctx.overrides, reverted, resources: updated() };
+  return { kind: 'effects', messages: ctx.messages, overrides: ctx.overrides, reverted, values: baseWrites, resources: updated() };
 }

@@ -35,23 +35,26 @@ export function canSourceEvent(context: {
 /**
  * Event scope of one resource card: its buttons run that resource's own mechanics.
  * Catalog originals and draft sessions never dispatch.
- * Base inputs use the sheet's resource writer, never its character writer.
+ * Base inputs use the sheet's resource writer, never its character writer; unsaved local
+ * choices (`onCardInput`) travel with the card's own button events as `$view`.
  */
 export function resourceEventScope(context: {
 	drafts?: Record<string, unknown>; eventBusy?: boolean;
 	canResourceEvent?: (definitionId: string, event: unknown) => boolean;
-	onResourceEvent?: (resourceId: string, event: unknown) => void;
+	onResourceEvent?: (resourceId: string, event: unknown, view?: Record<string, unknown>) => void;
+	cardInputs?: Map<string, Record<string, unknown>>;
 	onResourceChange?: (resourceId: string, statId: string, value: unknown) => void;
 	onResourceOverride?: (resourceId: string, statId: string, value: number) => void;
 }, record: { id: string; definitionId: string; catalogSource?: unknown }) {
-	const { canResourceEvent, onResourceEvent, onResourceOverride, onResourceChange } = context;
+	const { canResourceEvent, onResourceEvent, onResourceOverride, onResourceChange, cardInputs } = context;
 	if (!canResourceEvent || !onResourceEvent || context.drafts !== undefined || record.catalogSource) return {};
 	return {
-		eventScope: 'resource' as const, eventBusy: context.eventBusy, canResourceEvent, onResourceEvent, onResourceOverride, onResourceChange,
+		eventScope: 'resource' as const, eventBusy: context.eventBusy, canResourceEvent, onResourceEvent, onResourceOverride, onResourceChange, cardInputs,
+		onCardInput: cardInputs && ((viewId: string, value: unknown) => { cardInputs.set(record.id, { ...cardInputs.get(record.id), [viewId]: value }); }),
 		onChange: onResourceChange && ((statId: string, value: unknown) => onResourceChange(record.id, statId, value)),
 		onOverride: onResourceOverride && ((statId: string, value: number) => onResourceOverride(record.id, statId, value)),
 		canEvent: (event: unknown) => canResourceEvent(record.definitionId, event),
-		onEvent: (event: unknown) => onResourceEvent(record.id, event)
+		onEvent: (event: unknown) => onResourceEvent(record.id, event, cardInputs?.get(record.id))
 	};
 }
 

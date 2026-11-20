@@ -354,9 +354,9 @@ the charge-consumption part of Second Wind, not an inferred healing roll.
 Character events broadcast to owned instances subscribed by global name.
 Each failing subscriber rolls back its pending writes and reports a warning;
 it does not block successful subscribers. Tests cover this dispatch/isolation
-and original 5e USE consumption. There is no application rest menu yet:
-short-rest dispatch is an engine test, not a verified user-facing rest flow.
-Manual charge buttons remain the available refill control.
+and original 5e USE consumption. Since 2026-11-20 the avatar menu runs the
+official long and short rest popups (see "Rests and lasting writes" below);
+manual charge buttons remain available.
 
 Tests: `resource-events.test.ts`, `resource-card-inputs.test.tsx`, and
 `e2e/sheet-interactions.spec.ts` with `e2e/resource-card-actions.ts`.
@@ -1433,7 +1433,7 @@ The original avatar menu at
 `lifecycle_events_menu` in the current renderer. The original status section's
 `$edit_mode` conditions also resolve without a missing-stat error. These two
 reported errors were not reproduced on the current code. Selecting `Long rest`
-still reports an unexecuted event, not a completed rest.
+now opens the official rest popup (2026-11-20).
 
 The original serialized `bottom_right_button_event=null` no longer creates a
 runtime unsupported-field note. Null-valued optional view fields are absent for
@@ -1481,3 +1481,65 @@ stacking semantics. No effects are silently treated as successful no-ops.
 
 Executed checks and remaining verification gaps are in
 [VERIFICATION.md](VERIFICATION.md).
+
+#### Rests and lasting writes, 2026-11-20
+
+Evidence: unchanged official 5e 0.9.1 package (SHA-256 above) and source
+`systems/5e/system/mechanics/{on_long_rest,on_short_rest,trigger_long_rest,trigger_short_rest}.rpgs`.
+
+- A character mechanic without `revert_event_names` or
+  `calculated_revert_event_names` can never undo its writes. Its `setStat`
+  with `set` on a base stat therefore replaces the base value, like a manual
+  edit: the latest event wins and older value overrides on that stat are
+  cleared. None of the 21 official 5e character mechanics is revertible, and
+  several write the same stats (rests, death saves, skill sort). Previously the
+  second writer failed with an unresolved-aggregation error, for example sorting
+  skills twice or a short rest after a long rest. Revertible mechanics and
+  `$character` writes from resources keep reversible overrides.
+- `showPopUp` accepts `in_edit_mode` and exactly one `extra_buttons` entry.
+  The button's event must have a supported handler, otherwise the whole entry
+  stays unsupported. The popup inputs are passed to that event as `$view` and
+  are never saved (`temp_short_rest_hit_dice_*` stay unchanged).
+- `roll` with `on_result_effect` rolls immediately and exposes the sum of all
+  rolled formulas as `$event.result`, as documented; the command stays atomic.
+- `menuButton` entries fire the event named by the entry id.
+- Numeric inputs flag out-of-range drafts while typing, so a form cannot submit
+  more hit dice than `calculated_max_value_allowed` permits.
+- Not done: `characterLoaded` is not fired. The official first-load rest
+  (`long_rest_when_new`, PF2e `daily_preparations_when_new`) would also run once
+  on characters created before this change, replacing their current HP, so it
+  needs a separate decision.
+
+#### Guided creation `$view` and racial ability increases, 2026-11-20
+
+Reported: 5e racial ability score increases did not apply. Reproduced in the
+guided flow with the live pinned repository: Human with all scores 8 stayed at
+8, and `old_creator_ability_score_increases` was empty. Cause: page `post_edit`
+and `on_page_close` were evaluated without `$view`, while the official
+`creator_ability_score_increases` reads the chosen race from
+`$view.edit_character_basics_race_select`. These hooks now receive the confirmed
+page inputs by view id; the same Human character gets 9 in every score and six
+recorded increases. The manual setup still takes final scores as typed and does
+not add racial increases.
+
+#### Sheet feature choices, markdown descriptions and spells, 2026-11-20
+
+- Feature cards: a `select` on a calculated stat inside a resource card is an
+  unsaved local choice; the card's own button receives it as `$view`. Only ids
+  of such selects declared in the card's display view are accepted. The card's
+  `$parent` is rebuilt from the owned reference path (feature → class →
+  `class_details`), and setStat may target a deeper owned path such as
+  `$parent.current_class_details.selected_selectable_feature_ids`. This runs
+  the official 5e feat `saveSelectableFeaturesChoice` (Bard Optional Features).
+  Read-only cards tolerate the official duplicate view id `feat_display_effects`.
+- The level-up summary lists a feature under open choices only while fewer
+  options are chosen than the level allows.
+- `text` views with `markdown = true` render paragraphs, `-`/`*` lists, pipe
+  tables and bold/italic as React elements, never HTML. Diagnostics drop
+  accordingly (5e and 5e2024 141 → 127, PF2e 245 → 213; no new ones).
+- Spell catalogs join a game bundle only within the unchanged 2,000-file and
+  24 MiB budget: 5e installs 538 spells (894 files); PF2e would need 2,024
+  files, so its spells stay on the selective catalog search.
+- Resource filters with resource-typed options (`options`, `options_display_stat`)
+  match the shown label to the option records' ids: the 5e sheet filters spells
+  by class name ("Bard") while spells store `bard`. Before, the filter found none.

@@ -99,9 +99,10 @@ it.skipIf(!existsSync(official) || !existsSync(classes))('runs unchanged PF2e da
       const [id] = await installCatalogs([await prepareCatalogTemplate(original, 'local.json', system)], database);
       const saved = await configureCharacter(system, name, {}, { classes: id }, undefined, database, false);
       const { result, character } = await runCharacterEvent(saved.id, { name: 'daily_preparations', payload: {} }, database);
-      const values = result.overrides.on_daily_preparations?.values;
-      expect(values?.current_hp?.value).toBe(hp);
-      expect(values?.spell_slots_1?.value).toBe(slots);
+      const values = result.values;
+      expect(values.current_hp).toBe(hp);
+      expect(character.values.current_hp).toBe(hp);
+      expect(values.spell_slots_1).toBe(slots);
       expect(character.revision).toBe(saved.revision + 1);
     }
   } finally { await database.delete(); }
@@ -140,7 +141,9 @@ it('runs a resource card action on its own mechanics, collects rolls and reaches
   expect(attack.kind).toBe('roll');
   expect(attack.kind === 'roll' && attack.rolls.map(row => [row.text, row.results[0].total])).toEqual([['to hit', 7]]);
   expect(attack.resources.map(item => item.values.ammo)).toEqual([2]);
-  expect(attack.overrides).toEqual({ on_shared: { values: { slots: { aggregation: 'set', value: 7 } } } });
+  // `on_shared` has no revert subscription, so its set is a lasting base write, not an override.
+  expect(attack.overrides).toEqual({});
+  expect(attack.values).toEqual({ slots: 7 });
   const damage = executeCharacterEvent(cardSystem, owner, all, { name: 'damage' }, () => 4, 'blade-1');
   expect(damage.kind === 'roll' && damage.rolls[0].results.map(result => result.total)).toEqual([4, -1]);
   expect(() => executeCharacterEvent(cardSystem, character(['wrapper']), all, { name: 'toggle_equip' }, undefined, 'blade-1'))
@@ -173,7 +176,8 @@ it.skipIf(!existsSync(pinned5e))('runs unchanged 5e item quantity buttons and an
   // An unset Amount uses the source default (1); reaching zero fires the character's `remove_empty_items`.
   const removed = executeCharacterEvent(fifth, owner, all, { name: 'subtract_quantity' }, undefined, 'torch');
   expect(removed.resources.map(record => [record.id, record.values.quantity])).toEqual([['torch', 0]]);
-  expect(Object.values(removed.overrides).map(layer => layer.values?.equipment?.value)).toEqual([[{ resourceId: 'rope' }]]);
+  expect(removed.values.equipment).toEqual([{ resourceId: 'rope' }]);
+  expect(removed.overrides).toEqual({});
 
   const used = executeCharacterEvent(fifth, owner, all, { name: 'use' }, undefined, 'sw');
   expect(used.resources.map(record => [record.values, record.overrides])).toEqual([[effect.values, { current_charges: 0 }]]);

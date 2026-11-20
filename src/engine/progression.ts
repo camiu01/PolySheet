@@ -235,7 +235,12 @@ export function progressionSnapshot(system: StoredSystem, character: Character, 
     (Array.isArray(list) ? list : []).forEach(feature => {
       const item = progressionEvaluator(system, character, resources, { ...context, $feature: feature });
       const name = readOrSkip(() => item.get('$feature.name'));
-      if (typeof name === 'string') features.set(name, readOrSkip(() => item.get('$feature.can_choose_new_selectable_features_in_current_level')) === true);
+      if (typeof name !== 'string') return;
+      // A choice is open only while fewer options are chosen than the level allows, so one made in the form is not listed.
+      const chosen = readOrSkip(() => item.get('$feature.chosen_selectable_features'));
+      const allowed = readOrSkip(() => item.get('$feature.current_allowed_amount_of_selectable_features'));
+      const filled = Array.isArray(chosen) && typeof allowed === 'number' && chosen.length >= allowed;
+      features.set(name, !filled && readOrSkip(() => item.get('$feature.can_choose_new_selectable_features_in_current_level')) === true);
     });
   }
   return { stats, features };
