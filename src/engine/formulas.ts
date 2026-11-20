@@ -431,6 +431,14 @@ for (const [type, compare] of [
  */
 // Official PF2e creation formulas (feat/archetype graphs) need ~10^4–10^5 cached steps and stat
 // chains deeper than 64 nested nodes; 256 stays far below the JavaScript stack limit.
+/**
+ * Build the scoped evaluator used by sheets, views and diagnostics.
+ * @param stats - System statistics available to formulas.
+ * @param values - Current sheet values; never mutated.
+ * @param limits - Step and nesting budgets shared by nested scopes.
+ * @param environment - Creation time, inherited variables, overrides and modifiers.
+ * @throws On invalid references, cycles, unsupported handlers or exceeded budgets.
+ */
 export function createEvaluator(stats: Stat[], values: Record<string, unknown> = {}, limits = { steps: 100000, depth: 256 }, environment: EvaluationEnvironment = {}) {
   const root = new RuntimeResource('root', stats, values, environment.createdAt,
     { ...environment.variables, ...(environment.parent ? { $parent: environment.parent } : {}) },

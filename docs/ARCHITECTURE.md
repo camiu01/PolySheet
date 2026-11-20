@@ -108,7 +108,7 @@ Import-time bindings include only real, unambiguous inputs, not display labels.
 | `src/ui/SourceLayoutViews.tsx`, `src/ui/SourceValueViews.tsx`, `src/ui/SourceResourceViews.tsx`, `src/ui/view-support.tsx` | Collapsible/pager layout, ticker/button/select/menu controls, `resource`/`resourceArray` bodies and shared safe helpers |
 | `src/engine/enumerations.ts` | Bounded enumerated-type resolution with inheritance and allowlists |
 | `src/ui/store.ts` | Only ephemeral navigation, selection and search, not copies of DB data |
-| `src/ui/it.ts` | Initial Italian UI catalogue |
+| `src/ui/locales/`, `src/ui/i18n.ts`, `src/ui/it.ts` | Italian and English catalogues, locale detection and the active-catalogue lookup used by components |
 | `src/ui/Library.tsx`, `src/ui/SystemImport.tsx`, `src/ui/library.css` | File/link choices, optional GitHub references, grouped import review and explicit confirmation |
 | `src/ui/Characters.tsx` | Manual character creation, source sheet, manual base editor |
 | `src/ui/Tools.tsx` | Local resources, notebook links, dice, diagnostics, settings, backup |

@@ -139,7 +139,8 @@ Start with the [documentation index](docs/README.md):
 
 Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) for setup,
 documentation standards and compatibility extension rules. Documentation and
-code comments are English; UI copy is Italian, and imported labels stay unchanged.
+code comments are English; the interface ships Italian and English catalogues
+with the browser language as the first-run default, and imported labels stay unchanged.
 
 ## Credits and license
 

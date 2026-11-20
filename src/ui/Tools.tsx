@@ -14,7 +14,7 @@ import { exportBackup, restoreBackup, validateBackup, type ValidBackup } from '.
 import { RenderView } from './renderer';
 import { CompatibilityBadge, Empty, Modal, PageHeading, SystemSelect, Warning, download, readFile, type Run } from './shared';
 import { useUi } from './store';
-import { it } from './it';
+import { it, detectLocale, setLocale, type Locale } from './it';
 import { CatalogImport } from './CatalogImport';
 import { groupDiagnostics } from '../importing/diagnostic-groups';
 
@@ -138,7 +138,10 @@ export function Settings({ preferences, run }: { preferences: Preferences; run: 
             await db.rolls.bulkDelete(ids.slice(historyLimit));
           });
         });
-      }} /></label><p className="muted">{it.installHelp}</p></section>
+      }} /></label><h2>{it.language}</h2><div className="theme-options">{(['it', 'en'] as const).map((locale: Locale) => <button key={locale} className={`theme-option ${(preferences.locale ?? detectLocale()) === locale ? 'selected' : ''}`} aria-pressed={(preferences.locale ?? detectLocale()) === locale} onClick={() => void run(async () => {
+        setLocale(locale);
+        await db.preferences.put({ ...preferences, locale });
+      }, it.languageSaved)}>{locale === 'it' ? it.italian : it.english}</button>)}</div><p className="muted">{it.languageHelp}</p><p className="muted">{it.installHelp}</p></section>
       <section className="settings-panel backup-panel"><div className="panel-icon"><HardDrive size={24} /></div><h2>{it.backup}</h2><p className="muted">{it.backupHelp}</p><div className="button-row"><button className="button primary" onClick={() => void run(async () => download(await exportBackup(), `polysheet-${new Date().toISOString().slice(0, 10)}.json`))}><ArrowDownToLine size={17} />{it.export}</button><button className="button secondary" onClick={() => file.current?.click()}><Upload size={17} />{it.restore}</button></div>
         <input ref={file} type="file" accept=".json,application/json" aria-label={it.restore} className="sr-only" onChange={e => {
           const f = e.target.files?.[0]; e.target.value = '';

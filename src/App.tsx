@@ -14,16 +14,17 @@ import { diagnose } from './importing/system';
 import './ui/fields.css';
 import { useUi, type Page } from './ui/store';
 import { connectNavigation } from './ui/navigation';
-import { it } from './ui/it';
+import { it, detectLocale, setLocale } from './ui/it';
+import { useLocale } from './ui/i18n';
 import type { Run } from './ui/shared';
 
 interface InstallEvent extends Event { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> }
 const pages = [
-  { id: 'characters', label: it.characters, icon: LayoutGrid },
-  { id: 'systems', label: it.systems, icon: BookOpen },
-  { id: 'resources', label: it.resources, icon: FolderOpen },
-  { id: 'dice', label: it.dice, icon: Dices },
-  { id: 'combat', label: it.combat, icon: ShieldCheck }
+  { id: 'characters', icon: LayoutGrid },
+  { id: 'systems', icon: BookOpen },
+  { id: 'resources', icon: FolderOpen },
+  { id: 'dice', icon: Dices },
+  { id: 'combat', icon: ShieldCheck }
 ] as const;
 
 /** Render offline status, navigation, update prompts, and the selected local screen. */
@@ -32,6 +33,11 @@ export default function App() {
   const systems = useLiveQuery(async () => (await db.systems.toArray()).map(s => ({ ...s, diagnostics: diagnose(s.definition) })), []) ?? [];
   const characters = useLiveQuery(() => db.characters.orderBy('updatedAt').reverse().toArray(), []) ?? [];
   const preferences = useLiveQuery(() => db.preferences.get('app'), []) ?? defaultPreferences;
+  // The stored choice wins; the browser language applies only until the user picks one.
+  const locale = useLocale(state => state.locale);
+  const preferredLocale = preferences.locale ?? detectLocale();
+  useEffect(() => { setLocale(preferredLocale); }, [preferredLocale]);
+  useEffect(() => { document.documentElement.lang = locale; }, [locale]);
   const { page, characterId, systemKey, navigate } = useUi();
   const [menu, setMenu] = useState(false);
   const [pending, setPending] = useState(0);
@@ -113,7 +119,7 @@ export default function App() {
       {menu && <button type="button" className="icon-button drawer-close" aria-label={it.closeNavigation} onClick={() => setMenu(false)}><X size={20} /></button>}
       <button className="brand" onClick={() => go('characters')} aria-label={`${it.brand} · ${it.characters}`}><span className="brand-symbol"><Hexagon size={27} /><span /></span><strong>{it.brand}<span>{it.tagline}</span></strong></button>
       <div className="nav-section-label">{it.atTheTable}</div>
-      <nav aria-label={it.mainNavigation}>{pages.map(p => <button key={p.id} onClick={() => go(p.id)} className={`nav-item ${page === p.id ? 'active' : ''}`} aria-current={page === p.id ? 'page' : undefined}><p.icon size={19} />{p.label}{p.id === 'characters' && <span className="nav-count">{characters.length}</span>}</button>)}</nav>
+      <nav aria-label={it.mainNavigation}>{pages.map(p => <button key={p.id} onClick={() => go(p.id)} className={`nav-item ${page === p.id ? 'active' : ''}`} aria-current={page === p.id ? 'page' : undefined}><p.icon size={19} />{it[p.id]}{p.id === 'characters' && <span className="nav-count">{characters.length}</span>}</button>)}</nav>
       <div className="nav-section-label second-label">{it.workspace}</div>
       <nav aria-label={it.workspace}>{[
         { id: 'diagnostics', label: it.diagnostics, icon: ShieldCheck },
@@ -140,7 +146,7 @@ export default function App() {
     </div>
     <nav className="mobile-tabs" aria-label={it.mobileNavigation} inert={menu || undefined}>
       {pages.filter(p => ['characters', 'systems', 'dice'].includes(p.id)).map(p => <button key={p.id}
-        aria-current={page === p.id ? 'page' : undefined} onClick={() => go(p.id)}><p.icon size={21} /><span>{p.label}</span></button>)}
+        aria-current={page === p.id ? 'page' : undefined} onClick={() => go(p.id)}><p.icon size={21} /><span>{it[p.id]}</span></button>)}
       <button aria-label={it.more} aria-expanded={menu} aria-controls="main-navigation" onClick={toggleMenu}><Menu size={21} /><span>{it.more}</span></button>
     </nav>
   </div>;

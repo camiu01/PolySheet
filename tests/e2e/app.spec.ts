@@ -13,10 +13,11 @@ import { base, capabilitySystem, constant, list, stat } from '../fixtures/capabi
 import { chooseGame, openCatalogImport } from './helpers';
 import { viewSystem } from '../fixtures/views';
 import { it as copy } from '../../src/ui/it';
+import { en as english } from '../../src/ui/locales/en';
 import { catalogSystem, classOriginal, raceOriginal, backgroundOriginal, subraceOriginal } from '../fixtures/catalog';
 
 async function navigate(page: Page, label: string) {
-  const menu = page.getByRole('button', { name: 'Navigazione principale', exact: true });
+  const menu = page.locator('.mobile-menu');
   if (await menu.isVisible() && await menu.getAttribute('aria-expanded') !== 'true') await menu.click();
   const all = page.locator('.sidebar');
   await all.getByRole('button', { name: label === 'Personaggi' ? /^Personaggi \d+$/ : label, exact: true }).click();
@@ -210,6 +211,18 @@ test('reported original HP, AC and description recover with manual class and rac
   await expect(page.getByText('/ 14 HP', { exact: true })).toBeVisible();
   await expect(page.getByTestId('stat-armor_class')).toHaveText('12');
   await expect(page.getByText('Razza manuale Classe manuale 2', { exact: true })).toBeVisible();
+});
+
+test('switches the interface language and keeps the saved choice', async ({ page }) => {
+  await page.goto('./');
+  await navigate(page, copy.settings);
+  await page.getByRole('button', { name: english.english, exact: true }).click();
+  await expect(page.getByRole('heading', { name: english.settings, exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByTestId('save-status')).toHaveText(english.saved);
+  await navigate(page, english.settings);
+  await page.getByRole('button', { name: english.italian, exact: true }).click();
+  await expect(page.getByRole('heading', { name: copy.settings, exact: true })).toBeVisible();
 });
 
 test('avatar corner menu stays inside the viewport and accepts pointer selection', async ({ page }) => {

@@ -117,6 +117,10 @@ async function prepareCatalogs(input: readonly FolderFile[], entries: readonly F
   return catalogs;
 }
 
+/**
+ * Prepare one selected system and its reviewed catalogs without writing.
+ * @throws When the folder has no supported system or exceeds import limits.
+ */
 export async function prepareLocalBundle(input: readonly FolderFile[], path: string,
   progress: (done: number, total: number) => void = () => {}): Promise<LocalFolderBundle> {
   const found = discoverLocalFolder(input);

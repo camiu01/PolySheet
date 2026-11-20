@@ -16,7 +16,8 @@ Do not rerun application suites merely to attach new counts to prose changes.
 ## Documentation standard
 
 Write project documentation, architecture decisions, code identifiers and
-comments in English. UI copy belongs in `src/ui/it.ts`; imported game labels
+comments in English. UI copy belongs in the Italian and English catalogues under
+`src/ui/locales/`; imported game labels
 are not translated or rewritten.
 
 Use JSDoc/TSDoc-compatible comments on exported domain functions, public

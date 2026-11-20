@@ -2,7 +2,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { expect, it } from 'vitest';
 import type { ResourceInstance } from '../src/domain/model';
-import { LocalResourcePicker, duplicateSourceLabels } from '../src/ui/LocalResourcePicker';
+import { LocalResourcePicker, duplicateSourceLabels, spellLevel } from '../src/ui/LocalResourcePicker';
 
 const base = 'https://raw.githubusercontent.com/owner/repo/main/races/';
 function record(id: string, name: string, source?: string): ResourceInstance {
@@ -43,6 +43,20 @@ it('prefers upstream source-book codes over file names and lists options alphabe
   expect(Object.fromEntries(duplicateSourceLabels(resources))).toEqual({ a: 'MOM' });
   render(<LocalResourcePicker busy={false} onSelect={() => undefined} resources={resources} />);
   expect(screen.getAllByRole('button').map(button => button.textContent)).toEqual(['Aarakocra', 'TortleMOM', 'Tortle']);
+});
+
+it('orders spells by level and shows the level from copies or retained catalog originals', () => {
+  const spell = (id: string, name: string, level: string, template = false): ResourceInstance => ({
+    id, systemKey: 's', definitionId: 'spell', name,
+    values: template ? {} : { level },
+    ...(template ? { catalogSource: { original: JSON.stringify({ resource_id: 'spell', stats: { level: { value: level } } }), source: `${id}.json`, digest: id } } : {})
+  });
+  const resources = [spell('a', 'Shatter', 'spell_level_2', true), spell('b', 'Absorb Elements', 'spell_level_1'),
+    spell('c', 'Fire Bolt', 'spell_level_0', true), record('d', 'Alarm')];
+  expect(resources.map(spellLevel)).toEqual([2, 1, 0, undefined]);
+  render(<LocalResourcePicker busy={false} onSelect={() => undefined} resources={resources} />);
+  expect(screen.getAllByRole('button').map(button => button.textContent)).toEqual(
+    ['Fire BoltTrucchetto', 'Absorb ElementsLiv. 1', 'ShatterLiv. 2', 'Alarm']);
 });
 
 it('finds multiword source file names without changing their labels', () => {

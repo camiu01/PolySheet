@@ -19,10 +19,10 @@ import { ImportDiagnostics, SystemImportOptions } from './SystemImport';
 import { GameChoices, type GameProgress } from './GameChoices';
 import './library.css';
 
-/** Guide source selection and review before installing; preserve exact originals and validation limits. */
 /** Games whose pinned public source cannot be compiled here; they use the publisher's compiled file. */
 const compiledOnly = new Set(['pf2e']);
 
+/** Guide source selection and review before installing; preserve exact originals and validation limits. */
 export function Library({ systems, run }: { systems: StoredSystem[]; run: Run }) {
   const file = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);

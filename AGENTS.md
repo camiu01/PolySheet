@@ -13,7 +13,7 @@ Vite, Tailwind and Workbox. Do not add a backend, accounts or analytics.
 
 - `src/domain/`: contracts and validators; `src/engine/`: React-independent rules and view sessions.
 - `src/importing/`: source parsing and compatibility diagnostics; `src/persistence/`: Dexie storage, transactions and backups.
-- `src/ui/`: interface and Italian copy (`it.ts`); `public/`: static assets; `scripts/`: fixture and asset tooling.
+- `src/ui/`: interface and localized copy (`locales/` catalogues); `public/`: static assets; `scripts/`: fixture and asset tooling.
 - `tests/`: Vitest suites; `tests/e2e/`: Playwright acceptance tests. Keep external fixtures in gitignored `.reference/`.
 
 ## Development and validation
@@ -31,7 +31,8 @@ Stop on failures. For documentation-only changes, check content, paths and `git 
 
 Use two spaces, single quotes, PascalCase components and camelCase functions.
 No formatter or linter script is configured. Write documentation, identifiers
-and contract comments in English; keep UI copy Italian and imported labels unchanged.
+and contract comments in English; keep interface copy in the Italian and English
+catalogues and imported labels unchanged.
 
 Dexie owns persistent data; Zustand holds temporary UI state. Reuse registries
 and helpers. Preserve exact source bytes, validation limits and user data.

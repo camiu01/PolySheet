@@ -16,18 +16,22 @@ export function Modal({ title, children, onClose, bottomSheet = false, wide = fa
     <div className="modal-body">{children}</div>
   </dialog>, document.body);
 }
+/** Page title and description with an optional trailing action. */
 export function PageHeading({ title, description, action }: { title: string; description: string; action?: ReactNode }) {
   return <header className="page-heading"><div><h1>{title}</h1><p className="muted">{description}</p></div>{action}</header>;
 }
+/** Immutable system version picker; the empty option appears only when no valid selection exists. */
 export function SystemSelect({ systems, value, onChange }: { systems: StoredSystem[]; value: string; onChange: (key: string) => void }) {
   return <label className="field system-select"><span>{it.chooseSystem}</span><select value={value} onChange={e => onChange(e.target.value)}>
     {(!systems.length || !value) && <option value="">{it.choose}</option>}
     {systems.map(s => <option key={s.key} value={s.key}>{s.definition.name}{s.definition.id === 'polysheet-sentieri' ? ` · ${it.demoBadge}` : ''} · v{s.definition.version} · {s.digest.slice(0, 6)}</option>)}
   </select></label>;
 }
+/** Declared compatibility state of a stored system version. */
 export function CompatibilityBadge({ system }: { system: StoredSystem }) {
   return <span className={`badge ${system.diagnostics.length ? 'badge-warning' : 'badge-success'}`}>{system.diagnostics.length ? it.partial : it.supported}</span>;
 }
+/** Warning notice; children carry the real limitation text. */
 export function Warning({ children }: { children: ReactNode }) {
   return <div className="notice notice-warning"><AlertTriangle size={18} /><div>{children}</div></div>;
 }

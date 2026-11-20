@@ -3,6 +3,18 @@
 [Documentation index](README.md) · [How to run checks](DEVELOPMENT.md) ·
 [Historical records](VERIFICATION_HISTORY.md) · [12:37 checkpoint](VERIFICATION_2026-11-16_1237.md)
 
+## Spell levels in the resource picker, 2026-11-20
+
+- The local resource picker labels 5e spells with their level (cantrip or
+  level N) and lists them by level, then name. The level comes from a private
+  copy's `level` value or a catalog template's retained original; other
+  resources keep the alphabetical order and get no label.
+- `npm run check`: 400 passed, 1 skipped; `tests/rpgscript.test.ts` timed out
+  once under the full parallel run and passed when rerun on its own.
+- Browser check on the dev server with the imported 5e system: the Artificer
+  spell picker showed cantrips first, then level 1 spells, each labelled.
+- Playwright and `npm run build` were not run for this change.
+
 ## Local folder system imports, 2026-11-20
 
 - Added directory-picker imports that discover one or more compiled system files

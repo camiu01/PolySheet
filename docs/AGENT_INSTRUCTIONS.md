@@ -25,8 +25,9 @@ More specific directory instructions take precedence within their scope.
 ## Language and implementation
 
 - Write documentation, identifiers and JSDoc/TSDoc in English.
-- Keep application UI copy Italian, centralized in `src/ui/it.ts`. Preserve
-  imported labels in their original language.
+- Keep application UI copy in the Italian and English catalogues under
+  `src/ui/locales/`; add every new key to both. Preserve imported labels in their
+  original language.
 - Match the existing grimoire-style UI, CSS tokens, accessible controls and
   responsive layout documented in `DESIGN.md`. Do not introduce a second design system.
 - Keep rule evaluation independent of React. Use the existing formula/view

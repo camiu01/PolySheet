@@ -17,7 +17,7 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   reporter: [['list']],
-  use: { baseURL, trace: 'retain-on-failure', screenshot: 'only-on-failure' },
+  use: { baseURL, locale: 'it-IT', trace: 'retain-on-failure', screenshot: 'only-on-failure' },
   webServer: {
     command: `npm run preview -- --port ${port} --strictPort --base ${basePath}`,
     url: baseURL, reuseExistingServer: false, timeout: 30000

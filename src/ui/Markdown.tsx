@@ -31,6 +31,7 @@ function blocks(text: string) {
   return result.filter(block => block.lines.length);
 }
 
+/** Render validated source markdown; no imported HTML is interpreted. */
 export function Markdown({ text, className }: { text: string; className?: string }) {
   return <div className={['markdown', className].filter(Boolean).join(' ')}>{blocks(text).map((block, index) => {
     if (block.kind === 'list') return <ul key={index}>{block.lines.map((line, item) =>

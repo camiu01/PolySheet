@@ -18,7 +18,7 @@ export type CombatCommand =
 export async function createCombat(systemKey: string, name: string, database = db) {
   return database.transaction('rw', database.systems, database.combats, async () => {
     const system = await database.systems.get(systemKey);
-    if (!system?.definition.combat_system || !name.trim() || name.length > 100) throw new Error('Nome o sistema incontro non valido.');
+    if (!system?.definition.combat_system || !name.trim() || name.length > 100) throw new Error(it.combatNameInvalid);
     const now = new Date().toISOString();
     const combat: Combat = {
       id: crypto.randomUUID(), systemKey, name: name.trim(),
@@ -36,25 +36,25 @@ export async function commandCombat(id: string, command: CombatCommand, database
   await database.transaction('rw', [database.combats, database.systems, database.characters, database.resources], async () => {
     const combat = await database.combats.get(id);
     const system = combat ? await database.systems.get(combat.systemKey) : undefined;
-    if (!combat || !system?.definition.combat_system) throw new Error('Incontro o sistema non trovato.');
+    if (!combat || !system?.definition.combat_system) throw new Error(it.combatNotFound);
     const definition = system.definition.combat_system;
     const characters = await database.characters.where('systemKey').equals(system.key).toArray();
     const resources = await database.resources.where('systemKey').equals(system.key).toArray();
     if (command.type === 'add') {
-      if (combat.status === 'active' || combat.combatants.length >= 100) throw new Error('Aggiungi combattenti prima di avviare l’incontro (massimo 100).');
+      if (combat.status === 'active' || combat.combatants.length >= 100) throw new Error(it.combatantsBeforeStart);
       const type = definition.combatant_types.find(t => t.id === command.typeId);
-      if (!type) throw new Error('Tipo combattente non valido.');
+      if (!type) throw new Error(it.combatantTypeInvalid);
       const fighter: Combatant = {
         id: crypto.randomUUID(), typeId: type.id, values: {}, overrides: {},
         initiative: null, tieBreakers: [], createdAt: new Date().toISOString()
       };
       if (type.template_resource_id === 'character') {
-        if (type.instance_resource_id || !characters.some(c => c.id === command.sourceId)) throw new Error('Personaggio non compatibile.');
-        if (combat.combatants.some(f => f.characterId === command.sourceId)) throw new Error('Personaggio già presente nell’incontro.');
+        if (type.instance_resource_id || !characters.some(c => c.id === command.sourceId)) throw new Error(it.characterIncompatible);
+        if (combat.combatants.some(f => f.characterId === command.sourceId)) throw new Error(it.characterAlreadyPresent);
         fighter.characterId = command.sourceId;
       } else if (type.template_resource_id) {
         let source = resources.find(r => r.id === command.sourceId && r.definitionId === type.template_resource_id);
-        if (!source || source.catalogSource && (!prepared || !type.instance_resource_id)) throw new Error('Risorsa di partenza non compatibile.');
+        if (!source || source.catalogSource && (!prepared || !type.instance_resource_id)) throw new Error(it.sourceIncompatible);
         if (source.catalogSource) {
           if (!prepared?.materialized || prepared.system.key !== system.key || JSON.stringify(source) !== JSON.stringify(prepared.template))
             throw new Error(it.missingResource);
@@ -65,24 +65,24 @@ export async function commandCombat(id: string, command: CombatCommand, database
           source = graph.additions.find(r => r.id === graph.rootId)!;
         }
         if (type.instance_resource_id) fighter.templateId = source.id; else fighter.resourceId = source.id;
-      } else if (!type.instance_resource_id) throw new Error('Il combattente non definisce una sorgente né un’istanza.');
+      } else if (!type.instance_resource_id) throw new Error(it.combatantSourceMissing);
       if (type.instance_resource_id) {
         const instance = system.definition.resources.find(r => r.id === type.instance_resource_id);
-        if (!instance) throw new Error('Tipo istanza mancante.');
+        if (!instance) throw new Error(it.instanceTypeMissing);
         fighter.values = initialValues(instance.stats);
       }
       combat.combatants.push(fighter);
       initializeCombatant(system, combat, fighter.id, characters, resources, random);
       combat.status = 'preparing'; combat.turn = 0;
     } else if (command.type === 'remove') {
-      if (combat.status === 'active') throw new Error('Non rimuovere un combattente durante il suo ordine attivo: archivia o prepara prima l’incontro.');
+      if (combat.status === 'active') throw new Error(it.combatantActiveOrder);
       combat.combatants = combat.combatants.filter(f => f.id !== command.id); combat.turn = 0;
     } else if (command.type === 'value') {
       const fighter = combat.combatants.find(f => f.id === command.id);
       const context = combatContext(system, combat, characters, resources);
       const scope = context.scopes.get(command.id);
       const stat = scope?.stats.find(s => s.id === command.statId && s.type === 'base');
-      if (!fighter || !stat || !matchesType(command.value, stat.value_type, stat.sub_value_type)) throw new Error('Valore combattente non modificabile o non valido.');
+      if (!fighter || !stat || !matchesType(command.value, stat.value_type, stat.sub_value_type)) throw new Error(it.combatantValueInvalid);
       checkReferences([stat], { [stat.id]: command.value }, resources, system.key);
       if (fighter.characterId) {
         const character = characters.find(c => c.id === fighter.characterId)!;
@@ -98,27 +98,27 @@ export async function commandCombat(id: string, command: CombatCommand, database
       else fighter.values[stat.id] = jsonValue(command.value);
     } else if (command.type === 'initiative') {
       const fighter = combat.combatants.find(f => f.id === command.id);
-      if (!fighter || combat.status === 'active' || !Number.isSafeInteger(command.value) || Math.abs(command.value) > 1000000000) throw new Error('Iniziativa non modificabile o non valida.');
+      if (!fighter || combat.status === 'active' || !Number.isSafeInteger(command.value) || Math.abs(command.value) > 1000000000) throw new Error(it.initiativeLocked);
       fighter.initiative = command.value;
       combat.combatants = initiativeOrder(combat).order;
     } else if (command.type === 'difficulty') {
-      if (command.value !== null && !definition.difficulty_levels?.some(d => d.id === command.value)) throw new Error('Difficoltà non valida.');
+      if (command.value !== null && !definition.difficulty_levels?.some(d => d.id === command.value)) throw new Error(it.difficultyInvalid);
       combat.difficulty = command.value;
     } else if (command.type === 'roll') {
-      if (!combat.combatants.length || combat.status === 'active') throw new Error('Tira iniziativa prima di avviare l’incontro.');
+      if (!combat.combatants.length || combat.status === 'active') throw new Error(it.initiativeRollFirst);
       rollInitiatives(system, combat, characters, resources, random); combat.turn = 0; combat.status = 'preparing';
     } else if (command.type === 'start') {
-      if (combat.status === 'active' || !combat.combatants.length || initiativeOrder(combat).unresolved) throw new Error('Iniziativa mancante, attiva o parità non risolta: tira o modifica i valori.');
+      if (combat.status === 'active' || !combat.combatants.length || initiativeOrder(combat).unresolved) throw new Error(it.initiativeUnresolved);
       combat.combatants = initiativeOrder(combat).order;
       combat.round = Math.max(1, combat.round); combat.pass = 1; combat.turn = 0; combat.status = 'active';
-      if (!eligibleCombatants(system, combat).length) throw new Error('Nessun combattente raggiunge la soglia minima di iniziativa.');
+      if (!eligibleCombatants(system, combat).length) throw new Error(it.initiativeThreshold);
     } else if (command.type === 'next') advanceCombat(system, combat, characters, resources, random);
     else if (command.type === 'finish') combat.status = 'finished';
     if (command.type === 'value' || command.type === 'next' || command.type === 'start') {
       const message = definition.encounter_resolution_message;
       if (message && combat.round > 0) {
         const result = combatContext(system, combat, characters, resources).encounter.evaluate(message);
-        if (result !== null && typeof result !== 'string') throw new Error('Messaggio fine incontro non valido.');
+        if (result !== null && typeof result !== 'string') throw new Error(it.combatEndMessageInvalid);
         if (result !== null) combat.status = 'finished';
         else if (command.type === 'value' && combat.status === 'finished') combat.status = 'active';
       }

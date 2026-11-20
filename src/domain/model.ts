@@ -151,7 +151,7 @@ export interface Roll {
   formula: string; results: number[]; total: number; createdAt: string;
 }
 export interface Preferences {
-  id: 'app'; theme: 'light' | 'dark'; historyLimit: number;
+  id: 'app'; theme: 'light' | 'dark'; historyLimit: number; locale?: 'it' | 'en';
 }
 /** Narrow an untrusted non-array object or throw a path-qualified error. */
 export function object(value: unknown, path = '$'): Record<string, unknown> {

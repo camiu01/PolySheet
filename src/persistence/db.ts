@@ -2,7 +2,7 @@
 import Dexie, { type EntityTable } from 'dexie';
 import { jsonValue, matchesType, type Character, type Combat, type Preferences, type ResourceInstance, type Roll, type Stat, type StoredSystem } from '../domain/model';
 import { checkReferences, referencedIds } from '../domain/references';
-import { it } from '../ui/it';
+import { detectLocale, it } from '../ui/it';
 import { clearValueOverrides } from '../engine/overrides';
 
 /** Schema v3 adds encounters; legacy upgrades preserve every value and system pin. */
@@ -31,7 +31,7 @@ export class SheetDatabase extends Dexie {
   }
 }
 export const db = new SheetDatabase();
-export const defaultPreferences: Preferences = { id: 'app', theme: 'dark', historyLimit: 100 };
+export const defaultPreferences: Preferences = { id: 'app', theme: 'dark', historyLimit: 100, locale: detectLocale() };
 /** Clone base defaults only; calculated stats always remain definitions. */
 export function initialValues(stats: Stat[]) {
   return Object.fromEntries(stats.filter(s => s.type === 'base').map(s => [s.id, jsonValue(s.default_value)]));

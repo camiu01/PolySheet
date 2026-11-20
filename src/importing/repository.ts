@@ -70,6 +70,10 @@ export function bundleCatalogFiles<T extends { path: string; size: number }>(all
   return files;
 }
 
+/**
+ * Prepare a repository system and the catalogues of the same commit before any write.
+ * @throws When the selection is unknown, catalogues exceed the budget or the local system differs.
+ */
 export async function prepareRepositoryBundle(discovery: RepositoryDiscovery, selected: string, localSystem?: StoredSystem,
   progress: (done: number, total: number) => void = () => {}): Promise<RepositoryBundle> {
   const { snapshot } = discovery;

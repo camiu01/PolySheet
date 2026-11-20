@@ -50,6 +50,20 @@ export function duplicateSourceLabels(resources: ResourceInstance[]) {
   return labels;
 }
 
+/**
+ * 5e spell level from a private copy (`values.level`) or a catalog template's retained original
+ * (`stats.level.value`), both holding the source's `spell_level_N` id; anything else has no level.
+ */
+export function spellLevel(record: ResourceInstance) {
+  if (record.definitionId !== 'spell') return undefined;
+  let level = record.values.level;
+  if (level == null && record.catalogSource) {
+    try { level = JSON.parse(record.catalogSource.original)?.stats?.level?.value; } catch { return undefined; }
+  }
+  const match = typeof level === 'string' ? /^spell_level_(\d)$/.exec(level) : null;
+  return match ? Number(match[1]) : undefined;
+}
+
 /** Keep search/page state local; selection still uses the owner's atomic command. */
 export function LocalResourcePicker({ resources, busy, onSelect }: {
   resources: ResourceInstance[]; busy: boolean; onSelect: (record: ResourceInstance) => void;
@@ -58,12 +72,15 @@ export function LocalResourcePicker({ resources, busy, onSelect }: {
   const [page, setPage] = useState(0);
   const startRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const levels = useMemo(() => new Map(resources.map(r => [r.id, spellLevel(r)])), [resources]);
   const matches = useMemo(() => {
     const normalize = (text: string) => text.trim().toLocaleLowerCase('it').replace(/[_\s]+/g, ' ');
     const search = normalize(query);
     const found = search ? resources.filter(r => normalize(r.name).includes(search)) : resources;
-    return [...found].sort((a, b) => a.name.localeCompare(b.name, 'it'));
-  }, [resources, query]);
+    // Spells read by level first; entries without a level keep alphabetical order after them.
+    const rank = (r: ResourceInstance) => levels.get(r.id) ?? 10;
+    return [...found].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name, 'it'));
+  }, [resources, query, levels]);
   const sources = useMemo(() => duplicateSourceLabels(resources), [resources]);
   const pages = Math.max(1, Math.ceil(matches.length / pageSize));
   const current = Math.min(page, pages - 1), start = current * pageSize;
@@ -85,7 +102,8 @@ export function LocalResourcePicker({ resources, busy, onSelect }: {
     </div>
     <div className="local-resource-options">{matches.slice(start, start + pageSize).map(record =>
       <button type="button" key={record.id} className="button secondary" disabled={busy} onClick={() => onSelect(record)}>
-        <span>{record.name}{sources.has(record.id) && <small className="resource-source-label">{sources.get(record.id)}</small>}</span>
+        <span>{record.name}{levels.get(record.id) != null && <small className="resource-source-label">{it.spellLevelLabel(levels.get(record.id)!)}</small>}
+          {sources.has(record.id) && <small className="resource-source-label">{sources.get(record.id)}</small>}</span>
         <ChevronRight size={16} aria-hidden="true" />
       </button>
     )}</div>

@@ -10,6 +10,7 @@ import { checkReferences } from '../domain/references';
 import { eligibleCombatants, initiativeOrder } from '../engine/combat';
 import { db, type SheetDatabase } from './db';
 import { catalogDigest, prepareCatalogTemplate } from '../importing/catalog';
+import { it as copy } from '../ui/it';
 
 /**
  * Whole-archive backup bounds, sized for MAX_STORED_RESOURCES: one official 5e cleric character
@@ -61,7 +62,7 @@ const schema = z.object({
   })).max(1000),
   preferences: z.array(z.object({
     id: z.literal('app'), theme: z.enum(['light', 'dark']),
-    historyLimit: z.number().int().min(1).max(1000)
+    historyLimit: z.number().int().min(1).max(1000), locale: z.enum(['it', 'en']).optional()
   })).max(1)
 });
 /** Export a v4 snapshot including reversible character overrides in one read transaction. */
@@ -93,7 +94,7 @@ export async function validateBackup(text: string) {
   const systems = [];
   // Sequential decompression bounds peak memory when restoring many packages.
   for (const s of data.systems) {
-    if (s.artifact && data.version === 1) throw new Error('Un backup v1 non può contenere originali .rpg.');
+    if (s.artifact && data.version === 1) throw new Error(copy.backupV1Artifact);
     const prepared = s.artifact ? await prepareImport(artifactBytes(s.artifact.base64), s.source) : await prepareSystem(s.original, s.source);
     if (s.key !== prepared.key || s.digest !== prepared.digest || s.original !== prepared.original ||
         Boolean(s.artifact) !== Boolean(prepared.artifact) || prepared.diagnostics.some(d => d.severity === 'error'))
@@ -112,7 +113,7 @@ export async function validateBackup(text: string) {
       if (preview.resources[0].definitionId !== resource.definitionId || preview.resources[0].sourceId !== resource.sourceId
         || preview.resources[0].name !== resource.name || Object.keys(resource.values).length
         || data.resources.some(r => r.id !== resource.id && r.catalogGroup === resource.id))
-        throw new Error('Identità catalogo non valida.');
+        throw new Error(copy.catalogIdentityInvalid);
       resource.catalogIssue = preview.resources[0].catalogIssue;
     }
     if (resource.catalogIssue && !resource.catalogSource) throw new Error('Diagnostica catalogo senza originale.');
@@ -164,7 +165,7 @@ export async function validateBackup(text: string) {
     const system = byKey.get(combat.systemKey);
     const definition = system?.definition.combat_system;
     if (!definition || new Set(combat.combatants.map(f => f.id)).size !== combat.combatants.length) throw new Error('Combattimento non valido o ID duplicati.');
-    if (combat.difficulty !== null && !definition.difficulty_levels?.some(d => d.id === combat.difficulty)) throw new Error('Difficoltà incontro non valida.');
+    if (combat.difficulty !== null && !definition.difficulty_levels?.some(d => d.id === combat.difficulty)) throw new Error(copy.combatDifficultyInvalid);
     if ((combat.status === 'active' && (!combat.round || !combat.combatants.length)) || combat.turn >= Math.max(1, combat.combatants.length)) throw new Error('Turno o stato incontro non valido.');
     if (combat.status === 'active' && (initiativeOrder(combat).unresolved
       || combat.turn >= Math.max(1, eligibleCombatants(system!, combat).length)
