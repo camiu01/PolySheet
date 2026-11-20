@@ -63,6 +63,37 @@ test('folder import selects one system and reviews its own catalogs before writi
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test('catalog-only folder adds its originals to an installed system', async ({ page }) => {
+  const root = mkdtempSync(join(tmpdir(), 'polysheet-addon-'));
+  try {
+    const folder = join(root, 'addon');
+    mkdirSync(join(folder, 'catalogs', 'part-1'), { recursive: true });
+    writeFileSync(join(folder, 'catalogs', 'part-1', 'viandante.json'), classOriginal);
+    writeFileSync(join(folder, 'catalogs', 'manifest.json'), JSON.stringify({ total: 1 }));
+    await page.goto('./');
+    await page.locator('main').getByRole('button', { name: it.importSystem, exact: true }).click();
+    await page.getByLabel(it.localFile).setInputFiles({
+      name: 'song.system.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(catalogSystem))
+    });
+    await page.getByRole('dialog', { name: it.importPreview }).getByRole('button', { name: it.confirmImport }).click();
+    await expect(page.locator('.system-card')).toHaveCount(1);
+    const picker = page.waitForEvent('filechooser');
+    await page.locator('main .import-source-row button').filter({ hasText: it.localFolder }).click();
+    await (await picker).setFiles(folder);
+    const dialog = page.getByRole('dialog', { name: it.folderCatalogsTitle });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText(`1 ${it.folderCatalogs}`)).toBeVisible();
+    await dialog.getByRole('button', { name: it.folderCatalogsLoad }).click();
+    await expect(dialog.getByText(`1 ${it.catalogInstances}`)).toBeVisible();
+    await dialog.getByRole('button', { name: it.confirmImport }).click();
+    await expect(dialog).not.toBeVisible();
+    const drawer = page.getByRole('button', { name: 'Navigazione principale' });
+    if (await drawer.isVisible()) await drawer.click();
+    await page.getByRole('button', { name: it.resources }).click();
+    await expect(page.locator('main')).toContainText('Viandante');
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test('link options and compatibility review disclose details without hiding blocking errors', async ({ page }, info) => {
   await page.goto('./');
   await page.locator('main').getByRole('button', { name: it.importSystem, exact: true }).click();

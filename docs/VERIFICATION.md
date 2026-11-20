@@ -10,19 +10,25 @@
   Discovery reads names and sizes only; unsupported files such as PDFs are never
   opened. Catalog JSON keeps the existing 2,000-file/24 MiB budget and malformed
   files abort with their path.
-- `npm run check`: 395 passed, 1 skipped. `npm run build`: production build with
+- Catalog-only folders (an add-on without its own system, such as Daggerheart
+  Hope & Fear) are offered as catalog imports for one installed system. The
+  system record is replayed unchanged and the catalogs use the same bounded
+  repository-catalog path.
+- `npm run check`: 396 passed, 1 skipped. `npm run build`: production build with
   the existing large-chunk warning. `npm audit --omit=dev`: 0 vulnerabilities.
 - Full Playwright suite on production desktop and mobile `/PolySheet/`:
-  115 passed, 3 skipped (local-only fixtures), 7.0 min. The new case uploads a
-  real directory, selects the second of two systems, reviews its own catalog and
-  confirms once. Existing systems-page inputs now use their `aria-label`
-  locator because the folder input shares the `input[type=file]` selector.
+  117 passed, 3 skipped (local-only fixtures), 6.8 min. Cases upload real
+  directories, select one of two systems, review scoped catalogs and confirm
+  once; the add-on case adds a catalog to an installed system. Existing
+  systems-page inputs now use their `aria-label` locator because the folder
+  input shares the `input[type=file]` selector.
 - Real Daggerheart export folder (local, authorized): `export/` produced
   Daggerheart v1.1.0, digest `025bcaf6`, 589 catalogs, and the Risorse page then
-  listed 589 catalog templates. The probe pointed at `export/`, not the parent
-  folder: Playwright's directory upload copies file contents, so the parent's
-  312 MB of rulebook PDFs is not a valid automation input. The application
-  itself filters by extension before reading.
+  listed 589 catalog templates. The real `export-hope-and-fear-addon` folder
+  added its 332 catalogs to that installed system. The probe pointed at
+  `export/`, not the parent folder: Playwright's directory upload copies file
+  contents, so the parent's 312 MB of rulebook PDFs is not a valid automation
+  input. The application itself filters by extension before reading.
 - The probed catalogs remain user-supplied local content; none is bundled or
   committed.
 

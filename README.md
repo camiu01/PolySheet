@@ -25,6 +25,7 @@ The characters and Sentieri content are original examples, not external game con
   race/ancestry, background and heritage catalogs. Select the compiled system file once,
   then reuse the local version. [Import guide](docs/GITHUB_IMPORT.md#source-repositories-and-automatic-catalogs).
 - Import an exported folder with the system and its `catalogs/` in one review.
+  A catalog-only add-on folder can be added to an installed system instead.
   Non-system files such as PDFs are ignored without being read.
 - Assign private background/origin graphs and choose source-declared subraces
   by name, retaining their original IDs without applying automatic effects.

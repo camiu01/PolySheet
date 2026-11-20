@@ -2,10 +2,11 @@
 /** @file Local folder imports stay metadata-first, bounded and exact. */
 import { expect, it } from 'vitest';
 import {
-  catalogDirectoryOf, discoverLocalFolder, folderCatalogs, prepareLocalBundle, prepareLocalSystem, type FolderFile
+  catalogDirectoryOf, discoverLocalCatalogFolder, discoverLocalFolder, folderCatalogs, prepareLocalBundle,
+  prepareLocalCatalogFolder, prepareLocalSystem, scanLocalFolder, type FolderFile
 } from '../src/importing/local-folder';
 import { MAX_TREE_ENTRIES } from '../src/importing/github';
-import { MAX_SYSTEM_BYTES } from '../src/importing/system';
+import { MAX_SYSTEM_BYTES, prepareSystem } from '../src/importing/system';
 import { it as copy } from '../src/ui/it';
 import { catalogSystem, classOriginal, raceOriginal } from './fixtures/catalog';
 
@@ -57,6 +58,25 @@ it('keeps catalogs scoped to the selected system in a multi-system folder', asyn
   const bundle = await prepareLocalBundle(files, systems[1].path);
   expect(bundle.system.definition.id).toBe('b');
   expect(bundle.catalogs).toHaveLength(1);
+});
+
+it('prepares an add-on catalog folder for an installed system', async () => {
+  const files = [
+    entry('addon/catalogs/part-1/viandante.json', classOriginal),
+    entry('addon/catalogs/manifest.json', JSON.stringify({ total: 1 })),
+    entry('addon/README.md', 'instructions')
+  ];
+  expect(() => discoverLocalFolder(files)).toThrow(copy.folderNoSystem);
+  expect(scanLocalFolder(files).systems).toHaveLength(0);
+  expect(discoverLocalCatalogFolder(files).catalogs).toHaveLength(1);
+  const system = await prepareSystem(systemText, 'export/song.system.json');
+  const progress: number[] = [];
+  const previews = await prepareLocalCatalogFolder(files, system, (done, total) => progress.push(done, total));
+  expect(previews).toHaveLength(1);
+  expect(previews[0].systemKey).toBe(system.key);
+  expect(previews[0].resources[0].name).toBe('Viandante');
+  expect(previews[0].resources[0].catalogSource?.source).toBe('addon/catalogs/part-1/viandante.json');
+  expect(progress).toEqual([0, 1, 1, 1]);
 });
 
 it('rejects folders without a system, unsafe paths and oversized metadata', async () => {

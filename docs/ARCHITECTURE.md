@@ -272,7 +272,7 @@ snapshot retries the view; no source values are fabricated to make it render.
 | Repository catalogs | 2,000 files, 24 MiB total source bytes, four simultaneous reads; each file still at most 8 MiB |
 | Resource links | Same remote batch/file caps; web index bytes included, sequential unknown-size reads and no recursive indexes |
 | Local catalog batch | 100 files, 8 MiB total |
-| Local folder import | 20,000 directory entries, 100 system candidates; only `.json`/`.rpg` are read, under the system and repository-catalog caps |
+| Local folder import | 20,000 directory entries, 100 system candidates; only `.json`/`.rpg` are read, under the system and repository-catalog caps; catalog-only add-ons use the repository catalog budget |
 | Input text | Generally 10,000 characters; source `max_length` can tighten supported text inputs |
 
 These are application safety limits, not claims about upstream format limits.

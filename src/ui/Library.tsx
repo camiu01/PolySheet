@@ -8,7 +8,7 @@ import { artifactBytes, prepareImport } from '../importing/package';
 import { importFromUrl } from '../importing/url';
 import { githubRepository } from '../importing/github';
 import { discoverRepository, prepareRepositoryBundle, repositorySystemDownload, type RepositoryDiscovery } from '../importing/repository';
-import { folderCatalogs, discoverLocalFolder, prepareLocalBundle, type FolderFile, type LocalFolderDiscovery } from '../importing/local-folder';
+import { folderCatalogs as systemFolderCatalogs, scanLocalFolder, prepareLocalBundle, prepareLocalCatalogFolder, type FolderFile, type LocalFolderDiscovery } from '../importing/local-folder';
 import type { CatalogPreview } from '../importing/catalog';
 import { installRepositoryBundle } from '../persistence/catalog';
 import { deleteSystem, installSystem } from '../persistence/db';
@@ -29,6 +29,9 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
   const repositoryFile = useRef<HTMLInputElement>(null);
   const [folderPick, setFolderPick] = useState<{ found: LocalFolderDiscovery; files: FolderFile[] } | null>(null);
   const [folderPath, setFolderPath] = useState('');
+  const [catalogFolder, setCatalogFolder] = useState<{ found: LocalFolderDiscovery; files: FolderFile[] } | null>(null);
+  const [catalogSystem, setCatalogSystem] = useState('');
+  const [folderCatalogPreviews, setFolderCatalogPreviews] = useState<CatalogPreview[] | null>(null);
   const [preview, setPreview] = useState<StoredSystem | null>(null);
   const [deleting, setDeleting] = useState<StoredSystem | null>(null);
   const [showUrl, setShowUrl] = useState(false);
@@ -49,7 +52,7 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
   const matchingSystems = systems.filter(s => s.definition.id === sourceSystem?.id && s.definition.version === sourceSystem.version);
   const localSystem = repositoryUpload ?? matchingSystems.find(s => s.key === repositoryLocalKey);
   const systemDownload = repository && repositorySystemDownload(repository, repositoryPath);
-  const { navigate, selectSystem } = useUi();
+  const { navigate, selectSystem, systemKey } = useUi();
   async function prepare(original: string, source: string) { setCatalogs([]); setPreview(await prepareSystem(original, source)); }
   async function prepareFolder(files: FolderFile[], path: string) {
     setCatalogProgress(`${it.repositoryCatalogProgress}: 0`);
@@ -64,10 +67,34 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
       const path = item.webkitRelativePath || item.name;
       return { path, size: item.size, bytes: async () => new Uint8Array(await item.arrayBuffer()) };
     });
-    const found = discoverLocalFolder(files);
+    const found = scanLocalFolder(files);
+    if (!found.systems.length) {
+      if (!found.catalogs.length) throw new Error(it.folderNoSystem);
+      if (!systems.length) throw new Error(it.folderCatalogsNeedSystem);
+      setCatalogSystem(systems.find(s => s.key === systemKey)?.key ?? systems[0].key);
+      setFolderCatalogPreviews(null);
+      setCatalogFolder({ found, files });
+      return;
+    }
     if (found.systems.length === 1) { await prepareFolder(files, found.systems[0].path); return; }
     setFolderPath(found.systems[0].path);
     setFolderPick({ found, files });
+  }
+  async function prepareCatalogFolder() {
+    const target = systems.find(s => s.key === catalogSystem);
+    if (!target || !catalogFolder) throw new Error(it.folderCatalogsNeedSystem);
+    setCatalogProgress(`${it.repositoryCatalogProgress}: 0`);
+    try {
+      const prepared = await prepareLocalCatalogFolder(catalogFolder.files, target, (done, total) =>
+        setCatalogProgress(`${it.repositoryCatalogProgress}: ${done}/${total}`));
+      setFolderCatalogPreviews(prepared);
+    } finally { setCatalogProgress(''); }
+  }
+  async function installCatalogFolder() {
+    const target = systems.find(s => s.key === catalogSystem);
+    if (!target || !folderCatalogPreviews) throw new Error(it.folderCatalogsNeedSystem);
+    await installRepositoryBundle(target, folderCatalogPreviews);
+    setCatalogFolder(null); setFolderCatalogPreviews(null);
   }
   async function load(action: () => Promise<void>) {
     if (busy.current) return;
@@ -266,12 +293,42 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
             <select value={folderPath} disabled={loading} onChange={e => { setFolderPath(e.target.value); setImportError(''); }}>
               {folderPick.found.systems.map(system => <option key={system.path} value={system.path}>{system.path} · {system.size} B</option>)}
             </select></label>
-          <p className="muted">{folderCatalogs(folderPick.found, folderPath).length} {it.folderCatalogs}</p>
+          <p className="muted">{systemFolderCatalogs(folderPick.found, folderPath).length} {it.folderCatalogs}</p>
           {loading && catalogProgress && <p role="status">{catalogProgress}</p>}
         </div>
         <div className="modal-actions">
           <button type="button" className="button secondary" disabled={loading} onClick={() => setFolderPick(null)}>{it.cancel}</button>
           <button className="button primary" disabled={loading}>{loading ? it.loading : it.folderLoad}</button>
+        </div>
+      </form>
+    </Modal>}
+    {catalogFolder && <Modal title={it.folderCatalogsTitle} onClose={() => { if (!busy.current) { setCatalogFolder(null); setFolderCatalogPreviews(null); } }}>
+      <form className="system-import-dialog" onSubmit={e => { e.preventDefault(); void run(() => load(prepareCatalogFolder)); }}>
+        <div className="system-import-dialog-fields">
+          {importError && <p role="alert" className="error-text">{importError}</p>}
+          <p className="muted">{catalogFolder.found.name}</p>
+          {!folderCatalogPreviews ? <>
+            <p>{it.folderCatalogsHelp}</p>
+            <label className="field"><span>{it.folderCatalogsSystem}</span>
+              <select value={catalogSystem} disabled={loading} onChange={e => setCatalogSystem(e.target.value)}>
+                {systems.map(system => <option key={system.key} value={system.key}>{system.definition.name} · v{system.definition.version} · {system.digest.slice(0, 12)}</option>)}
+              </select></label>
+            <p className="muted">{catalogFolder.found.catalogs.length} {it.folderCatalogs}</p>
+          </> : <>
+            <Warning>{it.catalogWarning}</Warning>
+            <p>{folderCatalogPreviews.length} {it.catalogInstances}</p>
+            <details><summary>{it.repositoryCatalogs}</summary><ul>{folderCatalogPreviews.map(preview => <li key={preview.rootId}>
+              {preview.resources[0].name} · {preview.resources[0].definitionId}
+              {preview.resources[0].catalogIssue && <p className="error-text">{it.catalogUnavailable}: {preview.resources[0].catalogIssue}</p>}
+            </li>)}</ul></details>
+          </>}
+          {loading && catalogProgress && <p role="status">{catalogProgress}</p>}
+        </div>
+        <div className="modal-actions">
+          <button type="button" className="button secondary" disabled={loading} onClick={() => { setCatalogFolder(null); setFolderCatalogPreviews(null); }}>{it.cancel}</button>
+          {folderCatalogPreviews ? <button type="button" className="button primary" disabled={loading}
+            onClick={() => void run(() => load(installCatalogFolder), it.catalogImported)}>{loading ? it.loading : it.confirmImport}</button>
+            : <button className="button primary" disabled={loading}>{loading ? it.loading : it.folderCatalogsLoad}</button>}
         </div>
       </form>
     </Modal>}

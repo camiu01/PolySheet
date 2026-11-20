@@ -29,7 +29,7 @@ function safePath(path: string) {
  * @remarks Directory pickers expose File objects, not arbitrary filesystem paths;
  * a `C:\...` string can never be read by the page.
  */
-export function discoverLocalFolder(input: readonly FolderEntry[]): LocalFolderDiscovery {
+export function scanLocalFolder(input: readonly FolderEntry[]): LocalFolderDiscovery {
   if (!input.length) throw new Error(it.folderNoSystem);
   if (input.length > MAX_TREE_ENTRIES) throw new Error(it.folderLimit);
   const paths = new Set<string>(), supported: FolderEntry[] = [];
@@ -42,9 +42,25 @@ export function discoverLocalFolder(input: readonly FolderEntry[]): LocalFolderD
   const basename = (path: string) => path.split('/').at(-1)!;
   const systems = supported.filter(f => systemName.test(basename(f.path)));
   const catalogs = supported.filter(f => catalogDirectory.test(f.path) && !catalogManifest.test(basename(f.path)));
-  if (!systems.length) throw new Error(it.folderNoSystem);
-  if (systems.length > 100) throw new Error(it.folderTooMany);
   return { name: input[0].path.split('/')[0] || it.localFolder, files: supported, systems, catalogs };
+}
+
+/** Require at least one system file before preparing a full bundle. */
+export function discoverLocalFolder(input: readonly FolderEntry[]): LocalFolderDiscovery {
+  const found = scanLocalFolder(input);
+  if (!found.systems.length) throw new Error(it.folderNoSystem);
+  if (found.systems.length > 100) throw new Error(it.folderTooMany);
+  return found;
+}
+
+/**
+ * Accept an add-on folder that only carries catalogs for an already installed system.
+ * @throws When the folder contains no catalog JSON at all.
+ */
+export function discoverLocalCatalogFolder(input: readonly FolderEntry[]): LocalFolderDiscovery {
+  const found = scanLocalFolder(input);
+  if (!found.catalogs.length) throw new Error(it.folderNoSystem);
+  return found;
 }
 
 /** Directory owning a system's catalogs: `systems/<id>/` when present, else the system's folder. */
@@ -81,11 +97,9 @@ export async function prepareLocalSystem(input: readonly FolderFile[], path: str
  * @remarks Catalog JSON is bounded by the same count and byte budgets as repository
  * bundles. A malformed catalog aborts with its path instead of being hidden.
  */
-export async function prepareLocalBundle(input: readonly FolderFile[], path: string,
-  progress: (done: number, total: number) => void = () => {}): Promise<LocalFolderBundle> {
-  const found = discoverLocalFolder(input);
-  const system = await prepareLocalSystem(input, path);
-  const files = bundleCatalogFiles(folderCatalogs(found, path));
+async function prepareCatalogs(input: readonly FolderFile[], entries: readonly FolderEntry[], system: StoredSystem,
+  progress: (done: number, total: number) => void) {
+  const files = bundleCatalogFiles([...entries]);
   const catalogs: CatalogPreview[] = [];
   let done = 0;
   progress(0, files.length);
@@ -100,5 +114,22 @@ export async function prepareLocalBundle(input: readonly FolderFile[], path: str
     done += batch.length;
     progress(done, files.length);
   }
-  return { system, catalogs };
+  return catalogs;
+}
+
+export async function prepareLocalBundle(input: readonly FolderFile[], path: string,
+  progress: (done: number, total: number) => void = () => {}): Promise<LocalFolderBundle> {
+  const found = discoverLocalFolder(input);
+  const system = await prepareLocalSystem(input, path);
+  return { system, catalogs: await prepareCatalogs(input, folderCatalogs(found, path), system, progress) };
+}
+
+/**
+ * Prepare an add-on catalog folder for an installed system without changing that system.
+ * @remarks Used by the Hope & Fear add-on layout, which has no system file of its own.
+ */
+export async function prepareLocalCatalogFolder(input: readonly FolderFile[], system: StoredSystem,
+  progress: (done: number, total: number) => void = () => {}): Promise<CatalogPreview[]> {
+  const found = discoverLocalCatalogFolder(input);
+  return prepareCatalogs(input, found.catalogs, system, progress);
 }
