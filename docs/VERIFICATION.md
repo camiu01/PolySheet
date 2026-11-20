@@ -3,6 +3,14 @@
 [Documentation index](README.md) · [How to run checks](DEVELOPMENT.md) ·
 [Historical records](VERIFICATION_HISTORY.md) · [12:37 checkpoint](VERIFICATION_2026-11-16_1237.md)
 
+## Contributor guide, 2026-11-20
+
+- Checked the root guide's length, local links and heading anchor, source
+  directories, npm scripts, and Playwright settings. Compared the relocated
+  shared rules with the previous root guide; only the heading and cross-reference
+  changed. Reviewed the diff and ran `git diff --check`.
+- Application tests were not run for this documentation-only change.
+
 ## Selective 5e monsters and compatibility audit, 2026-11-19
 
 - Reproduced the missing-monster path against the unchanged official Goblin:
