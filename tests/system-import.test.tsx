@@ -11,15 +11,16 @@ beforeAll(() => {
   HTMLDialogElement.prototype.close = function () { this.removeAttribute('open'); };
 });
 
-it('offers distinct file, link and example actions and disables them while busy', () => {
-  const onFile = vi.fn(), onLink = vi.fn(), onDemo = vi.fn();
-  const { rerender } = render(<SystemImportOptions onFile={onFile} onLink={onLink} onDemo={onDemo} busy={false} />);
+it('offers distinct file, folder, link and example actions and disables them while busy', () => {
+  const onFile = vi.fn(), onFolder = vi.fn(), onLink = vi.fn(), onDemo = vi.fn();
+  const { rerender } = render(<SystemImportOptions onFile={onFile} onFolder={onFolder} onLink={onLink} onDemo={onDemo} busy={false} />);
   fireEvent.click(screen.getByRole('button', { name: copy.localFile }));
+  fireEvent.click(screen.getByRole('button', { name: copy.localFolder }));
   fireEvent.click(screen.getByRole('button', { name: copy.importUrl }));
   fireEvent.click(screen.getByRole('button', { name: copy.demoAction }));
-  for (const callback of [onFile, onLink, onDemo]) expect(callback).toHaveBeenCalledTimes(1);
+  for (const callback of [onFile, onFolder, onLink, onDemo]) expect(callback).toHaveBeenCalledTimes(1);
   expect(screen.getByRole('list', { name: copy.importSteps }).children).toHaveLength(3);
-  rerender(<SystemImportOptions onFile={onFile} onLink={onLink} onDemo={onDemo} busy />);
+  rerender(<SystemImportOptions onFile={onFile} onFolder={onFolder} onLink={onLink} onDemo={onDemo} busy />);
   for (const button of screen.getAllByRole('button')) expect(button).toBeDisabled();
 });
 

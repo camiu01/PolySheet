@@ -35,7 +35,7 @@ test('unchanged 5e long and short rests restore HP and spend hit dice from the s
   const catalogs = ['class_fighter_fighter', 'race_human', 'background_soldier'].map(name => resolve(folder + name + '.rpg.json'));
   test.skip(!existsSync(file) || catalogs.some(f => !existsSync(f)), 'Local-only official 5e fixtures are absent');
   await page.goto('./'); await navigate(page, it.systems);
-  await page.locator('input[type=file]').setInputFiles(file);
+  await page.getByLabel(it.localFile).setInputFiles(file);
   await page.getByRole('button', { name: it.confirmImport, exact: true }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await navigate(page, it.resources); await openCatalogImport(page);

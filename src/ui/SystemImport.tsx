@@ -1,12 +1,12 @@
 /** @file Source choices and compatibility review without changing import validation or persistence. */
-import { ArrowRight, BookOpen, Link, Upload } from 'lucide-react';
+import { ArrowRight, BookOpen, FolderOpen, Link, Upload } from 'lucide-react';
 import type { Diagnostic } from '../domain/model';
 import { groupDiagnostics } from '../importing/diagnostic-groups';
 import { it } from './it';
 
 /** Explain each source before opening a picker; the example stays a secondary path. */
-export function SystemImportOptions({ onFile, onLink, onDemo, busy }: {
-  onFile: () => void; onLink: () => void; onDemo?: () => void; busy: boolean;
+export function SystemImportOptions({ onFile, onFolder, onLink, onDemo, busy }: {
+  onFile: () => void; onFolder: () => void; onLink: () => void; onDemo?: () => void; busy: boolean;
 }) {
   return <section className="system-import" aria-labelledby="system-import-heading">
     <h2 id="system-import-heading">{it.importSourceTitle}</h2>
@@ -18,6 +18,11 @@ export function SystemImportOptions({ onFile, onLink, onDemo, busy }: {
       <Upload size={22} aria-hidden="true" />
       <div><h3>{it.importFileTitle}</h3><p>{it.localFileHelp}</p></div>
       <button className="button secondary" disabled={busy} onClick={onFile}>{it.localFile}</button>
+    </div>
+    <div className="import-source-row">
+      <FolderOpen size={22} aria-hidden="true" />
+      <div><h3>{it.importFolderTitle}</h3><p>{it.localFolderHelp}</p></div>
+      <button className="button secondary" disabled={busy} onClick={onFolder}>{it.localFolder}</button>
     </div>
     <div className="import-source-row">
       <Link size={22} aria-hidden="true" />

@@ -66,7 +66,7 @@ test('real 5e guided setup recovers an incomplete sheet, cancels cleanly, edits 
     .map(name => resolve(`.reference/rpg-companion-app-systems/systems/5e/resource_instances/${name}.rpg.json`));
   test.skip(!existsSync(file) || catalogs.some(file => !existsSync(file)), 'Local-only pinned 5e/catalog fixtures are absent');
   await page.goto('./'); await navigate(page, it.systems);
-  await page.locator('input[type=file]').setInputFiles(file);
+  await page.getByLabel(it.localFile).setInputFiles(file);
   await page.getByRole('button', { name: 'Conferma importazione', exact: true }).click();
   await navigate(page, 'Risorse');
   await page.getByLabel('File catalogo JSON', { exact: true }).setInputFiles(catalogs);
@@ -323,7 +323,7 @@ test('beginner D&D setup explains and applies point buy, dice and standard score
   const file = resolve('.reference/official-releases-2026-11-16/5e-system.rpg');
   test.skip(!existsSync(file), 'Local-only official 5e fixture is absent');
   await page.goto('./'); await navigate(page, it.systems);
-  await page.locator('input[type=file]').setInputFiles(file);
+  await page.getByLabel(it.localFile).setInputFiles(file);
   await page.getByRole('button', { name: 'Conferma importazione', exact: true }).click();
   await navigate(page, /^Personaggi \d+$/);
   await page.getByRole('button', { name: 'Nuovo personaggio', exact: true }).first().click();
@@ -368,7 +368,7 @@ test('real 5e HP and paged Monster selection retain atomic save, cancel and offl
   test.skip(!existsSync(file), 'Local-only official 5e fixture is absent');
   await page.goto('./');
   await navigate(page, it.systems);
-  await page.locator('input[type=file]').setInputFiles(file);
+  await page.getByLabel(it.localFile).setInputFiles(file);
   await page.getByRole('button', { name: 'Conferma importazione', exact: true }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await navigate(page, /^Personaggi \d+$/);

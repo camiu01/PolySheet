@@ -43,7 +43,7 @@ test('Bard Optional Features open after level up are chosen and saved from the s
   const catalogs = ['class_bard_bard', 'race_dwarf_dwarf', 'background_acolyte'].map(name => resolve(folder + name + '.rpg.json'));
   test.skip(!existsSync(file) || catalogs.some(f => !existsSync(f)), 'Local-only official 5e fixtures are absent');
   await page.goto('./'); await navigate(page, it.systems);
-  await page.locator('input[type=file]').setInputFiles(file);
+  await page.getByLabel(it.localFile).setInputFiles(file);
   await page.getByRole('button', { name: it.confirmImport, exact: true }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await navigate(page, it.resources); await openCatalogImport(page);

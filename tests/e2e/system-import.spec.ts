@@ -1,7 +1,10 @@
 /** @file Source selection and review remain understandable and non-destructive on desktop and mobile. */
 import { expect, test } from '@playwright/test';
-import { resolve } from 'node:path';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { demo, demoOriginal } from '../../src/demo';
+import { catalogSystem, classOriginal } from '../fixtures/catalog';
 import { it } from '../../src/ui/it';
 
 test('system import separates sources, opens the real file picker and cancels before writing', async ({ page }, info) => {
@@ -30,6 +33,36 @@ test('system import separates sources, opens the real file picker and cancels be
   await expect(page.locator('.system-card')).toHaveCount(0);
 });
 
+test('folder import selects one system and reviews its own catalogs before writing', async ({ page }) => {
+  const root = mkdtempSync(join(tmpdir(), 'polysheet-folder-'));
+  try {
+    const folder = join(root, 'export');
+    mkdirSync(join(folder, 'catalogs', 'class'), { recursive: true });
+    writeFileSync(join(folder, 'first.system.json'), JSON.stringify({ ...catalogSystem, id: 'folder-a', name: 'Cartella A' }));
+    writeFileSync(join(folder, 'second.system.json'), JSON.stringify({ ...catalogSystem, id: 'folder-b', name: 'Cartella B' }));
+    writeFileSync(join(folder, 'catalogs', 'class', 'viandante.json'), classOriginal.replace('catalog-original', 'folder-b'));
+    writeFileSync(join(folder, 'catalogs', 'manifest.json'), JSON.stringify({ total: 1 }));
+    writeFileSync(join(folder, 'README.md'), 'not imported');
+    await page.goto('./');
+    await page.locator('main').getByRole('button', { name: it.importSystem, exact: true }).click();
+    const picker = page.waitForEvent('filechooser');
+    await page.locator('main .import-source-row button').filter({ hasText: it.localFolder }).click();
+    await (await picker).setFiles(folder);
+    const choose = page.getByRole('dialog', { name: it.folderPreviewTitle });
+    await expect(choose).toBeVisible();
+    await choose.getByRole('combobox', { name: it.folderSelect }).selectOption('export/second.system.json');
+    await expect(choose.getByText(`1 ${it.folderCatalogs}`)).toBeVisible();
+    await choose.getByRole('button', { name: it.folderLoad }).click();
+    const preview = page.getByRole('dialog', { name: it.importPreview });
+    await expect(preview.getByRole('heading', { name: /Cartella B/ })).toBeVisible();
+    await expect(preview.getByText(`${it.repositoryCatalogs}: 1`)).toBeVisible();
+    await preview.getByRole('button', { name: it.confirmImport }).click();
+    await expect(preview).not.toBeVisible();
+    await expect(page.locator('.system-card')).toHaveCount(1);
+    await expect(page.locator('.system-card')).toContainText('Cartella B');
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test('link options and compatibility review disclose details without hiding blocking errors', async ({ page }, info) => {
   await page.goto('./');
   await page.locator('main').getByRole('button', { name: it.importSystem, exact: true }).click();
@@ -45,7 +78,7 @@ test('link options and compatibility review disclose details without hiding bloc
   const invalid = { ...demo, character_stats: [...demo.character_stats, {
     id: 'bad_default', name: 'Invalid default', type: 'base', value_type: 'integer', default_value: 'not a number'
   }] };
-  await page.locator('input[type=file]').setInputFiles({
+  await page.getByLabel(it.localFile).setInputFiles({
     name: 'invalid.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(invalid))
   });
   const preview = page.getByRole('dialog', { name: it.importPreview });

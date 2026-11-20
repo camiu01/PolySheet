@@ -3,6 +3,29 @@
 [Documentation index](README.md) · [How to run checks](DEVELOPMENT.md) ·
 [Historical records](VERIFICATION_HISTORY.md) · [12:37 checkpoint](VERIFICATION_2026-11-16_1237.md)
 
+## Local folder system imports, 2026-11-20
+
+- Added directory-picker imports that discover one or more compiled system files
+  and their `catalogs/`/`resource_instances/` JSON before a single confirmation.
+  Discovery reads names and sizes only; unsupported files such as PDFs are never
+  opened. Catalog JSON keeps the existing 2,000-file/24 MiB budget and malformed
+  files abort with their path.
+- `npm run check`: 395 passed, 1 skipped. `npm run build`: production build with
+  the existing large-chunk warning. `npm audit --omit=dev`: 0 vulnerabilities.
+- Full Playwright suite on production desktop and mobile `/PolySheet/`:
+  115 passed, 3 skipped (local-only fixtures), 7.0 min. The new case uploads a
+  real directory, selects the second of two systems, reviews its own catalog and
+  confirms once. Existing systems-page inputs now use their `aria-label`
+  locator because the folder input shares the `input[type=file]` selector.
+- Real Daggerheart export folder (local, authorized): `export/` produced
+  Daggerheart v1.1.0, digest `025bcaf6`, 589 catalogs, and the Risorse page then
+  listed 589 catalog templates. The probe pointed at `export/`, not the parent
+  folder: Playwright's directory upload copies file contents, so the parent's
+  312 MB of rulebook PDFs is not a valid automation input. The application
+  itself filters by extension before reading.
+- The probed catalogs remain user-supplied local content; none is bundled or
+  committed.
+
 ## Contributor guide, 2026-11-20
 
 - Checked the root guide's length, local links and heading anchor, source

@@ -23,7 +23,7 @@ async function navigate(page: Page, label: string) {
 }
 async function importJson(page: Page, text: string, confirm = true) {
   await navigate(page, copy.systems);
-  await page.locator('input[type=file]').setInputFiles({ name: 'system.rpg.json', mimeType: 'application/json', buffer: Buffer.from(text) });
+  await page.getByLabel(copy.localFile).setInputFiles({ name: 'system.rpg.json', mimeType: 'application/json', buffer: Buffer.from(text) });
   await expect(page.getByRole('dialog')).toBeVisible();
   if (confirm) {
     await page.getByRole('button', { name: 'Conferma importazione' }).click();
@@ -131,7 +131,7 @@ test('reported original HP, AC and description recover with manual class and rac
   test.skip(!existsSync(file), 'Local-only user-provided HP reproduction fixture is absent');
   await page.goto('./');
   await navigate(page, copy.systems);
-  await page.locator('input[type=file]').setInputFiles(file);
+  await page.getByLabel(copy.localFile).setInputFiles(file);
   await page.getByRole('button', { name: 'Conferma importazione', exact: true }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await create(page, 'HP manuale');
@@ -344,7 +344,7 @@ for (const id of ['5e', '5e2024', 'pf2e']) {
     const bytes = readFileSync(file);
     await page.goto('./');
     await navigate(page, copy.systems);
-    await page.locator('input[type=file]').setInputFiles(file);
+    await page.getByLabel(copy.localFile).setInputFiles(file);
     const preview = page.getByRole('dialog', { name: 'Prima di importare' });
     await expect(preview.getByText('Supporto parziale', { exact: true })).toBeVisible();
     await expect(preview).not.toContainText('sortBy');
@@ -549,7 +549,7 @@ test('typed photos, lists, resource references and encounter turns survive offli
 
 test('rejects malformed files and shows unknown components without running scripts', async ({ page }) => {
   await page.goto('./'); await navigate(page, copy.systems);
-  await page.locator('input[type=file]').setInputFiles({ name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from('{broken') });
+  await page.getByLabel(copy.localFile).setInputFiles({ name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from('{broken') });
   await expect(page.getByRole('alert')).toContainText('JSON malformato');
   await importJson(page, JSON.stringify({ ...demo, character_sheet_sections: [
     ...demo.character_sheet_sections,
@@ -836,7 +836,7 @@ for (const { label, file, stat, input, before, after, value } of [
     test.skip(Boolean(file) && !existsSync(resolve(file)), 'Prepare the local-only pinned source artifact.');
     const original = file ? readFileSync(resolve(file)) : gzipSync(demoOriginal);
     await page.goto('./'); await navigate(page, copy.systems);
-    await page.locator('input[type=file]').setInputFiles({ name: 'system.rpg', mimeType: 'application/gzip', buffer: original });
+    await page.getByLabel(copy.localFile).setInputFiles({ name: 'system.rpg', mimeType: 'application/gzip', buffer: original });
     if (file) await expect(page.getByRole('dialog').getByText('Supporto parziale', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Conferma importazione' }).click();
     await expect(page.getByRole('dialog')).not.toBeVisible();
@@ -935,9 +935,9 @@ test('direct raw .rpg imports the supplied repository system', async ({ page }) 
 
 test('bad .rpg envelopes and gzip resource indexes fail without installation', async ({ page }) => {
   await page.goto('./'); await navigate(page, copy.systems);
-  await page.locator('input[type=file]').setInputFiles({ name: 'bad.rpg', mimeType: 'application/octet-stream', buffer: Buffer.from([80, 75, 3, 4]) });
+  await page.getByLabel(copy.localFile).setInputFiles({ name: 'bad.rpg', mimeType: 'application/octet-stream', buffer: Buffer.from([80, 75, 3, 4]) });
   await expect(page.getByRole('alert')).toContainText('Formato .rpg non riconosciuto');
-  await page.locator('input[type=file]').setInputFiles({ name: 'systems.rpg', mimeType: 'application/gzip', buffer: gzipSync('{"systems":[]}') });
+  await page.getByLabel(copy.localFile).setInputFiles({ name: 'systems.rpg', mimeType: 'application/gzip', buffer: gzipSync('{"systems":[]}') });
   await expect(page.getByRole('alert')).toContainText('non contiene un sistema JSON monolitico');
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await expect(page.locator('.system-card')).toHaveCount(0);
@@ -947,10 +947,10 @@ test('.rpg expanded byte ceiling rejects 8 MiB plus one and accepts exactly 8 Mi
   const limit = 8 * 1024 * 1024;
   const boundary = demoOriginal + ' '.repeat(limit - Buffer.byteLength(demoOriginal));
   await page.goto('./'); await navigate(page, copy.systems);
-  await page.locator('input[type=file]').setInputFiles({ name: 'bomb.rpg', mimeType: 'application/gzip', buffer: gzipSync(boundary + ' ') });
+  await page.getByLabel(copy.localFile).setInputFiles({ name: 'bomb.rpg', mimeType: 'application/gzip', buffer: gzipSync(boundary + ' ') });
   await expect(page.getByRole('alert')).toContainText('troppo grande');
   await expect(page.locator('.system-card')).toHaveCount(0);
-  await page.locator('input[type=file]').setInputFiles({ name: 'boundary.rpg', mimeType: 'application/gzip', buffer: gzipSync(boundary) });
+  await page.getByLabel(copy.localFile).setInputFiles({ name: 'boundary.rpg', mimeType: 'application/gzip', buffer: gzipSync(boundary) });
   await expect(page.getByRole('dialog', { name: 'Prima di importare' })).toBeVisible();
   await page.getByRole('button', { name: 'Conferma importazione' }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();

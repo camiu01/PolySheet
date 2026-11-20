@@ -60,7 +60,7 @@ test('real 5e monsters import selectively and stay isolated across sheet and com
     await route.fulfill({ body: original, contentType: 'application/json' });
   });
   await page.goto('./'); await navigate(page, it.systems);
-  await page.locator('input[type=file]').setInputFiles(file);
+  await page.getByLabel(it.localFile).setInputFiles(file);
   await page.getByRole('button', { name: it.confirmImport, exact: true }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await navigate(page, it.resources); await openCatalogImport(page);
@@ -193,7 +193,7 @@ for (const { system, cases: rows } of catalogSystems) test(`real ${system} catal
     return route.fulfill({ body: originals.get(path)!, contentType: 'application/json' });
   });
   await page.goto('./'); await navigate(page, it.systems);
-  await page.locator('input[type=file]').setInputFiles(file);
+  await page.getByLabel(it.localFile).setInputFiles(file);
   await page.getByRole('button', { name: it.confirmImport, exact: true }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await navigate(page, it.resources); await openCatalogImport(page);

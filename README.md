@@ -24,6 +24,8 @@ The characters and Sentieri content are original examples, not external game con
 - Discover systems from a public GitHub source repository and retrieve class,
   race/ancestry, background and heritage catalogs. Select the compiled system file once,
   then reuse the local version. [Import guide](docs/GITHUB_IMPORT.md#source-repositories-and-automatic-catalogs).
+- Import an exported folder with the system and its `catalogs/` in one review.
+  Non-system files such as PDFs are ignored without being read.
 - Assign private background/origin graphs and choose source-declared subraces
   by name, retaining their original IDs without applying automatic effects.
 - In **Risorse**, import supported catalogs from a JSON link, a GitHub folder
@@ -83,7 +85,11 @@ ports, optional external fixtures and the complete command list.
 ## Before importing a system
 
 Monolithic JSON and the verified gzip-JSON **system** `.rpg` variant can be
-previewed from a file or HTTPS URL. Public GitHub repository roots also support
+previewed from a file, HTTPS URL or a folder chosen with the browser's directory
+picker. A folder may also carry catalog JSON under `catalogs/` or
+`resource_instances/`; both are reviewed and installed after one confirmation.
+Browsers cannot read a typed `C:\...` path, so the folder must be selected.
+Public GitHub repository roots also support
 [commit-pinned file discovery](docs/GITHUB_IMPORT.md).
 
 Decoding a file, validating its definition, supporting its formulas/views/events

@@ -8,6 +8,7 @@ import { artifactBytes, prepareImport } from '../importing/package';
 import { importFromUrl } from '../importing/url';
 import { githubRepository } from '../importing/github';
 import { discoverRepository, prepareRepositoryBundle, repositorySystemDownload, type RepositoryDiscovery } from '../importing/repository';
+import { folderCatalogs, discoverLocalFolder, prepareLocalBundle, type FolderFile, type LocalFolderDiscovery } from '../importing/local-folder';
 import type { CatalogPreview } from '../importing/catalog';
 import { installRepositoryBundle } from '../persistence/catalog';
 import { deleteSystem, installSystem } from '../persistence/db';
@@ -24,7 +25,10 @@ const compiledOnly = new Set(['pf2e']);
 
 export function Library({ systems, run }: { systems: StoredSystem[]; run: Run }) {
   const file = useRef<HTMLInputElement>(null);
+  const folderInput = useRef<HTMLInputElement>(null);
   const repositoryFile = useRef<HTMLInputElement>(null);
+  const [folderPick, setFolderPick] = useState<{ found: LocalFolderDiscovery; files: FolderFile[] } | null>(null);
+  const [folderPath, setFolderPath] = useState('');
   const [preview, setPreview] = useState<StoredSystem | null>(null);
   const [deleting, setDeleting] = useState<StoredSystem | null>(null);
   const [showUrl, setShowUrl] = useState(false);
@@ -47,6 +51,24 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
   const systemDownload = repository && repositorySystemDownload(repository, repositoryPath);
   const { navigate, selectSystem } = useUi();
   async function prepare(original: string, source: string) { setCatalogs([]); setPreview(await prepareSystem(original, source)); }
+  async function prepareFolder(files: FolderFile[], path: string) {
+    setCatalogProgress(`${it.repositoryCatalogProgress}: 0`);
+    try {
+      const bundle = await prepareLocalBundle(files, path, (done, total) =>
+        setCatalogProgress(`${it.repositoryCatalogProgress}: ${done}/${total}`));
+      setCatalogs(bundle.catalogs); setPreview(bundle.system); setFolderPick(null);
+    } finally { setCatalogProgress(''); }
+  }
+  async function fromFolder(picked: File[]) {
+    const files: FolderFile[] = picked.map(item => {
+      const path = item.webkitRelativePath || item.name;
+      return { path, size: item.size, bytes: async () => new Uint8Array(await item.arrayBuffer()) };
+    });
+    const found = discoverLocalFolder(files);
+    if (found.systems.length === 1) { await prepareFolder(files, found.systems[0].path); return; }
+    setFolderPath(found.systems[0].path);
+    setFolderPick({ found, files });
+  }
   async function load(action: () => Promise<void>) {
     if (busy.current) return;
     busy.current = true;
@@ -110,6 +132,11 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
         setCatalogs([]); setPreview(await prepareImport(new Uint8Array(await f.arrayBuffer()), f.name));
       }));
     }} />
+    <input ref={folderInput} type="file" multiple {...{ webkitdirectory: '' }} className="sr-only" aria-label={it.localFolder}
+      disabled={loading} onChange={e => {
+        const picked = Array.from(e.target.files ?? []); e.target.value = '';
+        if (picked.length) void run(() => load(() => fromFolder(picked)));
+      }} />
     {systems.length > 0 && <>
     <div className="section-title"><h2>{systems.length ? it.libraryTitle : it.noSystems}</h2><span className="muted">{systems.length} {systems.length === 1 ? it.savedVersion : it.savedVersions}</span></div>
     <div className="system-grid">
@@ -134,9 +161,11 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
       installed={systems.map(s => s.definition.id)}
       onUse={id => { const latest = systems.find(s => s.definition.id === id); if (latest) { selectSystem(latest.key); navigate('characters'); } }} />
     <SystemImportOptions busy={loading} onFile={() => file.current?.click()}
+      onFolder={() => { setImportError(''); folderInput.current?.click(); }}
       onLink={() => { setRepository(null); setImportError(''); setShowUrl(true); }}
       onDemo={systems.some(s => s.definition.id === 'polysheet-sentieri') ? undefined
         : () => void run(() => prepare(demoOriginal, 'PolySheet · contenuto originale MIT'))} />
+    {loading && catalogProgress && !showUrl && !preview && <p role="status" className="muted">{catalogProgress}</p>}
     <div className="footnote"><BookOpen size={18} /><div><strong>{it.versions}</strong><p>{it.versionHelp}</p></div></div>
     {deleting && <Modal title={it.removeSystemTitle} onClose={() => !busy.current && setDeleting(null)}>
       <h3>{deleting.definition.name} · v{deleting.definition.version}</h3>
@@ -225,6 +254,26 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
         <div className="modal-actions"><button type="button" className="button secondary" disabled={loading} onClick={() => setShowUrl(false)}>{it.cancel}</button>
           <button className="button primary" disabled={loading}>{loading ? it.loading : it.fetch}</button></div>
       </form>}
+    </Modal>}
+    {folderPick && <Modal title={it.folderPreviewTitle} onClose={() => { if (!busy.current) setFolderPick(null); }}>
+      <form className="system-import-dialog" onSubmit={e => {
+        e.preventDefault(); void run(() => load(() => prepareFolder(folderPick.files, folderPath)));
+      }}>
+        <div className="system-import-dialog-fields">
+          {importError && <p role="alert" className="error-text">{importError}</p>}
+          <p className="muted">{folderPick.found.name}</p>
+          <label className="field"><span>{it.folderSelect}</span>
+            <select value={folderPath} disabled={loading} onChange={e => { setFolderPath(e.target.value); setImportError(''); }}>
+              {folderPick.found.systems.map(system => <option key={system.path} value={system.path}>{system.path} · {system.size} B</option>)}
+            </select></label>
+          <p className="muted">{folderCatalogs(folderPick.found, folderPath).length} {it.folderCatalogs}</p>
+          {loading && catalogProgress && <p role="status">{catalogProgress}</p>}
+        </div>
+        <div className="modal-actions">
+          <button type="button" className="button secondary" disabled={loading} onClick={() => setFolderPick(null)}>{it.cancel}</button>
+          <button className="button primary" disabled={loading}>{loading ? it.loading : it.folderLoad}</button>
+        </div>
+      </form>
     </Modal>}
     {preview && <Modal title={it.importPreview} onClose={() => { if (!busy.current) { setPreview(null); setCatalogs([]); } }}>
       <div className="system-import-dialog"><div className="system-import-dialog-fields">
