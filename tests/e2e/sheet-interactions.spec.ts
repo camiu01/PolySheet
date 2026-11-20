@@ -303,16 +303,18 @@ async function verifySpellPicker(page: Page, project: string) {
   await open.click();
   const picker = page.getByRole('dialog', { name: 'Aggiungi risorsa · Spell', exact: true });
   await expect(picker.getByRole('checkbox', { name: 'Class: Fighter' })).toBeChecked();
-  await expect(picker.getByRole('button', { name: 'Local spell · Fighter', exact: true })).toBeVisible();
-  await expect(picker.getByRole('button', { name: 'Local spell · Wizard', exact: true })).toHaveCount(0);
+  // The picker appends the source spell level, so the entry names carry a suffix.
+  const fighter = picker.getByRole('button', { name: /^Local spell · Fighter / });
+  await expect(fighter).toContainText('Trucchetto');
+  await expect(picker.getByRole('button', { name: /^Local spell · Wizard / })).toHaveCount(0);
   await page.screenshot({ path: resolve(`.reference/ui-review/${project}-spell-filters.png`) });
   await picker.getByRole('checkbox', { name: 'Class: Fighter' }).uncheck();
-  await expect(picker.getByRole('button', { name: 'Local spell · Wizard', exact: true })).toBeVisible();
+  await expect(picker.getByRole('button', { name: /^Local spell · Wizard / })).toBeVisible();
   await picker.getByRole('button', { name: it.close, exact: true }).click();
   expect(await setupSnapshot(page)).toEqual(before);
   await open.click();
   await expect(picker.getByRole('checkbox', { name: 'Class: Fighter' })).toBeChecked();
-  await picker.getByRole('button', { name: 'Local spell · Fighter', exact: true }).click();
+  await fighter.click();
   await expect(picker).not.toBeVisible();
   const after = await setupSnapshot(page);
   expect(after.resourceCount).toBe(before.resourceCount + 1);

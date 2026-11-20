@@ -72,6 +72,51 @@ describe('monolithic JSON import', () => {
   });
 });
 
+it('accepts $parent and $resource paths inside a resource scope only', () => {
+  const integer = (id: string) => ({ id, name: id, type: 'base', value_type: 'integer', default_value: 0 });
+  const calculated = (id: string, path: string) => ({ id, name: id, type: 'calculated', value_type: 'integer',
+    components: { type: 'stat', stat: path } });
+  const resources = [...demo.resources, { id: 'nested', name: 'Nested', stats: [integer('own'), calculated('owner_level', '$parent.level')],
+    list_view: { id: 'nested_list', type: 'list', subviews: [{ id: 'row', type: 'stat', stat: '$resource.own' }] } }];
+  const scoped = parseSystem(JSON.stringify({ ...demo, resources })).diagnostics;
+  expect(scoped.filter(d => /\$parent|\$resource/.test(d.message))).toEqual([]);
+  // A character stat has no parent scope, so the same path stays reported there.
+  const character = { ...demo, character_stats: [...demo.character_stats, calculated('parent_level', '$parent.level')] };
+  expect(parseSystem(JSON.stringify(character)).diagnostics).toContainEqual(expect.objectContaining({
+    message: 'Riferimento mancante o contesto non disponibile: $parent.level' }));
+});
+
+it('resolves a stat path that walks the resource held by a base field', () => {
+  const stats = (...fields: unknown[]) => ({ ...demo,
+    resources: [...demo.resources,
+      { id: 'beast', name: 'Beast', stats: [{ id: 'wings', name: 'Wings', type: 'base', value_type: 'integer', default_value: 0 }] },
+      { id: 'warden', name: 'Warden', stats: [
+        { id: 'beast', name: 'Beast', type: 'base', value_type: 'resource', resource_type: 'beast', default_value: null }],
+        list_view: { id: 'warden_list', type: 'list', subviews: fields } }] });
+  const view = (field: string) => ({ id: field, type: 'stat', stat: field });
+  const resolved = parseSystem(JSON.stringify(stats(view('beast.wings'))));
+  expect(resolved.diagnostics.filter(d => /Riferimento non risolto/.test(d.message))).toEqual([]);
+  const missing = parseSystem(JSON.stringify(stats(view('beast.horns'))));
+  expect(missing.diagnostics).toContainEqual(expect.objectContaining({
+    path: `$.resources[${demo.resources.length + 1}].list_view.subviews[0].stat`, message: 'Riferimento non risolto: beast.horns' }));
+});
+
+it('reports only the resource mechanics that stay manual', () => {
+  const used = { id: 'used', name: 'Used', type: 'base', value_type: 'integer', default_value: 0 };
+  const set = (value: unknown) => ({ type: 'setStat', stat: 'used', new_value: value, aggregation_type: 'set' });
+  const popup = { type: 'showPopUp', pop_up_title: { type: 'constant', value: 'Scegli' },
+    pop_up_view: { id: 'text', type: 'text', text: { type: 'constant', value: 'x' } } };
+  const runnable = { id: 'use', event_names: 'use', effects: set({ type: 'constant', value: 1 }) };
+  const manual = { id: 'choose', event_names: 'choose', effects: popup };
+  const resource = (mechanics: unknown[]) => [...demo.resources, { id: 'gizmo', name: 'Gizmo', stats: [used], mechanics }];
+  const path = `$.resources[${demo.resources.length}].mechanics`;
+  const partial = parseSystem(JSON.stringify({ ...demo, resources: resource([runnable, manual]) }));
+  expect(partial.diagnostics).toContainEqual(expect.objectContaining({ path,
+    message: '1 di 2 meccaniche risorsa eseguite; 1 non eseguibili perché richiedono una finestra o input esterni.' }));
+  // A mechanic the card can run is executed, so no warning is left behind.
+  expect(parseSystem(JSON.stringify({ ...demo, resources: resource([runnable]) })).diagnostics.some(d => d.path === path)).toBe(false);
+});
+
 it('accepts resource identity and item-scoped resourceArray labels without unresolved-reference warnings', () => {
   const stat = (id: string) => ({ type: 'stat', stat: id });
   const system = { ...demo, resources: [...demo.resources,

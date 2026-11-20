@@ -3,6 +3,54 @@
 [Documentation index](README.md) · [How to run checks](DEVELOPMENT.md) ·
 [Historical records](VERIFICATION_HISTORY.md) · [12:37 checkpoint](VERIFICATION_2026-11-16_1237.md)
 
+## Card commands, spell details and compatibility reports, 2026-11-20
+
+- A card action or a rest has no modifier layer to undo, so its `addToStat` now
+  writes the character base value too; a second CAST decrements the same slot
+  again instead of failing, and a long rest restores it.
+- A source list of resource identities resolves the instances the character
+  owns (5e `spell.classes` stores upstream slugs such as `bard`) and leaves
+  unrelated identities out, so the spell detail no longer reports
+  "Non calcolabile". A local id under another pin or type is still an error.
+- The sheet waits for its first resource snapshot instead of rendering an empty
+  list; the class and level-up pickers no longer preselect the first class, and
+  the class picker hides archetypes and private copies of a catalog entry.
+- Resource mechanics are reported as executed when a card button or a
+  subscription runs them; only handlers that need a popup stay manual. Creation
+  hooks also list the deferred `fireEvent` they run and the effects they skip,
+  and the enumerated-types warning is gone because select, menuButton and the
+  dynamic chips resolve them. A chip's `on_tap_event` now runs as a button in the
+  sheet scope (5e condition chips), and its event is validated at import instead
+  of being kept uninterpreted. The `eventName` formula reads `event_name` and
+  `for_resource`, so the `Formula non supportata: eventName` report is gone.
+- `should_auto_save` is accepted on stat and checkbox views; the sheet keeps
+  saving those fields immediately and marks an explicit-save field it saves on
+  blur instead.
+- `$parent.<stat>` and `$resource.<stat>` resolve inside resource and combat
+  scopes, and a character stat still reports both because it has no such scope.
+  Resource `search_filters` are the local picker prefilters, so they are no
+  longer reported; `sort_options` stay uninterpreted.
+- `create_if_empty` seeds one blank instance through the owner writer that holds
+  the field, so a single-resource view stops at "creazione automatica" only when
+  it is read-only; the same blank-instance helper now serves `auto_add_first`.
+- A view stat such as `monster.armor_class` walks the resource held by that base
+  field and is checked against its definition instead of being reported as
+  unresolved. The official 5e, 5e2024 and PF2e reports drop from 127/127/213 to
+  33/33/52 warnings; what is left is unimplemented source fields
+  (`sort_options`, `macros`, `currencies`, `is_defeated`…), the missing
+  `monster_instance_trait` definition, `$resource.traits`-style paths whose stat
+  the 5e monster does not declare, and `on_tap_event` inside resource or combat
+  views, which have no owning character to run a card command.
+- `npm run check`: 409 passed, 1 skipped. `npm run build`: 16 precache entries.
+- `npm run test:e2e` was interrupted by the user after 49 passes; the two specs
+  this change touches pass on desktop and mobile (`dnd-catalog-use` 2 passed,
+  `sheet-interactions` 6 passed) once their picker selectors match the source
+  spell level the picker now appends to entry names.
+- Browser check on the dev server with Lucien Valcourt: two CASTs took level-1
+  slots 3 → 1, a long rest restored 3 and kept HP 24/24, the Charm Person detail
+  listed "Bard" with no `[data-view-error]`, and the level-up dialog stayed
+  submit-disabled while no class was chosen.
+
 ## 5e armor edit view, 2026-11-20
 
 - The official 5e armor edit view wraps the `armor_edit_rarity` select in a

@@ -38,16 +38,17 @@ export function CharacterProgression({ character, system, resources, onClose, sh
     // PF2e derives HP from levels: no imported HP method, no dice and no multiclass wrapper preview here.
     const rolled = contract.kind === 'class_details';
     if (typeof level !== 'number' || rolled && typeof mode !== 'string' || !classes.length) throw new Error(it.progressionUnsupported);
-    const selected = classes.find(choice => choice.record.id === wrapperId) ?? classes[0];
+    // Never preselect a class while several are assigned: the wrong wrapper would gain the level.
+    const selected = classes.find(choice => choice.record.id === wrapperId) ?? (classes.length === 1 ? classes[0] : undefined);
     const total = target ?? level + 1;
-    const staged = multiclass ? preview : { character: snapshot, resources, wrapperId: selected.record.id };
+    const staged = selected ? multiclass ? preview : { character: snapshot, resources, wrapperId: selected.record.id } : undefined;
     const options = staged && progressionArchetypes(system, staged.character, staged.resources, staged.wrapperId,
-      (multiclass ? 0 : selected.level) + total - level);
+      (multiclass ? 0 : selected!.level) + total - level);
     const featureKey = `${staged?.wrapperId}:${total}:${archetype}`;
     const drafts = featureDrafts.key === featureKey ? featureDrafts.values : {};
     const features = !result && rolled && staged && Number.isSafeInteger(total) && total > level && total <= contract.maxLevel
       ? selectableProgressionFeatures(system, staged.character, staged.resources, staged.wrapperId,
-        (multiclass ? 0 : selected.level) + total - level, archetype || null) : [];
+        (multiclass ? 0 : selected!.level) + total - level, archetype || null) : [];
     async function selectTemplate(id: string) {
       const token = ++selection.current;
       setTemplate(id); setPreview(undefined); setArchetype(''); setError(''); setLoading(!!id);
@@ -67,7 +68,7 @@ export function CharacterProgression({ character, system, resources, onClose, sh
         <div className="modal-actions"><button className="button primary" onClick={close}>{it.close}</button></div></div>
         : <form className="source-form" onSubmit={event => {
           event.preventDefault();
-          if (lock.current || loading || !acknowledged || multiclass && (!manual || !preview)) return;
+          if (lock.current || loading || !acknowledged || !selected || multiclass && (!manual || !preview)) return;
           lock.current = true; setBusy(true); setError('');
           const from = multiclass ? 0 : selected.level;
           const increases = staged ? abilityIncreaseLevels(system, staged.character, staged.resources, staged.wrapperId, from, from + total - level) : [];
@@ -99,9 +100,10 @@ export function CharacterProgression({ character, system, resources, onClose, sh
             {rolled && <label className="check-field"><input type="checkbox" checked={multiclass} onChange={event => {
               setMulticlass(event.target.checked); setArchetype(''); setManual(false); setAcknowledged(false);
             }} />{it.progressionMulticlass}</label>}
-            {!multiclass ? <label className="field"><span>{it.progressionClass}</span><select value={selected.record.id} onChange={event => {
+            {!multiclass ? <label className="field"><span>{it.progressionClass}</span><select value={selected?.record.id ?? ''} onChange={event => {
               setWrapperId(event.target.value); setArchetype(''); setAcknowledged(false);
-            }}>{classes.map(choice => <option key={choice.record.id} value={choice.record.id}>{choice.name} · {choice.level}</option>)}</select></label>
+            }}>{!selected && <option value="">{it.choose}</option>}
+              {classes.map(choice => <option key={choice.record.id} value={choice.record.id}>{choice.name} · {choice.level}</option>)}</select></label>
               : <><label className="field"><span>{it.classChoice}</span><select value={template} onChange={event => void selectTemplate(event.target.value)}>
                 <option value="">{it.choose}</option>
                 {resources.filter(record => record.definitionId === 'class' && !record.catalogIssue
@@ -111,7 +113,7 @@ export function CharacterProgression({ character, system, resources, onClose, sh
               <option value="">{it.choose}</option>{options.options.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}
             </select></label>}
             {mode === 'roll' && <p className="muted">{it.progressionRoll}</p>}
-            {!multiclass && <ProgressionGains classLevel={selected.level + total - level}
+            {!multiclass && selected && <ProgressionGains classLevel={selected.level + total - level}
               read={() => progressionPreview(system, snapshot, resources, selected.record.id, selected.level + total - level)} />}
             <ProgressionFeatures features={features} drafts={drafts} onChange={(featureId, selected) =>
               setFeatureDrafts({ key: featureKey, values: { ...drafts, [featureId]: selected } })} />
@@ -120,7 +122,7 @@ export function CharacterProgression({ character, system, resources, onClose, sh
           </fieldset></div>
           {error && <p role="alert" className="danger-text">{error}</p>}
           <div className="modal-actions"><button type="button" className="button secondary" disabled={busy} onClick={close}>{it.cancel}</button>
-            <button type="submit" className="button primary" disabled={busy || loading || !acknowledged || multiclass && (!manual || !preview)
+            <button type="submit" className="button primary" disabled={busy || loading || !acknowledged || !multiclass && !selected || multiclass && (!manual || !preview)
               || !!options?.required && !archetype || total <= level || total > contract.maxLevel || !Number.isSafeInteger(total)}>{busy ? it.saving : it.progression}</button></div>
         </form>}
     </Modal>;

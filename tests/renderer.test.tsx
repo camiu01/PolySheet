@@ -5,6 +5,8 @@ import { RenderView } from '../src/ui/renderer';
 import { parseSystem } from '../src/importing/system';
 import { demoOriginal } from '../src/demo';
 import { initialValues } from '../src/persistence/db';
+import type { Stat } from '../src/domain/model';
+import { RuntimeResource } from '../src/engine/formulas';
 
 it('renders source sections and emits an edit of the original base stat', () => {
   const { definition } = parseSystem(demoOriginal);
@@ -27,6 +29,19 @@ it('makes unsupported events visible while preserving supported stat display', (
   const { definition } = parseSystem(demoOriginal);
   render(<RenderView input={{ id: 'v', type: 'stat', stat: 'vigore', on_tap_event: { name: 'unimplemented' } }} context={{ stats: definition.character_stats, values: {} }} />);
   expect(screen.getByTestId('stat-vigore')).toHaveTextContent('2');
+  expect(screen.getByText('Non supportato: on_tap_event')).toBeInTheDocument();
+});
+it('runs a chip tap event in the sheet scope and keeps an unsupported one visible', () => {
+  const onEvent = vi.fn(), stats: Stat[] = [];
+  const input = { id: 'chip', type: 'chip', text: { type: 'constant', value_type: 'string', value: 'Affaticato' },
+    on_tap_event: { name: 'toggle_condition' } };
+  const { rerender } = render(<RenderView input={input} context={{ stats, character: new RuntimeResource('character:test', stats, {}),
+    values: {}, canEvent: () => true, onEvent }} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Affaticato' }));
+  expect(onEvent).toHaveBeenCalledWith({ name: 'toggle_condition' });
+  rerender(<RenderView input={input} context={{ stats, values: {} }} />);
+  expect(screen.queryByRole('button', { name: 'Affaticato' })).toBeNull();
+  expect(screen.getByText('Affaticato')).toBeVisible();
   expect(screen.getByText('Non supportato: on_tap_event')).toBeInTheDocument();
 });
 it('does not report absent serialized avatar events as unsupported', () => {

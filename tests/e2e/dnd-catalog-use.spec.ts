@@ -68,7 +68,10 @@ test('real 5e inventory drafts cancel, then equipment and a spell save and reope
   await page.getByRole('button', { name: 'Aggiungi risorsa · Spell', exact: true }).click();
   const picker = page.getByRole('dialog', { name: 'Aggiungi risorsa · Spell', exact: true });
   await picker.getByRole('checkbox', { name: 'Class: Fighter', exact: true }).uncheck();
-  await picker.getByRole('button', { name: 'Magic Missile', exact: true }).click();
+  // The picker appends the source spell level to the entry name.
+  const spell = picker.getByRole('button', { name: /^Magic Missile/ });
+  await expect(spell).toContainText('Liv. 1');
+  await spell.click();
   await expect(picker).not.toBeVisible();
   await expect(page.getByTestId('save-status')).toHaveText(it.saved);
   const saved = await state(page);

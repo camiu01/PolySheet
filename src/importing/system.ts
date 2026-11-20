@@ -7,6 +7,8 @@
 import { formulaFields, formulaHandlers, statPath } from '../engine/formulas';
 import { viewBindings } from './view-bindings';
 import { characterEventPlan } from '../engine/character-events';
+import { eventNames } from '../engine/effects';
+import { resourceEventSupported } from '../engine/resource-events';
 import {
   matchesType, object, systemSchema, type Diagnostic, type Stat,
   type StoredSystem, type SystemDefinition
@@ -18,11 +20,11 @@ export const MAX_SYSTEM_BYTES = 8 * 1024 * 1024;
 export const viewFields: Record<string, string[]> = {
   text: ['text', 'edit_stat', 'style', 'label', 'hint', 'max_length', 'bold', 'markdown', 'max_lines', 'signed', 'color', 'resource_id', 'resource_instance_ids_stat', 'resource_display_stat'],
   stat: ['stat', 'edit_stat', 'change_amount', 'min_value_allowed', 'max_value_allowed', 'calculated_min_value_allowed', 'calculated_max_value_allowed', 'style', 'always_show_sign', 'override_label',
-    'bottom_sheet_view', 'bottom_sheet_in_edit_mode', 'sheet_title', 'stat_color', 'name_color', 'edit_bottom_sheet_title'],
+    'bottom_sheet_view', 'bottom_sheet_in_edit_mode', 'sheet_title', 'stat_color', 'name_color', 'edit_bottom_sheet_title', 'should_auto_save'],
   section: ['header', 'content', 'show_divider', 'collapsible', 'start_collapsed', 'always_show_collapse_icon', 'content_item_min_width', 'alignment'],
   list: ['subviews', 'padding', 'padding_top', 'padding_right', 'padding_bottom', 'padding_left', 'alignment'],
   composite: ['subviews', 'alignment', 'row_only'],
-  divider: [], spacer: [], checkbox: ['stat', 'label', 'enabled', 'label_alignment', 'style'],
+  divider: [], spacer: [], checkbox: ['stat', 'label', 'enabled', 'label_alignment', 'style', 'should_auto_save'],
   avatar: ['photo_stat', 'name_stat', 'interactable', 'preview_enabled', 'size'],
   avatarSection: ['center_content', 'bottom_left_stack', 'bottom_right_stack', 'bottom_left_button_title', 'bottom_right_button_title'],
   icon: ['name', 'size', 'color'],
@@ -158,7 +160,8 @@ export function diagnose(system: SystemDefinition): Diagnostic[] {
         else try {
           const first = statPath(node.stat)[0];
           const contexts = ['created_at', '$view', '$character', '$resource', '$combatants', '$combat', '$combat_difficulty', '$combatant', '$combatant_type', '$template_resource_id', '$instance_resource_id', '$edit_mode'];
-          const implicit = first.id === 'id' && resourceScopes.has(stats)
+          // A resource scope exposes its own upstream id and, when nested, the parent it was reached from.
+          const implicit = (first.id === 'id' || first.id === '$parent') && resourceScopes.has(stats)
             || first.id === '$is_new' && path.startsWith('$.character_creation_flow[');
           if (!stats.some(s => s.id === first.id) && !bindings.includes(first.id) && !contexts.includes(first.id) && !implicit && !first.optional && type !== 'defined')
             report(`${path}.stat`, `Riferimento mancante o contesto non disponibile: ${node.stat}`);
@@ -227,6 +230,7 @@ export function diagnose(system: SystemDefinition): Diagnostic[] {
       } catch (error) { report(path, error instanceof Error ? error.message : String(error), 'error'); }
     }
     const eventFields = v.type === 'stat' ? ['on_tap_event', 'on_long_tap_event']
+      : v.type === 'chip' ? ['on_tap_event']
       : v.type === 'avatarSection' ? ['bottom_left_button_event', 'bottom_right_button_event'] : [];
     const allowed = viewFields[v.type];
     if (!allowed) report(`${path}.type`, `Componente non supportato: ${v.type}`);
@@ -238,8 +242,11 @@ export function diagnose(system: SystemDefinition): Diagnostic[] {
       catch (error) { report(`${path}.${key}`, error instanceof Error ? error.message : String(error)); }
     }
     for (const key of unsupportedViewOptions(v)) report(`${path}.${key}`, `Opzione non supportata: ${String(v[key])}`);
-    if (v.type === 'resource' && v.create_if_empty != null && v.create_if_empty !== false)
-      report(`${path}.create_if_empty`, 'Creazione automatica di risorse vuote non supportata.');
+    if (v.type === 'resource' && v.create_if_empty != null && v.create_if_empty !== false) {
+      // Seeding writes one blank instance through the owner writer, which needs a base resource field.
+      const target = typeof v.stat === 'string' ? stats.find(s => s.id === v.stat && s.type === 'base' && s.value_type === 'resource') : undefined;
+      if (!target) report(`${path}.create_if_empty`, 'Creazione automatica non eseguibile: serve una statistica base di tipo risorsa.');
+    }
     if (v.type === 'popUpButton' && v.icon != null && object(v.icon).type !== 'icon')
       report(`${path}.icon`, 'popUpButton richiede una vista icon.');
     for (const field of ['text', 'label', 'hint', 'is_visible', 'validation_message', 'enabled', 'override_label', 'pop_up_title', 'save_text', 'cancel_text', 'bottom_left_button_title', 'bottom_right_button_title', 'title', 'subtitle', 'first_line_extra', 'second_line_extra', 'title_color', 'subtitle_color', 'first_line_extra_color', 'second_line_extra_color', 'chips',
@@ -271,9 +278,16 @@ export function diagnose(system: SystemDefinition): Diagnostic[] {
         try {
           const parts = statPath(v[field]);
           const binding = parts[0].id === '$view' && parts.length === 2 ? inputs.get(parts[1].id) : undefined;
-          if (field !== 'stat' || !['resource', 'resourceArray'].includes(v.type) || !binding
+          // `monster.armor_class` walks the resource held by that base field; its nested stat is checked there.
+          const holder = parts[0].id === '$view' ? undefined : stats.find(s => s.id === parts[0].id);
+          const nested = holder?.value_type === 'resource' && typeof holder.resource_type === 'string' && parts.length === 2
+            ? system.resources.find(r => r.id === holder.resource_type)?.stats.find(s => s.id === parts[1].id) : undefined;
+          // `$resource.field` is this scope's own field; `$parent.field` belongs to the owner that opened it.
+          const scoped = parts[0].id === '$resource' && parts.length === 2 && stats.some(s => s.id === parts[1].id)
+            || parts[0].id === '$parent' && parts.length >= 2 && stats !== system.character_stats;
+          if (!nested && !scoped && (field !== 'stat' || !['resource', 'resourceArray'].includes(v.type) || !binding
             || v.type === 'resource' && binding.value_type !== 'resource'
-            || v.type === 'resourceArray' && (binding.value_type !== 'array' || binding.sub_value_type !== 'resource'))
+            || v.type === 'resourceArray' && (binding.value_type !== 'array' || binding.sub_value_type !== 'resource')))
             report(`${path}.${field}`, `Riferimento non risolto: ${v[field]}`);
         } catch (error) { report(`${path}.${field}`, error instanceof Error ? error.message : String(error), 'error'); }
       }
@@ -358,21 +372,30 @@ export function diagnose(system: SystemDefinition): Diagnostic[] {
   system.character_sheet_sections.forEach((s, i) => checkView(s.view, `$.character_sheet_sections[${i}].view`, system.character_stats));
   checkView(system.character_search_item_view, '$.character_search_item_view', system.character_stats);
   if (system.character_creation_flow.length) {
-    report('$.character_creation_flow', 'Pagine di creazione disponibili come bozza guidata; azioni di pagina eseguite sulla bozza per setStat, addToStat, sequence, when e forEach. pre_edit e gli altri effetti non eseguiti.');
+    report('$.character_creation_flow', 'Pagine di creazione disponibili come bozza guidata; azioni di pagina eseguite sulla bozza per setStat, addToStat, sequence, when, forEach e fireEvent differito. pre_edit e gli altri effetti vengono saltati e segnalati.');
     system.character_creation_flow.forEach((page, i) => {
       if (page && typeof page === 'object' && object(page).view)
         checkView(object(page).view, `$.character_creation_flow[${i}].view`, system.character_stats);
     });
   }
-  if (system.mechanics.length) report('$.mechanics', `${system.mechanics.length} meccaniche dichiarate. Supporto parziale agli eventi espliciti del personaggio; lifecycle, risorse e flussi asincroni non eseguiti.`);
+  if (system.mechanics.length) report('$.mechanics', `${system.mechanics.length} meccaniche dichiarate. Eseguiti gli eventi espliciti del personaggio e delle schede risorsa; lifecycle, progressione e flussi asincroni non eseguiti.`);
   if (Object.keys(system.progression_systems).length) report('$.progression_systems', 'Progressione automatica non supportata.');
-  if (system.enumerated_types.length) report('$.enumerated_types', 'Enumerazioni usate da select, menuButton e dalle formule enumerated; le chip dinamiche non sono ancora interpretate.');
   if (!system.dice) report('$.dice', 'Definizioni dadi assenti nella variante storica. Disponibile solo il lanciatore manuale dell’app.');
   system.resources.forEach((r, i) => {
     const p = `$.resources[${i}]`;
     checkStats(r.stats, `${p}.stats`);
-    if (r.mechanics?.length) report(`${p}.mechanics`, 'Effetti risorsa non eseguiti. Assegnazione soltanto manuale.');
-    fields(r, ['id', 'name', 'plural', 'abbreviation', 'translatable', 'display_name', 'stats', 'display_view', 'edit_view', 'list_view', 'search_item_view', 'mechanics', 'indexed_stats', 'core', 'color'], p);
+    if (r.mechanics?.length) {
+      // A card button runs a mechanic whose static handler needs no external input; an event
+      // subscription runs one declared through `calculated_event_names`. A handler that opens a
+      // popup stays manual: a resource command ends in a result, never in a form.
+      const mechanics = r.mechanics.map(item => object(item));
+      const popup = (m: Record<string, unknown>) => /"type":"showPopUp"/.test(JSON.stringify(m.effects ?? null));
+      const manual = mechanics.filter(m => m.calculated_event_names == null && (popup(m)
+        || !eventNames(m.event_names).some(name => resourceEventSupported(system, r.id, { name })))).length;
+      if (manual) report(`${p}.mechanics`, `${mechanics.length - manual} di ${mechanics.length} meccaniche risorsa eseguite; ${manual} non eseguibili perché richiedono una finestra o input esterni.`);
+    }
+    // `search_filters` feed the local picker prefilter engine; sort options stay unimplemented.
+    fields(r, ['id', 'name', 'plural', 'abbreviation', 'translatable', 'display_name', 'stats', 'display_view', 'edit_view', 'list_view', 'search_item_view', 'mechanics', 'indexed_stats', 'core', 'color', 'search_filters'], p);
     for (const field of ['display_view', 'edit_view', 'list_view', 'search_item_view'] as const)
       if (r[field]) checkView(r[field], `${p}.${field}`, r.stats);
   });

@@ -64,7 +64,15 @@ export function SourceResourceSelect({ node: v, context: ctx, preferTemplates = 
   const inline = v.create_in_place === true || definition.core !== true || v.inline_creation_mode === 'only';
   // Offer usable catalog roots (choosing one stages a private copy of its whole graph) and local records,
   // but not the root of another character's private graph: a shallow copy would share its children.
-  const offered = (r: ResourceInstance) => r.catalogSource ? !r.catalogIssue : r.catalogGroup !== r.id;
+  // Archetypes are `class` children too, so they belong under their own class, never in the class picker.
+  // A private copy repeating a usable catalog name is the same entry seen twice: the template stays the
+  // choice. A template the catalog rejected is not offered, so its copy must remain selectable.
+  const normalizeName = (name: string) => name.trim().toLocaleLowerCase('it');
+  const catalogNames = new Set((ctx.resources ?? []).filter(r => r.catalogSource && !r.catalogIssue && r.definitionId === definition.id)
+    .map(r => normalizeName(r.name)));
+  const offered = (r: ResourceInstance) => (r.catalogSource ? !r.catalogIssue
+    : definition.id === 'class' ? !r.catalogGroup
+    : r.catalogGroup !== r.id) && (!!r.catalogSource || !catalogNames.has(normalizeName(r.name)));
   const resources = (ctx.resources ?? []).filter(r => offered(r) && r.definitionId === definition.id && (!ctx.systemKey || r.systemKey === ctx.systemKey));
   const selected = ctx.drafts && Object.hasOwn(ctx.drafts, v.id) ? ctx.drafts[v.id] : ctx.values[fieldId] ?? field.default_value;
   const selectedRefs = Array.isArray(selected) ? selected : [selected];

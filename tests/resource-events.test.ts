@@ -123,7 +123,8 @@ const cardDefinition = {
       { id: 'blade_shoot', event_names: 'shoot', effects: { type: 'addToStat', stat: 'ammo', value: constant(-1), aggregation_type: 'set' } },
       { id: 'blade_damage', event_names: 'damage', effects: { type: 'roll', rolls: { type: 'map', components: stat('dice'),
         mapper: { type: 'rollable', text: constant('danno'), formulas: list(stat('$mapValue'), constant('-1')) } } } },
-      { id: 'blade_typed', event_names: 'typed', effects: set('bonus', stat('$view.amount')) }
+      { id: 'blade_typed', event_names: 'typed', effects: set('bonus', stat('$view.amount')) },
+      { id: 'blade_cast', event_names: 'cast', effects: { type: 'addToStat', stat: '$character.slots', value: constant(-1), aggregation_type: 'set' } }
     ]
   }],
   mechanics: [...definition.mechanics, { id: 'on_shared', event_names: 'shared', effects: set('slots', constant(7)) }]
@@ -148,6 +149,18 @@ it('runs a resource card action on its own mechanics, collects rolls and reaches
   expect(damage.kind === 'roll' && damage.rolls[0].results.map(result => result.total)).toEqual([4, -1]);
   expect(() => executeCharacterEvent(cardSystem, character(['wrapper']), all, { name: 'toggle_equip' }, undefined, 'blade-1'))
     .toThrow('non appartiene al personaggio');
+});
+
+it('repeats a card addToStat on the character base value instead of refusing the second cast', () => {
+  const owner = character(['wrapper']);
+  owner.values.weapon = { resourceId: 'blade-1' };
+  const first = executeCharacterEvent(cardSystem, owner, [...resources, blade], { name: 'cast' }, undefined, 'blade-1');
+  expect(first.overrides).toEqual({});
+  expect(first.values).toEqual({ slots: -1 });
+  const second = executeCharacterEvent(cardSystem, { ...owner, values: { ...owner.values, ...first.values } },
+    [...resources, blade], { name: 'cast' }, undefined, 'blade-1');
+  expect(second.overrides).toEqual({});
+  expect(second.values).toEqual({ slots: -2 });
 });
 
 it('offers card buttons only for valid handlers that need no popup form values', () => {

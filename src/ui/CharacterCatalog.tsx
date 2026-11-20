@@ -24,7 +24,8 @@ export function CharacterCatalog({ character, system, resources, run }: {
   const race = subrace && character.values[subrace.race.id];
   const templates = resources.filter(r => !r.catalogIssue && (r.catalogSource || !r.catalogGroup));
   const classes = templates.filter(r => r.definitionId === 'class');
-  const chosen = classes.some(r => r.id === selected) ? selected : classes[0]?.id ?? '';
+  // No implicit class: the first template would be added by a click the user did not aim at it.
+  const chosen = classes.some(r => r.id === selected) ? selected : '';
   const current = fields.classes && character.values[fields.classes.id];
   const wrappers = Array.isArray(current) ? current.flatMap(v => isResourceReference(v)
     ? resources.filter(r => r.id === v.resourceId) : []) : [];
@@ -83,7 +84,7 @@ export function CharacterCatalog({ character, system, resources, run }: {
       })}
       {fields.classes && <><label className="field"><span>{it.classChoice}</span>
         <select value={chosen} disabled={!classes.length} onChange={e => setSelected(e.target.value)}>
-          {!classes.length && <option value="">{it.choose}</option>}
+          <option value="">{classes.length ? it.choose : it.noCatalog}</option>
           {classes.map(r => <option value={r.id} key={r.id}>{r.name}</option>)}
         </select>
       </label><button className="button secondary" disabled={!chosen} onClick={() => void save(() => assignCatalog(character.id, chosen, fields.classes!.id))}>{it.addClass}</button></>}

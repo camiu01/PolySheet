@@ -14,7 +14,7 @@ import { rollDice } from './dice';
 import { enumerationEntries } from './enumerations';
 import { clearValueOverrides, cloneOverrides, resolveCharacterOverrides, revertMechanic } from './overrides';
 import {
-  eventNames, executeEffect, validateEffect, type EffectContext, type EventMessage, type PreparedRoll
+  eventNames, executeEffect, validateEffect, type EffectContext, type EventMessage, type PreparedRoll, type ResourceWriteMode
 } from './effects';
 import { changedResources, resourceDispatcher, withWrites, type ResourceWrites } from './resource-events';
 
@@ -135,6 +135,8 @@ export type CharacterEventResult = (
  * skill sort toggles, death saves). Resource and revertible mechanics keep reversible overrides.
  */
 function permanentMechanic(system: SystemDefinition, mechanicId: string) {
+  // A resource card action is a one-shot command with no revert subscription: its writes are lasting.
+  if (mechanicId.startsWith('resource-event:')) return true;
   const mechanic = Array.isArray(system.mechanics)
     ? system.mechanics.map(item => object(item)).find(item => item.id === mechanicId) : undefined;
   return !!mechanic && !eventNames(mechanic.revert_event_names).length && mechanic.calculated_revert_event_names == null;
@@ -184,9 +186,22 @@ export function executeCharacterEvent(system: StoredSystem, character: Character
       executedRolls.push(...rolled);
       return rolled.reduce((sum, row) => sum + row.results.reduce((total, roll) => total + roll.total, 0), 0);
     },
-    writeBase(statId: string, value: Json) {
+    writeBase(statId: string, value: Json, mode: ResourceWriteMode = 'set') {
       if (!permanentMechanic(system.definition, ctx.mechanicId)) return false;
-      values[statId] = value; baseWrites[statId] = value;
+      // A stored modifier from an earlier run of this same command would apply twice now.
+      const own = ctx.overrides[ctx.mechanicId]?.modifiers?.[statId];
+      if (own) {
+        const overrides = cloneOverrides(ctx.overrides), entry = overrides[ctx.mechanicId];
+        delete entry.modifiers?.[statId];
+        if (!Object.keys(entry.modifiers ?? {}).length && !Object.keys(entry.values ?? {}).length) delete overrides[ctx.mechanicId];
+        ctx.overrides = overrides;
+      }
+      if (mode === 'add') {
+        const current = values[statId];
+        if (typeof current !== 'number' || typeof value !== 'number') return false;
+        values[statId] = current + value;
+      } else values[statId] = value;
+      baseWrites[statId] = values[statId];
       ctx.overrides = clearValueOverrides(ctx.overrides, statId) ?? ctx.overrides;
       return true;
     },

@@ -84,8 +84,11 @@ export const CharacterSheet = memo(function CharacterSheet({ character, system, 
   const events = useCharacterEvents(system, character);
   // Unsaved card selections live with this sheet only; a reload starts from the saved values.
   const cardInputs = useRef(new Map<string, Record<string, unknown>>());
-  const resources = useLiveQuery(() => db.resources.where('systemKey').equals(system.key).toArray(), [system.key]) ?? [];
+  const resources = useLiveQuery(() => db.resources.where('systemKey').equals(system.key).toArray(), [system.key]);
   const overrides = resolveCharacterOverrides(character.overrides);
+  // Resource references resolve through the whole local set: an empty first snapshot would trap
+  // every dependent view in an error boundary before the live query delivers the records.
+  if (!resources) return <p className="muted">{it.saving}</p>;
   const change = (id: string, value: unknown) => { void run(() => setCharacterValue(character.id, id, value)); };
   const context = {
     canEvent: events.canEvent, onEvent: events.onEvent, eventBusy: events.eventBusy,

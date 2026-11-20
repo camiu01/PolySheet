@@ -94,6 +94,12 @@ describe('documented enumeration and text formulas', () => {
     expect(() => createEvaluator([]).evaluate(enumerated('enumeratedName', 'dexterity'))).toThrow('Enumerazioni del sistema non disponibili');
     expect(() => createEvaluator([], {}, undefined, env).evaluate({ type: 'enumeratedName', enumerated_type: 'ability', id: constant(3) })).toThrow('non testuale');
   });
+  it('turns a literal event name into its text and rejects an empty one', () => {
+    const e = createEvaluator([]);
+    expect(e.evaluate({ type: 'eventName', event_name: 'short_rest' })).toBe('short_rest');
+    expect(e.evaluate({ type: 'list', components: [{ type: 'eventName', event_name: 'recharge' }] })).toEqual(['recharge']);
+    expect(() => e.evaluate({ type: 'eventName', event_name: '' })).toThrow('Nome evento non valido');
+  });
   it('converts only valid decimal text to a finite number', () => {
     const e = createEvaluator([]);
     expect(e.evaluate({ type: 'toNum', components: constant('12', 'string') })).toBe(12);

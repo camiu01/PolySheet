@@ -34,8 +34,8 @@ export interface EffectContext {
   dispatch(event: unknown): EffectTerminal | undefined;
   /** Draw these rolls now, record them for display and return their summed total; absent where results cannot be shown. */
   rollNow?(rolls: PreparedRoll[]): number;
-  /** Replace a character base value when the running mechanic cannot be reverted; false keeps an override. */
-  writeBase?(statId: string, value: Json): boolean;
+  /** Replace or add to a character base value when the running mechanic cannot be reverted; false keeps an override. */
+  writeBase?(statId: string, value: Json, mode?: ResourceWriteMode): boolean;
   /** Run the mechanics of one resource for a scoped event name. */
   dispatchResource?(target: unknown, name: string): EffectTerminal | undefined;
   /** Write a base stat of an owned resource reached through `$variable.stat` or `resourceStat.stat`. */
@@ -277,7 +277,11 @@ export function writeCharacterStat(ctx: EffectContext, type: unknown, statId: st
   if (!stat) throw new Error(`Statistica mancante: ${statId}`);
   if (!matchesType(value, stat.value_type, stat.sub_value_type))
     throw new Error(`Valore non valido per ${stat.id} (${stat.value_type}).`);
-  if (direct && type === 'setStat' && aggregation === 'set' && stat.type === 'base' && ctx.writeBase?.(stat.id, value)) return;
+  // A non-revertible command (a rest, a card action) has no modifier layer to undo, so both a
+  // replacement and an addition land on the base value: repeating a cast decrements it again.
+  const cardAction = ctx.mechanicId.startsWith('resource-event:');
+  if ((direct || cardAction) && stat.type === 'base' && (type === 'addToStat' || type === 'setStat' && aggregation === 'set')
+    && ctx.writeBase?.(stat.id, value, type === 'addToStat' ? 'add' : 'set')) return;
   const override = { aggregation, value };
   if (type === 'addToStat') {
     if (!['integer', 'decimal'].includes(stat.value_type) || typeof value !== 'number')

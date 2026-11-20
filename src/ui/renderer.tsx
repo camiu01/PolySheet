@@ -112,11 +112,21 @@ function resourceText(v: View, ctx: RenderContext) {
   const d = ctx.resourceDefinitions?.find(d => d.id === v.resource_id);
   if (!d || typeof v.resource_instance_ids_stat !== 'string') throw new Error(it.noResourceType);
   const value = createEvaluator(ctx.stats, ctx.values, undefined, ctx).get(v.resource_instance_ids_stat);
-  return (Array.isArray(value) ? value : [value]).filter(id => id != null).map(id => {
-    const r = ctx.resources?.find(r => r.id === id && r.definitionId === d.id && (!ctx.systemKey || r.systemKey === ctx.systemKey));
-    if (!r) throw new Error(it.missingResource);
+  // A source list may name identities the character does not own (5e `spell.classes` lists every
+  // class able to cast it, and `source` names a book). Only resolvable instances are shown.
+  return (Array.isArray(value) ? value : [value]).filter(id => id != null).flatMap(id => {
+    const eligible = (r: ResourceInstance) => r.definitionId === d.id && (!ctx.systemKey || r.systemKey === ctx.systemKey);
+    // Upstream identity strings (5e `spell.classes`: "bard") survive a private copy as text.
+    const local = ctx.resources?.find(r => r.id === id);
+    const r = local && eligible(local) ? local
+      : local ? undefined
+      : ctx.resources?.find(r => eligible(r) && (r.sourceId === id || r.values.id === id));
+    // A local id that exists under another pin or type is a real mismatch; an unknown identity is not owned.
+    if (!r && local) throw new Error(it.missingResource);
+    if (!r) return [];
     const display = typeof v.resource_display_stat === 'string' ? v.resource_display_stat : d.display_name;
-    return display ? textValue(createEvaluator(d.stats, r.values, undefined, { resources: ctx.resources, resourceDefinitions: ctx.resourceDefinitions, createdAt: r.createdAt, instanceId: r.sourceId ?? r.id, enumerations: ctx.enumerations, character: ctx.character }).get(display)) : r.name;
+    const label = display ? textValue(createEvaluator(d.stats, r.values, undefined, { resources: ctx.resources, resourceDefinitions: ctx.resourceDefinitions, createdAt: r.createdAt, instanceId: r.sourceId ?? r.id, enumerations: ctx.enumerations, character: ctx.character }).get(display)) : r.name;
+    return label ? [label] : [];
   }).join(', ');
 }
 const sourceIconEntries = Object.entries(sourceIcons);
@@ -152,8 +162,12 @@ export const rendererRegistry = new Map<string, Renderer>([
   ['selectResources', (v, ctx) => !ctx.drafts && v.should_save_on_selection !== true ? <DeferredResourceSelect node={v} context={ctx} /> : <SourceResourceSelect node={v} context={ctx} />],
   ['resourceSection', (v, ctx) => <SourceResourceSection node={v} context={ctx} />],
   ['chip', (v, ctx, e) => {
-    const background = viewColor(v.background_color, e);
-    return <span className={`source-chip ${v.style === 'compact' ? 'source-chip-compact' : ''}`} style={{ backgroundColor: background, color: readableOn(background), borderColor: viewColor(v.border_color, e) }}>{resourceText(v, ctx) ?? (v.text ? textValue(e(v.text)) : '')}</span>;
+    const background = viewColor(v.background_color, e), style = { backgroundColor: background, color: readableOn(background), borderColor: viewColor(v.border_color, e) };
+    const className = `source-chip ${v.style === 'compact' ? 'source-chip-compact' : ''}`, label = resourceText(v, ctx) ?? (v.text ? textValue(e(v.text)) : '');
+    // A tapped chip runs its character event; without one it stays a label.
+    return canSourceEvent(ctx, v.on_tap_event)
+      ? <button type="button" className={className} style={style} disabled={ctx.eventBusy} onClick={() => ctx.onEvent!(v.on_tap_event)}>{label}</button>
+      : <span className={className} style={style}>{label}</span>;
   }],
   ['listItem', (v, ctx, e) => {
     // `chips` computes to the literal chip views built by `createChip`; anything else is rejected by the view schema.
@@ -214,9 +228,10 @@ export const rendererRegistry = new Map<string, Renderer>([
     const stat = ctx.stats.find(s => s.id === v.stat && s.type === 'base' && s.value_type === 'bool');
     if (!stat) throw new Error('Checkbox senza statistica booleana base');
     // `switcher` is the same boolean input presented as an accessible switch.
-    return <label className={`check-field ${v.label_alignment === 'left' ? 'check-label-left' : ''} ${v.style === 'switcher' ? 'switch-field' : ''}`}><input type="checkbox" role={v.style === 'switcher' ? 'switch' : undefined} checked={inputValue(v, ctx, stat) === true}
+    return <><label className={`check-field ${v.label_alignment === 'left' ? 'check-label-left' : ''} ${v.style === 'switcher' ? 'switch-field' : ''}`}><input type="checkbox" role={v.style === 'switcher' ? 'switch' : undefined} checked={inputValue(v, ctx, stat) === true}
       disabled={!ctx.onChange || (v.enabled != null && e(v.enabled) !== true)}
-      onChange={event => saveInput(v, ctx, stat.id, event.target.checked)} />{v.label ? textValue(e(v.label)) : stat.name}</label>;
+      onChange={event => saveInput(v, ctx, stat.id, event.target.checked)} />{v.label ? textValue(e(v.label)) : stat.name}</label>
+      {ctx.onChange && !ctx.drafts && v.should_auto_save !== true && <small className="unsupported-note">{it.explicitSave}</small>}</>;
   }]
 ]);
 interface ViewProps { input: unknown; context: RenderContext }
@@ -291,6 +306,7 @@ function ViewContent({ input, context }: ViewProps) {
     if (v.validation_message != null && !context.drafts && context.onChange)
       return <DeferredResourceSelect node={v} context={environment} />;
     const eventKeys = v.type === 'stat' ? ['on_tap_event', 'on_long_tap_event']
+      : v.type === 'chip' ? ['on_tap_event']
       : v.type === 'avatarSection' ? ['bottom_left_button_event', 'bottom_right_button_event'] : [];
     const ignored = Object.keys(v).filter(k => v[k] != null
       && !(eventKeys.includes(k) && canSourceEvent(environment, v[k]))

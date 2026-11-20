@@ -647,8 +647,11 @@ for (const id of ['5e', '5e2024']) {
     await expect(page.getByRole('dialog')).not.toBeVisible();
     await create(page, 'Cataloghi automatici');
     const aside = page.locator('.sheet-aside');
-    await expect(aside.getByRole('combobox', { name: 'Classe da aggiungere', exact: true }).locator('option')).toHaveText(['Viandante']);
+    const classSelect = aside.getByRole('combobox', { name: 'Classe da aggiungere', exact: true });
+    await expect(classSelect.locator('option')).toHaveText(['Seleziona…', 'Viandante']);
+    await expect(aside.getByRole('button', { name: 'Aggiungi classe', exact: true })).toBeDisabled();
     await aside.getByRole('combobox', { name: 'race', exact: true }).selectOption({ label: 'Collina' });
+    await classSelect.selectOption({ label: 'Viandante' });
     await aside.getByRole('button', { name: 'Aggiungi classe', exact: true }).click();
     const level = aside.getByRole('spinbutton', { name: 'Livello manuale · Viandante', exact: true });
     await expect(level).toHaveValue('1'); await level.fill('2'); await level.press('Tab'); await expect(level).toHaveValue('2');

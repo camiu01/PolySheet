@@ -130,7 +130,8 @@ export const formulaFields: Record<string, string[]> = {
   toNum: ['components'], toSignedString: ['components'],
   replace: ['string', 'occurrence', 'replace'], split: ['components', 'separator'],
   copyResource: ['components', 'preserve_ids'],
-  createChip: ['id', 'text', 'background_color', 'border_color', 'style', 'resource_id', 'resource_instance_ids_stat', 'resource_display_stat']
+  createChip: ['id', 'text', 'background_color', 'border_color', 'style', 'resource_id', 'resource_instance_ids_stat', 'resource_display_stat'],
+  eventName: ['event_name', 'for_resource']
 };
 /**
  * Build the literal `chip` view described by one `createChip` node.
@@ -174,6 +175,11 @@ function enumeratedValue(scope: ScopeApi, node: Node, evaluate: (value: unknown)
 }
 /** Extensible handler registry. No dynamic JavaScript evaluation is used. */
 export const formulaHandlers = new Map<string, Handler>([
+  // A literal event name: 5e builds the recharge or revert list of one effect from it.
+  ['eventName', n => {
+    if (typeof n.event_name !== 'string' || !n.event_name) throw new Error('Nome evento non valido');
+    return n.event_name;
+  }],
   ['createChip', (n, e) => chipView(n, e)],
   ['isNull', (n, e) => e(n.components) === null],
   ['notNull', (n, e) => e(n.components) !== null],

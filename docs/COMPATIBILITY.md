@@ -21,6 +21,54 @@ rejects the format or leaves the action visibly unexecuted. A preview with zero
 errors may still have hundreds of warnings and produce runtime errors on
 unpopulated resource references. No diagnostic count is a compatibility certificate.
 
+## Scoped stat paths, prefilters and card commands, 2026-11-20
+
+Evidence: official 5e 0.9.1 package SHA-256
+`5de5642ad7281d7a99566a518d916e43c24f0c2046c4c40b8042e5074ac3ea3b`,
+source revision `8788e3b18099e4a1b3510f02869d97f1488586b4`; PF2e 0.3.0 package
+`a0f6f3d56e432e1f60625b06e374c21af8237ec01f3ef93024ed45c321b3e679`.
+Pointers: `resources[4].stats[*]` (`$parent.level`, `$parent.school`),
+`resources[9]` (`$parent.min_level`), `resources[30].stats[*]`
+(`$parent.current_level`, `$parent.is_attuned`), `resources[35]`
+(`$parent.current_class_details.selected_selectable_feature_ids`),
+`resources[37]` (`$parent.archetypes`), `resources[44]` (`$parent.hp`),
+`resources[30].display_view.subviews[19..27].stat` (`$resource.traits`,
+`$resource.actions`), `resources[1].search_filters`, `resources[1].sort_options`,
+`resources[11].stats[28..30].components` (`eventName`),
+`character_sheet_sections[3].view.content[0].subviews[2].should_auto_save`,
+`resources[6].mechanics` (one popup handler) and `resources[6].list_view.subviews[1].content[1].on_tap_event`.
+
+Semantics observed in the originals: `$parent` names the record that holds the
+scope being rendered, so a `levelled_*` resource reads the spell that selected
+it and `monster`/`class` read the record that owns them; `$resource` names the
+current scope itself. Neither exists at character level, where the same path
+stays a reported error. Resource `search_filters` carry the prefilter each local
+picker shows, while `sort_options` are unused. `should_auto_save: false` marks a
+field the source saves on commit rather than continuously. A card `addToStat`
+has no revert subscription in 5e `resources[6].mechanics`, so it writes the
+character base value; a second activation stacks instead of failing.
+
+Ambiguities kept visible rather than guessed: a stat path under `$parent` cannot
+be validated against a definition, because the owning record varies at runtime;
+`resources[30]` references a `monster_instance_trait` type no installed catalog
+provides and `$resource.traits`/`actions` fields its stats do not declare;
+`on_tap_event` inside resource, combat or draft views still has no owning
+character to run a card command; `sort_options`, `macros`, `currencies` and
+`is_defeated` remain unimplemented.
+
+Independently expected values: the official 5e, 5e2024 and PF2e import reports
+carry 33, 33 and 52 warnings (from 127/127/213) and no errors; a `$parent.level`
+stat on a character is still reported; two CAST activations on a level-1 slot
+take it 3 → 1 and a long rest restores 3. `npm run check` passes 409 tests with
+one skip and `npm run build` emits 16 precache entries.
+
+Tests: `import.test.ts` (resource-mechanic report, nested and scoped stat paths),
+`engine.test.ts` (`eventName`), `renderer.test.tsx` (chip tap event),
+`resource-events.test.ts` (card `addToStat`), `source-views.test.tsx`,
+`scoped-resource-popup.test.tsx` (`create_if_empty` seeding) and production
+`e2e/dnd-catalog-use.spec.ts` / `e2e/sheet-interactions.spec.ts` for the picker
+level labels.
+
 ## Selective 5e monsters, 2026-11-19
 
 Current gap assessment: [D&D 5e audit](DND5E_AUDIT.md). Older dated entries
@@ -1301,18 +1349,20 @@ exact path is specified.
 | [divide](https://docs.rpg-companion.app/Stat/Formulas/divide) | `character_stats[160].components` | Partial: ordered division; explicit down/up/none; reject zero, missing rounding, closest | engine, documented `[20,2,5] = 2`, external `8 → -1`, `15 → 2`, `9 → -1` |
 | [when](https://docs.rpg-companion.app/Stat/Formulas/when), [isEmpty](https://docs.rpg-companion.app/Stat/Formulas/isEmpty) | `resources[39].stats[2].components` | Supported subset: first matching bool condition only; isEmpty accepts text/list | engine + external note default/title tests |
 | [and](https://docs.rpg-companion.app/Stat/Formulas/and) | `resources[39].edit_view.subviews[0].validation_message.clauses[0].condition` | Boolean-list formula without short circuit; real scoped form validation | engine + view-session + browser |
+| [eventName](https://docs.rpg-companion.app/Stat/Formulas/eventName) | Official 5e 0.9.1 `resources[11].stats[28..30].components.clauses[*].components.components[0]` (`effect` recharge and revert lists) | Evaluates to its literal `event_name` text, so a `when` branch can build the one event name an effect subscribes to; empty names fail explicitly. `for_resource` is accepted for the firing pipeline and unused by the text value | `engine.test.ts`, import diagnostics |
 | [enumeratedName](https://docs.rpg-companion.app/Stat/Formulas/enumeratedName), [enumeratedAbbreviation](https://docs.rpg-companion.app/Stat/Formulas/enumeratedAbbreviation) | Supplied 0.6.0: `mechanics[17].effects.pop_up_view.subviews[1].subviews[1].text` (alignment name), `resources[5].stats[8].components.components.components[2]` (ability abbreviation) | Partial: resolves through the source `enumerated_types`, including inherited entries, with a lazy per-type cache; unknown type/entry or a missing abbreviation fails explicitly; no label fallback | engine + import + supplied-source diagnostics |
 | [toNum](https://docs.rpg-companion.app/Stat/Formulas/toNum), [toSignedString](https://docs.rpg-companion.app/Stat/Formulas/toSignedString) | Supplied 0.6.0: `resources[5].stats[13].components` (hit die), `resources[27].stats[58].components.components.components[3]` (modifier) | `toNum` accepts only plain decimal text up to 64 characters and rejects whitespace, exponents, empty text or non-finite results; `toSignedString` prefixes non-negative numbers with `+` and keeps negatives unchanged | engine |
 | [replace](https://docs.rpg-companion.app/Stat/Formulas/replace) | Supplied 0.6.0: `resources[5].stats[13].components.components` (`d` removed from a hit die) | Literal all-occurrence replacement with no regex or replacement-pattern syntax; empty occurrence rejected; 1 MiB result bound | engine |
 | [CharacterSheetSection](https://docs.rpg-companion.app/System/CharacterSheetSection), [section](https://docs.rpg-companion.app/Views/section) | `character_sheet_sections[5]` | Partial: source order, header/content, collapsibility and responsive minimum width; no lifecycle actions | renderer + external + E2E |
-| [stat view](https://docs.rpg-companion.app/Views/stat) | `character_sheet_sections[5].view.content[0..5]` | Partial: displayed stat and distinct edit_stat, names, signs, scalar editing; events not executed and visibly flagged | renderer + external + offline external E2E |
+| [stat view](https://docs.rpg-companion.app/Views/stat) | `character_sheet_sections[5].view.content[0..5]`; `should_auto_save` on `character_sheet_sections[3].view.content[0].subviews[2]` (death saves) | Partial: displayed stat and distinct edit_stat, names, signs, scalar editing; `on_tap_event`/`on_long_tap_event` run only with the character-sheet event gate and are visibly flagged elsewhere; `should_auto_save` false keeps the explicit-save note | renderer + external + offline external E2E |
 | [text](https://docs.rpg-companion.app/Views/text) | `character_sheet_sections[5].view.header[1]`, `resources[39].display_view.subviews[0]` | Plain text/scalar editing, scoped validation, signs/clamp/colors and pinned local resource-ID display; no HTML/Markdown | renderer + view-session + browser |
-| [list](https://docs.rpg-companion.app/Views/list), [composite](https://docs.rpg-companion.app/Views/composite), [checkbox](https://docs.rpg-companion.app/Views/checkbox) | `resources[39].display_view` (list), `character_search_item_view` (composite), `character_sheet_sections[2].view.header[3].pop_up_view.content[0]` (checkbox) | Source order/layout/padding, scalar checkbox drafts and original popup Save/Cancel; unsupported options remain diagnosed | renderer + view-session + original browser acceptance |
-| Interactive/resource views | Original notes, condition popup/chips, avatar and section icons | Registered subset above and in VIEWS.md; unknown types/events still have visible fallbacks, not invented actions | renderer + view-session + original browser acceptance |
-| [collapsible](https://docs.rpg-companion.app/Views/collapsible), [viewPager](https://docs.rpg-companion.app/Views/viewPager), [ticker](https://docs.rpg-companion.app/Views/ticker), [button](https://docs.rpg-companion.app/Views/button), [select](https://docs.rpg-companion.app/Views/select), [menuButton](https://docs.rpg-companion.app/Views/menuButton), [resource](https://docs.rpg-companion.app/Views/resource), [resourceArray](https://docs.rpg-companion.app/Views/resourceArray) | `character_sheet_sections[9].view.content[0]`, `resources[3].edit_view`, `character_sheet_sections[4].view.header[1]`, `resources[1].display_view.subviews[7].subviews[0]`, `character_creation_flow[0].view.subviews[4].subviews[1]`, `character_sheet_sections[0].view.bottom_right_stack[0]`, `character_creation_flow[0].view.subviews[2].subviews[0].pop_up_view`, `character_creation_flow[0].view.subviews[3]` | Tested subset: accordion/pager state, bounded ticker edits, enumeration and local-resource options, resource display/edit/list and array create/remove. Button and menu events, `create_if_empty`, resource-valued filters and `diffText` stay unsupported and diagnosed | `source-views.test.tsx` + renderer + view-session |
+| [list](https://docs.rpg-companion.app/Views/list), [composite](https://docs.rpg-companion.app/Views/composite), [checkbox](https://docs.rpg-companion.app/Views/checkbox) | `resources[39].display_view` (list), `character_search_item_view` (composite), `character_sheet_sections[2].view.header[3].pop_up_view.content[0]` (checkbox) | Source order/layout/padding, scalar checkbox drafts and original popup Save/Cancel; `should_auto_save` false on a checkbox adds the explicit-save note; unsupported options remain diagnosed | renderer + view-session + original browser acceptance |
+| Interactive/resource views | Original notes, condition popup/chips, avatar and section icons | Registered subset above and in VIEWS.md; a chip's `on_tap_event` is a button in the sheet event scope and part of its no-handler fallback; unknown types/events still have visible fallbacks, not invented actions | renderer + view-session + original browser acceptance |
+| [collapsible](https://docs.rpg-companion.app/Views/collapsible), [viewPager](https://docs.rpg-companion.app/Views/viewPager), [ticker](https://docs.rpg-companion.app/Views/ticker), [button](https://docs.rpg-companion.app/Views/button), [select](https://docs.rpg-companion.app/Views/select), [menuButton](https://docs.rpg-companion.app/Views/menuButton), [resource](https://docs.rpg-companion.app/Views/resource), [resourceArray](https://docs.rpg-companion.app/Views/resourceArray) | `character_sheet_sections[9].view.content[0]`, `resources[3].edit_view`, `character_sheet_sections[4].view.header[1]`, `resources[1].display_view.subviews[7].subviews[0]`, `character_creation_flow[0].view.subviews[4].subviews[1]`, `character_sheet_sections[0].view.bottom_right_stack[0]`, `character_creation_flow[0].view.subviews[2].subviews[0].pop_up_view`, `character_creation_flow[0].view.subviews[3]` | Tested subset: accordion/pager state, bounded ticker edits, enumeration and local-resource options, resource display/edit/list and array create/remove. `create_if_empty` seeds one blank instance through the writer that owns the field, only in an editable view; a read-only view keeps the visible note. Button and menu events, resource-valued filters and `diffText` stay unsupported and diagnosed | `source-views.test.tsx` + `scoped-resource-popup.test.tsx` + renderer + view-session |
 | [Resource](https://docs.rpg-companion.app/System/Resource) | `resources[39]` | Definitions, typed manual editing and safe display; notebook links distinct from typed references. Separate strict JSON class/race/background/ancestry/heritage templates support exact original export and private assignment, not general resource interchange or effects | persistence + capabilities + catalog + E2E |
-| [CharacterCreationPage](https://docs.rpg-companion.app/System/CharacterCreationPage) | `character_creation_flow[0..3]`; current `systems/5e/system/character_creation_flow/01_item_1.rpgs` | Not supported; explicit separate manual creator | import diagnostics + browser manual-creation assertion |
-| [Mechanic](https://docs.rpg-companion.app/Mechanic/), [Effect](https://docs.rpg-companion.app/Effects/Effect) | `mechanics[]`; stat-view `on_tap_event` | General dispatch/stacking/reversal unsupported. Only explicit combat instance `on_create` synchronous sequence and one `setStat/set` per direct target execute atomically | import + renderer + combat tests |
+| Scoped stat paths and search prefilters | `resources[4..40].stats[*].components` (`$parent.*`), `resources[30].display_view.subviews[19]` (`$resource.traits`), `resources[*].search_filters` | A stat path resolves its own scope through `$resource` and its owner through `$parent`, so only a character stat keeps the missing-context report; a nested resource field still checks the held definition's stats. `search_filters` are the local picker prefilters; `sort_options` stay uninterpreted | `import.test.ts` + picker prefilter tests |
+| [CharacterCreationPage](https://docs.rpg-companion.app/System/CharacterCreationPage) | `character_creation_flow[0..3]`; current `systems/5e/system/character_creation_flow/01_item_1.rpgs` | Partial: pages run as a guided draft with `setStat`, `addToStat`, `sequence`, `when`, `forEach` and a deferred `fireEvent`; `pre_edit` and other page hooks are skipped and reported, never simulated | import diagnostics + creation-focus tests |
+| [Mechanic](https://docs.rpg-companion.app/Mechanic/), [Effect](https://docs.rpg-companion.app/Effects/Effect) | `mechanics[]`; `resources[*].mechanics`; stat and chip `on_tap_event` | Partial: named character events, resource card actions and declared `calculated_event_names` subscriptions execute with bounded budgets and owned-record writers; card actions without a revert subscription write base values. A resource handler that opens a popup, lifecycle order, stacking and asynchronous flows stay unsupported. Combat keeps only its explicit synchronous `on_create` | `character-events`, `resource-events`, `import` + renderer + combat tests |
 | [RPGDice](https://docs.rpg-companion.app/System/RPGDice), [Rollable](https://docs.rpg-companion.app/System/Rollable) | Historical root has no `dice`; supplied Archer `5e/system.rpg` decoded JSON `dice[0..5]` defines d4/d6/d8/d10/d12/d20 | Partial: imported face definitions, `xdy +/- n` manual roller and history; no Rollable object/effect dispatch or 3D | engine dice tests, Archer integration + E2E; historical absence warning |
 | [Split composition](https://docs.rpg-companion.app/GettingStarted/SystemCreation) | Current `systems/5e/system/` | Not supported; no folder/archive import or guessed merge. An unassembled authoring root is rejected with an explicit message, and its fields are never taken from sibling files | file format rejection + import + GitHub regressions |
 | [RPGScript/dev tool](https://docs.rpg-companion.app/GettingStarted/DeveloperTools/RPGScript) | Current `systems/5e/system/character_stats.rpgs` and `_stdlib/*.rpgs` | Not supported in browser; no partial compiler, external tool code not reused | documented input restriction |

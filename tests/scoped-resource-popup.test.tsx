@@ -1,9 +1,9 @@
 /** @file Resource paths must read live scoped inputs without persisting a preview. */
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { existsSync, readFileSync } from 'node:fs';
 import { beforeAll, expect, it, vi } from 'vitest';
 import { SourceForm } from '../src/ui/SourceForm';
-import { RenderView } from '../src/ui/renderer';
+import { RenderView, type RenderContext } from '../src/ui/renderer';
 import { parseSystem } from '../src/importing/system';
 import { validationMessages } from '../src/engine/view-session';
 import { demo } from '../src/demo';
@@ -107,15 +107,27 @@ it('keeps source events inside popup draft sessions diagnosed even with a valid 
   })]);
 });
 
-it('keeps unsupported automatic resource creation visible without blocking unrelated form inputs', () => {
+it('keeps automatic resource creation inert in a read-only view', () => {
   render(<RenderView input={{ ...popup.pop_up_view, stat: 'race', create_if_empty: true }} context={{
     stats, values: { race: null }, resourceDefinitions: [definition]
   }} />);
   expect(document.querySelector('[data-view-error]')).toBeNull();
   expect(screen.getByText(/Creazione automatica/)).toBeVisible();
+});
+
+it('seeds the declared empty resource through the owner writer and reports it as supported', async () => {
+  const onCommit = vi.fn<NonNullable<RenderContext['onCommit']>>(async () => undefined);
+  render(<RenderView input={{ ...popup.pop_up_view, stat: 'race', create_if_empty: true }} context={{
+    stats, values: { race: null }, resourceDefinitions: [definition], systemKey: 'pinned', onCommit
+  }} />);
+  await waitFor(() => expect(onCommit).toHaveBeenCalledTimes(1));
+  const [patch, additions] = onCommit.mock.calls[0];
+  expect(additions?.map(record => record.definitionId)).toEqual(['race']);
+  expect(typeof patch === 'function' ? patch({}) : patch).toEqual({ race: { resourceId: additions![0].id } });
+  expect(document.querySelector('[data-view-error]')).toBeNull();
   const { diagnostics } = parseSystem(JSON.stringify({ ...demo, character_stats: stats, resources: [definition],
     character_sheet_sections: [{ id: 'preview', view: { ...popup.pop_up_view, stat: 'race', create_if_empty: true } }] }));
-  expect(diagnostics.some(d => d.path.endsWith('.create_if_empty'))).toBe(true);
+  expect(diagnostics.some(d => d.path.endsWith('.create_if_empty'))).toBe(false);
 });
 
 const path = '.reference/archer-system.json';
@@ -137,6 +149,8 @@ it.skipIf(!existsSync(path))('resolves the unchanged Archer race preview path in
   expect(characterEventPlan(system, avatar.bottom_left_button_event).effect?.type).toBe('showPopUp');
   expect(diagnostics.some(d => d.path === '$.character_sheet_sections[0].view.bottom_left_button_event')).toBe(false);
   for (const required of ['$.character_creation_flow', '$.mechanics', '$.progression_systems',
-    '$.resources[1].mechanics', '$.resources[6].mechanics', '$.resources[9].mechanics'])
+    '$.resources[6].mechanics'])
     expect(diagnostics.some(d => d.path === required)).toBe(true);
+  // Every other declared resource mechanic runs from a card button or an event subscription.
+  expect(diagnostics.filter(d => d.path === '$.resources[1].mechanics' || d.path === '$.resources[9].mechanics')).toEqual([]);
 });

@@ -69,6 +69,16 @@ function ResourceBody({ node: v, definition, record: snapshot, context, onError 
   }} />;
 }
 
+/** Blank instance with the definition's declared default values and display name. */
+function blankInstance(definition: ResourceDefinition, context: RenderContext): ResourceInstance {
+  const values = initialValues(definition.stats);
+  const name = definition.display_name
+    ? textValue(createEvaluator(definition.stats, values, undefined, context).get(definition.display_name)) || definition.name
+    : definition.name;
+  return { id: crypto.randomUUID(), systemKey: context.systemKey ?? '', definitionId: definition.id,
+    name: name.slice(0, 100), values, createdAt: new Date().toISOString() };
+}
+
 /** Source `resource`: display one referenced instance with its declared view. */
 export function SourceResourceView({ node: v, context: ctx }: { node: View; context: RenderContext }) {
   const [error, setError] = useState('');
@@ -77,7 +87,22 @@ export function SourceResourceView({ node: v, context: ctx }: { node: View; cont
   if (typeof v.stat !== 'string') throw new Error('Percorso della risorsa richiesto');
   const value = referenceValue(ctx, v);
   const id = resourceReferenceIds(value)[0];
+  const field = ctx.stats.find(s => s.id === v.stat && s.type === 'base');
+  const autoCreated = useRef(false);
+  // `create_if_empty` seeds one blank instance through the owner writer that owns the field, so
+  // the reference and the record land in the same commit; a read-only view creates nothing.
+  useEffect(() => {
+    if (autoCreated.current || id || Array.isArray(value) || v.create_if_empty !== true
+      || field?.value_type !== 'resource' || !ctx.onCommit) return;
+    autoCreated.current = true;
+    const record = blankInstance(definition, ctx);
+    void ctx.onCommit(() => ({ [field.id]: { resourceId: record.id } }), [record])
+      .catch(cause => setError(cause instanceof Error ? cause.message : String(cause)));
+  }, [id, field, definition, ctx, v.create_if_empty]);
   if (!id || Array.isArray(value)) {
+    // Seeding needs a single base field and the owner's writer; both arrive only in an editable view.
+    if (v.create_if_empty === true && field?.value_type === 'resource' && ctx.onCommit)
+      return error ? <p role="alert" className="error-text">{error}</p> : null;
     if (v.create_if_empty === true) return <p className="unsupported-note">{it.createIfEmptyUnsupported}</p>;
     // Inside a form or another resource's card an empty embedded display is not actionable;
     // the character sheet's own fields still say they are empty.
@@ -183,11 +208,7 @@ export function SourceResourceArray({ node: v, context: ctx }: { node: View; con
   useEffect(() => {
     if (autoAdded.current || !editable || v.auto_add_first !== true || records.length || !definition.edit_view) return;
     autoAdded.current = true;
-    const values = initialValues(definition.stats);
-    const name = definition.display_name
-      ? textValue(createEvaluator(definition.stats, values, undefined, ctx).get(definition.display_name)) || definition.name
-      : definition.name;
-    const record = { id: crypto.randomUUID(), systemKey: ctx.systemKey ?? '', definitionId: definition.id, name, values, createdAt: new Date().toISOString() };
+    const record = blankInstance(definition, ctx);
     append(record, [record]);
   }, [editable, records.length, v.auto_add_first, definition, ctx]);
   const create = addRemove && definition.edit_view

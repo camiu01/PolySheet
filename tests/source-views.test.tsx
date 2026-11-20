@@ -130,6 +130,20 @@ it('lists referenced resource instances without offering creation in display mod
   expect(screen.queryByRole('button', { name: 'Aggiungi risorsa' })).toBeNull();
 });
 
+it('lists a resource array whose entries are upstream identity strings (5e spell.classes)', () => {
+  const definition = { id: 'class', name: 'Classe', stats: [base('name', 'string', '')],
+    display_view: { id: 'class-display', type: 'text', text: stat('name') } } as ResourceDefinition;
+  const bard = { id: 'class-copy', systemKey: 'sys', definitionId: 'class', name: 'Child',
+    values: { id: 'bard', name: 'Bard' } } as ResourceInstance;
+  render(<RenderView input={{ id: 'spell-classes', type: 'text', resource_id: 'class',
+    resource_instance_ids_stat: 'classes', resource_display_stat: 'name' }}
+    context={{ stats: [base('classes', 'array', [], 'string')], values: { classes: ['bard', 'wizard'] },
+      systemKey: 'sys', resources: [bard], resourceDefinitions: [definition] }} />);
+  expect(screen.getByText('Bard')).toBeInTheDocument();
+  expect(screen.queryByText(/wizard/)).toBeNull();
+  expect(screen.queryByText('Non calcolabile')).toBeNull();
+});
+
 it('fills a single-choice select that has exactly one option only inside a draft form', () => {
   const stats = [{ id: 'armor', name: 'Armatura', type: 'base', value_type: 'string', default_value: null }];
   const node = { id: 'armor-select', type: 'select', stat: 'armor', options: 'armors' };
