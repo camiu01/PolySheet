@@ -122,8 +122,8 @@ function ArrayItem({ node: v, definition, record, context, editable, popUp, onSe
   onRemove: (record: ResourceInstance) => void; onError: (cause: unknown) => void;
 }) {
   // The entry name stays in the accessible name only; visibly "Rimuovi" sits inside the entry it removes.
-  const removeButton = <button type="button" className="link-button danger-text" onClick={() => onRemove(record)}>
-    <Trash2 size={15} aria-hidden="true" />{it.removeEntry}<span className="sr-only"> · {record.name}</span></button>;
+  const removeButton = <button type="button" className="link-button danger-text" aria-label={`${it.removeEntry} · ${record.name}`} onClick={() => onRemove(record)}>
+    <Trash2 size={15} aria-hidden="true" />{it.removeEntry}</button>;
   return <article className="source-resource-item">
     {popUp ? <>
       <button type="button" className="link-button" onClick={() => onSelect(record)}>

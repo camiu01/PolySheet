@@ -186,17 +186,17 @@ export function SourceResourceSection({ node: v, context: ctx }: { node: View; c
         onDrop={e => { e.preventDefault(); move(e.dataTransfer.getData('text/plain'), r.id); }}>
         {definition.list_view ? <RenderView input={definition.list_view} context={resourceContext(r)} /> : <strong>{r.name}</strong>}
         <div className="button-row">
-          {v.tap_displays_resource !== false && <button type="button" className="link-button" onClick={() => { setSelected(r); setEditing(false); }}>{it.details}<span className="sr-only"> · {r.name}</span></button>}
-          {editable && <button type="button" className="link-button" onClick={() => {
+          {v.tap_displays_resource !== false && <button type="button" className="link-button" aria-label={`${it.details} · ${r.name}`} onClick={() => { setSelected(r); setEditing(false); }}>{it.details}</button>}
+          {editable && <button type="button" className="link-button" aria-label={`${it.detach} · ${r.name}`} onClick={() => {
             void ctx.onCommit?.(latest => {
               const items = latest[field];
               if (!Array.isArray(items)) throw new Error(it.invalidValue);
               return { [field]: items.filter(item => !isResourceReference(item) || item.resourceId !== r.id) };
             }).catch(e => setError(String(e)));
-          }}>{it.detach}<span className="sr-only"> · {r.name}</span></button>}
+          }}>{it.detach}</button>}
           {editable && v.reorganizable === true && <>
-            <button type="button" className="link-button" disabled={index === 0} onClick={() => move(r.id, visible[index - 1].id)}>{it.moveUp}<span className="sr-only"> · {r.name}</span></button>
-            <button type="button" className="link-button" disabled={index === visible.length - 1} onClick={() => move(r.id, visible[index + 1].id)}>{it.moveDown}<span className="sr-only"> · {r.name}</span></button>
+            <button type="button" className="link-button" aria-label={`${it.moveUp} · ${r.name}`} disabled={index === 0} onClick={() => move(r.id, visible[index - 1].id)}>{it.moveUp}</button>
+            <button type="button" className="link-button" aria-label={`${it.moveDown} · ${r.name}`} disabled={index === visible.length - 1} onClick={() => move(r.id, visible[index + 1].id)}>{it.moveDown}</button>
           </>}
         </div>
       </article>)}

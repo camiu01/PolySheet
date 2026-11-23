@@ -42,7 +42,7 @@ it('prefers upstream source-book codes over file names and lists options alphabe
   ];
   expect(Object.fromEntries(duplicateSourceLabels(resources))).toEqual({ a: 'MOM' });
   render(<LocalResourcePicker busy={false} onSelect={() => undefined} resources={resources} />);
-  expect(screen.getAllByRole('button').map(button => button.textContent)).toEqual(['Aarakocra', 'TortleMOM', 'Tortle']);
+  expect(screen.getAllByRole('button').map(button => button.textContent)).toEqual(['Aarakocra', 'Tortle MOM', 'Tortle']);
 });
 
 it('orders spells by level and shows the level from copies or retained catalog originals', () => {
@@ -56,7 +56,7 @@ it('orders spells by level and shows the level from copies or retained catalog o
   expect(resources.map(spellLevel)).toEqual([2, 1, 0, undefined]);
   render(<LocalResourcePicker busy={false} onSelect={() => undefined} resources={resources} />);
   expect(screen.getAllByRole('button').map(button => button.textContent)).toEqual(
-    ['Fire BoltTrucchetto', 'Absorb ElementsLiv. 1', 'ShatterLiv. 2', 'Alarm']);
+    ['Fire Bolt Trucchetto', 'Absorb Elements Liv. 1', 'Shatter Liv. 2', 'Alarm']);
 });
 
 it('finds multiword source file names without changing their labels', () => {
