@@ -449,6 +449,11 @@ export function createEvaluator(stats: Stat[], values: Record<string, unknown> =
   const root = new RuntimeResource('root', stats, values, environment.createdAt,
     { ...environment.variables, ...(environment.parent ? { $parent: environment.parent } : {}) },
     environment.overrides, environment.instanceId, environment.modifiers);
+  // A sheet evaluator is its own `$character`: race and background features filter on
+  // `$character.level` (5e). A root built from a resource definition's stats is a resource
+  // preview and keeps `$character` undefined unless the caller names an owner.
+  const character = environment.character ?? (environment.resourceDefinitions && !environment.parent
+    && !environment.resourceDefinitions.some(definition => definition.stats === stats) ? root : undefined);
   const scopes = new Map<string, RuntimeResource>();
   const scopeIds = new WeakMap<RuntimeResource, number>();
   const scopeRecords = new WeakMap<RuntimeResource, string>();
@@ -568,7 +573,7 @@ export function createEvaluator(stats: Stat[], values: Record<string, unknown> =
       if (Object.hasOwn(scope.variables, id)) return presence ? true : scope.variables[id];
       // `$view` is local to the scope that owns the form; nested resources never see their parent's drafts.
       if (id !== '$view' && id !== '$parent' && Object.hasOwn(environment.variables ?? {}, id)) return presence ? true : environment.variables?.[id];
-      if (id === '$character' && environment.character) return presence ? true : environment.character;
+      if (id === '$character' && character) return presence ? true : character;
       const s = scope.stats.find(s => s.id === id);
       if (!s && id === 'id' && scope.instanceId) return presence ? true : scope.instanceId;
       if (!s && id === 'created_at' && scope.createdAt) return presence ? true : scope.createdAt;

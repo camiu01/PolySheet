@@ -11,7 +11,7 @@ import { prepareCatalogTemplate } from '../src/importing/catalog';
 import { assignCatalog, configureCharacter, installCatalogs } from '../src/persistence/catalog';
 import { filterResources, resourceFilters } from '../src/engine/resource-filters';
 import { installSystem, setCharacterValue, SheetDatabase } from '../src/persistence/db';
-import { runCharacterEvent } from '../src/persistence/character-events';
+import { runCharacterEvent, runCharacterLoaded } from '../src/persistence/character-events';
 import { demo } from '../src/demo';
 import { base, constant, list, stat } from './fixtures/capabilities';
 
@@ -163,5 +163,33 @@ it.skipIf(!existsSync(fixture) || !existsSync(classFile('bard')) || !existsSync(
     const owner = new RuntimeResource(character.id, real.definition.character_stats, character.values, character.createdAt);
     expect(wrappers.map(id => String(createEvaluator(details.stats, resources.find(r => r.id === id)!.values, undefined,
       { ...context, character: owner }).get('class_name_with_spellcasting_ability')))).toEqual([expect.stringMatching(/Bard.*CHA/i), expect.stringMatching(/Wizard.*INT/i)]);
+  } finally { await database.delete(); }
+}, 120000);
+
+it.skipIf(!existsSync(fixture) || !existsSync(classFile('bard')))('opening a new 5e bard runs the source first-load long rest once', async () => {
+  const real = await prepareSystem(gunzipSync(readFileSync(fixture)).toString('utf8'), 'Local first-load fixture');
+  const database = new SheetDatabase(`loaded-${crypto.randomUUID()}`);
+  try {
+    await installSystem(real, database);
+    const [bard] = await installCatalogs([await prepareCatalogTemplate(readFileSync(classFile('bard'), 'utf8'), 'local.json', real)], database);
+    const created = await configureCharacter(real, 'Fresh', { constitution_score: 14, hit_point_mode: 'average' },
+      { classes: bard }, undefined, database, true);
+    const read = async () => {
+      const character = (await database.characters.get(created.id))!;
+      return createEvaluator(real.definition.character_stats, character.values, undefined, {
+        resources: await database.resources.toArray(), resourceDefinitions: real.definition.resources,
+        enumerations: real.definition.enumerated_types });
+    };
+    expect((await read()).get('spell_slots_1')).toBe(0);
+    await runCharacterLoaded(created.id, database);
+    const rested = await read();
+    // PHB bard level 1: two 1st-level slots; one d8 hit die.
+    expect(rested.get('spell_slots_1')).toBe(2);
+    expect(rested.get('current_d8_hit_dice')).toBe(1);
+    expect(rested.get('is_new_and_should_long_rest')).toBe(false);
+    // Later openings leave spent resources alone.
+    await setCharacterValue(created.id, 'spell_slots_1', 0, database);
+    await runCharacterLoaded(created.id, database);
+    expect((await read()).get('spell_slots_1')).toBe(0);
   } finally { await database.delete(); }
 }, 120000);
