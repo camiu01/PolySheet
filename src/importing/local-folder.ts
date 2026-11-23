@@ -9,7 +9,7 @@ import { it } from '../ui/it';
 
 export interface FolderEntry { path: string; size: number }
 /** Lazy byte reader; discovery must stay metadata-only for large folders. */
-export interface FolderFile extends FolderEntry { bytes: () => Promise<Uint8Array> }
+export interface FolderFile extends FolderEntry { bytes: () => Promise<Uint8Array<ArrayBuffer>> }
 export interface LocalFolderDiscovery { name: string; files: FolderEntry[]; systems: FolderEntry[]; catalogs: FolderEntry[] }
 export interface LocalFolderBundle { system: StoredSystem; catalogs: CatalogPreview[] }
 
