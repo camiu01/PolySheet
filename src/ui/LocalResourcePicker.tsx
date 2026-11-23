@@ -125,8 +125,8 @@ export function LocalResourcePicker({ resources, busy, onSelect, sorting }: {
     <div className="local-resource-options">{matches.slice(start, start + pageSize).map(({ record, group }, index, page) => <Fragment key={record.id}>
       {group !== null && group !== (index ? page[index - 1].group : matches[start - 1]?.group ?? null) && <h3 className="resource-group">{group}</h3>}
       <button type="button" className="button secondary" disabled={busy} onClick={() => onSelect(record)}>
-        <span>{record.name}{levels.get(record.id) != null && <small className="resource-source-label">{it.spellLevelLabel(levels.get(record.id)!)}</small>}
-          {sources.has(record.id) && <small className="resource-source-label">{sources.get(record.id)}</small>}</span>
+        <span>{record.name}{levels.get(record.id) != null && <>{' '}<small className="resource-source-label">{it.spellLevelLabel(levels.get(record.id)!)}</small></>}
+          {sources.has(record.id) && <>{' '}<small className="resource-source-label">{sources.get(record.id)}</small></>}</span>
         <ChevronRight size={16} aria-hidden="true" />
       </button>
     </Fragment>)}</div>
