@@ -1,5 +1,7 @@
 # Historical verification records
 
+[← README](../README.md) · [Docs index](README.md)
+
 These are preserved checkpoint records, not current results. Read
 [latest verification](VERIFICATION.md) first. Dates, environments, warnings,
 availability claims and words such as "current" below apply only to their

@@ -1,5 +1,7 @@
 # Combat and contextual fields
 
+[← README](../README.md) · [Docs index](README.md)
+
 This is a verified command subset, not a complete RPG Companion rule engine.
 All displayed system labels and formulas come from the pinned import.
 

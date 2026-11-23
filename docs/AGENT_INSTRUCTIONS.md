@@ -1,5 +1,7 @@
 # Agent instructions
 
+[← README](../README.md) · [Docs index](README.md)
+
 These instructions supplement the root `AGENTS.md`. All paths below are
 relative to the repository root.
 

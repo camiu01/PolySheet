@@ -1,7 +1,6 @@
 # Development and testing
 
-[Documentation index](README.md) · [Contributing](../CONTRIBUTING.md) ·
-[Executed checks](VERIFICATION.md)
+[← README](../README.md) · [Docs index](README.md) · [Contributing](../CONTRIBUTING.md) · [Executed checks](VERIFICATION.md)
 
 ## Setup
 

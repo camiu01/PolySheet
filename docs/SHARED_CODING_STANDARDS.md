@@ -1,5 +1,7 @@
 # Shared coding standards
 
+[← README](../README.md) · [Docs index](README.md)
+
 The following standards are included in this repository so they also apply
 without personal Droid configuration. The project-specific [repository guidelines](../AGENTS.md),
 the required project documents and more specific directory instructions take

@@ -1,5 +1,7 @@
 # CI and GitHub Pages deployment
 
+[← README](../README.md) · [Docs index](README.md)
+
 ## Pipeline
 
 Workflow: [`.github/workflows/ci-pages.yml`](../.github/workflows/ci-pages.yml),
