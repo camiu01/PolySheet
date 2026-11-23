@@ -43,7 +43,7 @@ scope being rendered, so a `levelled_*` resource reads the spell that selected
 it and `monster`/`class` read the record that owns them; `$resource` names the
 current scope itself. Neither exists at character level, where the same path
 stays a reported error. Resource `search_filters` carry the prefilter each local
-picker shows, while `sort_options` are unused. `should_auto_save: false` marks a
+picker shows, and `sort_options` add a "Sort by" choice to the resource archive (once a type is chosen) and the local picker: enumeration options follow the enumeration's declaration order and group under its entry names, option-resource values group under their `options_display_stat`, booleans use `true_name`/`false_name`, `order: desc` reverses ranked records, and records without a value stay last. The default order is unchanged until the player picks an option; array stats are rejected rather than guessed. `should_auto_save: false` marks a
 field the source saves on commit rather than continuously. A card `addToStat`
 has no revert subscription in 5e `resources[6].mechanics`, so it writes the
 character base value; a second activation stacks instead of failing.
@@ -53,11 +53,15 @@ be validated against a definition, because the owning record varies at runtime;
 `resources[30]` references a `monster_instance_trait` type no installed catalog
 provides and `$resource.traits`/`actions` fields its stats do not declare;
 `on_tap_event` inside resource, combat or draft views still has no owning
-character to run a card command; `sort_options`, `macros`, `currencies` and
-`is_defeated` remain unimplemented.
+character to run a card command; `macros` and `currencies`
+remain unimplemented. A combatant type's `is_defeated` formula is evaluated in
+the combatant scope and shown as a Defeated badge; it never skips or removes a
+turn, because the source does not say what a defeated actor does. A resource
+`is_combatant_entry` is recognised but only feeds automatic encounter
+generation, which the app does not offer, so it stays reported.
 
 Independently expected values: the official 5e, 5e2024 and PF2e import reports
-carry 33, 33 and 52 warnings (from 127/127/213) and no errors; a `$parent.level`
+carry 22, 22 and 38 warnings (from 127/127/213) and no errors; a `$parent.level`
 stat on a character is still reported; two CAST activations on a level-1 slot
 take it 3 → 1 and a long rest restores 3. `npm run check` passes 409 tests with
 one skip and `npm run build` emits 16 precache entries.
@@ -1360,7 +1364,7 @@ exact path is specified.
 | Interactive/resource views | Original notes, condition popup/chips, avatar and section icons | Registered subset above and in VIEWS.md; a chip's `on_tap_event` is a button in the sheet event scope and part of its no-handler fallback; unknown types/events still have visible fallbacks, not invented actions | renderer + view-session + original browser acceptance |
 | [collapsible](https://docs.rpg-companion.app/Views/collapsible), [viewPager](https://docs.rpg-companion.app/Views/viewPager), [ticker](https://docs.rpg-companion.app/Views/ticker), [button](https://docs.rpg-companion.app/Views/button), [select](https://docs.rpg-companion.app/Views/select), [menuButton](https://docs.rpg-companion.app/Views/menuButton), [resource](https://docs.rpg-companion.app/Views/resource), [resourceArray](https://docs.rpg-companion.app/Views/resourceArray) | `character_sheet_sections[9].view.content[0]`, `resources[3].edit_view`, `character_sheet_sections[4].view.header[1]`, `resources[1].display_view.subviews[7].subviews[0]`, `character_creation_flow[0].view.subviews[4].subviews[1]`, `character_sheet_sections[0].view.bottom_right_stack[0]`, `character_creation_flow[0].view.subviews[2].subviews[0].pop_up_view`, `character_creation_flow[0].view.subviews[3]` | Tested subset: accordion/pager state, bounded ticker edits, enumeration and local-resource options, resource display/edit/list and array create/remove. `create_if_empty` seeds one blank instance through the writer that owns the field, only in an editable view; a read-only view keeps the visible note. Button and menu events, resource-valued filters and `diffText` stay unsupported and diagnosed | `source-views.test.tsx` + `scoped-resource-popup.test.tsx` + renderer + view-session |
 | [Resource](https://docs.rpg-companion.app/System/Resource) | `resources[39]` | Definitions, typed manual editing and safe display; notebook links distinct from typed references. Separate strict JSON class/race/background/ancestry/heritage templates support exact original export and private assignment, not general resource interchange or effects | persistence + capabilities + catalog + E2E |
-| Scoped stat paths and search prefilters | `resources[4..40].stats[*].components` (`$parent.*`), `resources[30].display_view.subviews[19]` (`$resource.traits`), `resources[*].search_filters` | A stat path resolves its own scope through `$resource` and its owner through `$parent`, so only a character stat keeps the missing-context report; a nested resource field still checks the held definition's stats. `search_filters` are the local picker prefilters; `sort_options` stay uninterpreted | `import.test.ts` + picker prefilter tests |
+| Scoped stat paths and search prefilters | `resources[4..40].stats[*].components` (`$parent.*`), `resources[30].display_view.subviews[19]` (`$resource.traits`), `resources[*].search_filters` | A stat path resolves its own scope through `$resource` and its owner through `$parent`, so only a character stat keeps the missing-context report; a nested resource field still checks the held definition's stats. `search_filters` are the local picker prefilters; `sort_options` order the archive and picker | `import.test.ts` + picker prefilter tests |
 | [CharacterCreationPage](https://docs.rpg-companion.app/System/CharacterCreationPage) | `character_creation_flow[0..3]`; current `systems/5e/system/character_creation_flow/01_item_1.rpgs` | Partial: pages run as a guided draft with `setStat`, `addToStat`, `sequence`, `when`, `forEach` and a deferred `fireEvent`; `pre_edit` and other page hooks are skipped and reported, never simulated | import diagnostics + creation-focus tests |
 | [Mechanic](https://docs.rpg-companion.app/Mechanic/), [Effect](https://docs.rpg-companion.app/Effects/Effect) | `mechanics[]`; `resources[*].mechanics`; stat and chip `on_tap_event` | Partial: named character events, resource card actions and declared `calculated_event_names` subscriptions execute with bounded budgets and owned-record writers; card actions without a revert subscription write base values. A resource handler that opens a popup, lifecycle order, stacking and asynchronous flows stay unsupported. Combat keeps only its explicit synchronous `on_create` | `character-events`, `resource-events`, `import` + renderer + combat tests |
 | [RPGDice](https://docs.rpg-companion.app/System/RPGDice), [Rollable](https://docs.rpg-companion.app/System/Rollable) | Historical root has no `dice`; supplied Archer `5e/system.rpg` decoded JSON `dice[0..5]` defines d4/d6/d8/d10/d12/d20 | Partial: imported face definitions, `xdy +/- n` manual roller and history; no Rollable object/effect dispatch or 3D | engine dice tests, Archer integration + E2E; historical absence warning |
@@ -1555,10 +1559,13 @@ Evidence: unchanged official 5e 0.9.1 package (SHA-256 above) and source
 - `menuButton` entries fire the event named by the entry id.
 - Numeric inputs flag out-of-range drafts while typing, so a form cannot submit
   more hit dice than `calculated_max_value_allowed` permits.
-- Not done: `characterLoaded` is not fired. The official first-load rest
-  (`long_rest_when_new`, PF2e `daily_preparations_when_new`) would also run once
-  on characters created before this change, replacing their current HP, so it
-  needs a separate decision.
+- `characterLoaded` fires once, right after a character is created, so the
+  official first-load rest (`long_rest_when_new`, PF2e `daily_preparations_when_new`)
+  fills hit dice and spell slots. It is not fired on opening a sheet: characters
+  saved earlier still hold the source's "is new" default and would be rested.
+  A handler that would roll dice is rolled back.
+- A sheet evaluator is its own `$character` for the resources it reaches, so 5e
+  race traits and background features (`$character.level`) are listed.
 
 #### Guided creation `$view` and racial ability increases, 2026-11-20
 

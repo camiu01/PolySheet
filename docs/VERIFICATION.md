@@ -3,6 +3,63 @@
 [Documentation index](README.md) · [How to run checks](DEVELOPMENT.md) ·
 [Historical records](VERIFICATION_HISTORY.md) · [12:37 checkpoint](VERIFICATION_2026-11-16_1237.md)
 
+## New 5e character: first-load rest, race and background traits, 2026-11-23
+
+Found by walking 5e from scratch (system, catalogs, guided bard creation): a new
+level 1 bard had zero spell slots and empty Racial traits and Background lists.
+
+- `characterLoaded` now fires once after creation; the source's first-load long
+  rest gives the bard two 1st-level slots and one d8 hit die. Later fires change
+  nothing. Existing characters are not rested on opening.
+- Sheet evaluators expose themselves as `$character` to reached resources, so
+  Elf lists its 4 traits and Entertainer lists By Popular Demand.
+- Checks: `tests/rest-events.test.ts` (first-load rest),
+  `tests/race-background-features.test.ts` (fails without the engine fix),
+  `npm run check` 422 passed, 1 skipped; full e2e on desktop and mobile
+  119 passed, 3 skipped (the first run caught a level-up race with the
+  background rest; the sheet now opens after it).
+
+## Lighter first run, phase-aware combat and readable compatibility, 2026-11-23
+
+- The bundled Sentieri demo installs in one step and opens the character list;
+  every confirmed import also lands on the character list. An empty list with
+  an installed game offers "New character" instead of "Add an RPG", and the
+  duplicate heading action is hidden while the list is empty.
+- The import page shows the demo first and file, folder and link as one row of
+  buttons; the per-source limits moved into the formats disclosure.
+- The combat toolbar shows only the commands valid in the current phase, and
+  deleting an encounter now offers Cancel. The sheet drops the system digest from
+  its heading and shows the linked-resources explanation only while none is linked.
+- Compatibility reports list each distinct message once with its count and the
+  source fields it concerns; the exact paths stay in a bounded disclosure.
+- The Sentieri badge and copy no longer say "not D&D". View, file-size and
+  combat-deletion errors and roll/character dates follow the active locale.
+- A combatant type's `is_defeated` formula is evaluated in the combatant scope
+  and shown as a Defeated badge without skipping its turn; a non-boolean result
+  is reported. Resource `is_combatant_entry` now names the missing encounter
+  generator. Official 5e, 5e2024 and PF2e imports drop to 32, 32 and 51
+  warnings with no errors, and none concerns `is_defeated`.
+- Resource `sort_options` are validated at import and offered as "Sort by" in
+  the resource archive and local picker (enumeration order and headers,
+  option-resource labels, booleans, `order`); the default order is unchanged.
+  Official 5e, 5e2024 and PF2e imports now carry 22, 22 and 38 warnings, none
+  about `sort_options`. Picker counts and dates follow the active locale.
+- Resource card grids keep at least 220px per column, so a phone-sized
+  `content_item_min_width` no longer squeezes a title beside its counter
+  (5e Bardic Inspiration); a counter's two steppers stay on one line.
+- Jack of All Trades, checked on the restored local Lucien Valcourt backup:
+  `has_jack_of_all_trades` is true and all 18 skills equal the ability modifier
+  plus proficiency, double for expertise, or half proficiency rounded down
+  otherwise. The 5e source applies it to skills only; initiative stays
+  `dexterity_modifier`.
+- The sheet's subrace field appears only when the assigned race declares
+  subraces, or when a saved value is still there to clear; the background and
+  subrace e2e scenario passes on desktop and mobile.
+- Checks: `npm run check` (420 passed, 1 skipped); `npm run build`;
+  `npm run test:e2e` with `PLAYWRIGHT_PORT=4183` and
+  `PLAYWRIGHT_BASE_PATH=/PolySheet/` (119 passed, 3 skipped: local-only
+  `.reference` fixtures). Desktop and 375px mobile reviewed in the browser.
+
 ## Card commands, spell details and compatibility reports, 2026-11-20
 
 - A card action or a rest has no modifier layer to undo, so its `addToStat` now
