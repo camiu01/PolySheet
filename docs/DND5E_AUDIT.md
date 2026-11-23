@@ -1,5 +1,7 @@
 # D&D 5e compatibility audit
 
+[← README](../README.md) · [Docs index](README.md)
+
 Checked 2026-11-19. This is an implementation/source audit with the workflows
 listed below, not certification of every 5e rule or every monster.
 

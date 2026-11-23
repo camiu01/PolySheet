@@ -1,5 +1,7 @@
 # Public GitHub system retrieval
 
+[← README](../README.md) · [Docs index](README.md)
+
 ## Use
 
 For D&D, open **I miei GDR** and choose the 2014 or 2024 edition.

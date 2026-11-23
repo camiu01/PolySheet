@@ -1,5 +1,7 @@
 # Source views and scoped editing
 
+[← README](../README.md) · [Docs index](README.md)
+
 This is a tested subset, not full upstream UI/event compatibility. Source
 documents and version pins remain immutable. All application controls are
 Italian; imported labels retain their original language.

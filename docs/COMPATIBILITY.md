@@ -1,7 +1,6 @@
 # Compatibility and source evidence
 
-[Documentation index](README.md) · [Executed checks](VERIFICATION.md) ·
-[Local fixture preparation](DEVELOPMENT.md#external-fixtures)
+[← README](../README.md) · [Docs index](README.md) · [Executed checks](VERIFICATION.md) · [Local fixture preparation](DEVELOPMENT.md#external-fixtures)
 
 ## Reading import results
 

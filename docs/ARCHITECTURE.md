@@ -1,5 +1,7 @@
 # Architecture
 
+[← README](../README.md) · [Docs index](README.md)
+
 ## Game selection and local navigation
 
 The library presents verified, commit-pinned D&D 2014/2024 source shortcuts

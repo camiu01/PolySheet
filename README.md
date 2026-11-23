@@ -1,17 +1,24 @@
-# PolySheet
+<div align="center">
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE.md)
+# PolySheet
+### Local-first tabletop RPG character notebook
+
+[![License MIT](https://img.shields.io/badge/License_MIT-blue)](LICENSE.md)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
+![React](https://img.shields.io/badge/React-149ECA?logo=react&logoColor=white)
+![PWA](https://img.shields.io/badge/PWA-5A0FC8?logo=pwa&logoColor=white)
+
+<img src="docs/assets/characters-desktop.png" alt="PolySheet dark character library with original Sentieri example characters" width="640" />
+
+[Live app](https://camiu01.github.io/PolySheet/) · [Docs](docs/README.md) · [What it does](#what-it-does) · [Getting started](#getting-started) · [Usage](#usage) · [Development](#development) · [License](#license)
+
+</div>
 
 A local-first character notebook for tabletop RPG players who want their sheets,
 notes and dice in one place, even without a connection. Import a system, create
 characters manually and keep your table's records in your browser.
 
-[Try the app](https://camiu01.github.io/PolySheet/) ·
-[Try Sentieri](#try-it-with-sentieri) ·
-[Documentation](docs/README.md) ·
 [Contributing](CONTRIBUTING.md)
-
-![PolySheet dark character library with original Sentieri example characters](docs/assets/characters-desktop.png)
 
 *Desktop character library, captured from a local production test on 2026-11-16.
 The characters and Sentieri content are original examples, not external game content.*
@@ -43,7 +50,7 @@ The characters and Sentieri content are original examples, not external game con
 PolySheet is independent of RPG Companion App. It implements a declared subset,
 not its complete rules engine or official character-creation flow.
 
-## Try it with Sentieri
+### Try it with Sentieri
 
 Open the [hosted app](https://camiu01.github.io/PolySheet/) or run it locally:
 
@@ -60,7 +67,8 @@ Sentieri is a small original MIT-licensed example, included without downloads or
 third-party game rules. The hosted demo may differ from your local checkout;
 [verification](docs/VERIFICATION.md) records what was actually checked.
 
-## Run locally
+<a id="run-locally"></a>
+## Getting started
 
 Use Node.js 22.12+ or 24 LTS and npm. From the repository root:
 
@@ -83,7 +91,9 @@ file is required. Development mode does not enable the production offline worker
 See [development and testing](docs/DEVELOPMENT.md) for browser setup, isolated
 ports, optional external fixtures and the complete command list.
 
-## Before importing a system
+## Usage
+
+### Before importing a system
 
 Monolithic JSON and the verified gzip-JSON **system** `.rpg` variant can be
 previewed from a file, HTTPS URL or a folder chosen with the browser's directory
@@ -110,7 +120,7 @@ and review the app's diagnostics before relying on an external system.
   data. Gzip decoding needs native browser `DecompressionStream`.
   See [all safety limits](docs/ARCHITECTURE.md#safety-limits).
 
-## Your data and offline use
+### Your data and offline use
 
 There is no backend, account, analytics or automatic sync. Data belongs to the
 current browser profile and origin. Private browsing, storage eviction or
@@ -127,7 +137,8 @@ activation. Remote images are never fetched. Finish editing and wait for
 Moving between localhost, the demo and a custom domain requires an explicit
 backup/export and restore, not a deployment.
 
-## Documentation and contributions
+<a id="documentation-and-contributions"></a>
+## Development
 
 Start with the [documentation index](docs/README.md):
 
@@ -142,7 +153,8 @@ documentation standards and compatibility extension rules. Documentation and
 code comments are English; the interface ships Italian and English catalogues
 with the browser language as the first-run default, and imported labels stay unchanged.
 
-## Credits and license
+<a id="credits-and-license"></a>
+## License
 
 PolySheet, Sentieri and the original icons/artwork are [MIT-licensed](LICENSE.md).
 Dependency licenses remain their own, including Lucide's ISC license.

@@ -1,7 +1,6 @@
 # Executed verification
 
-[Documentation index](README.md) · [How to run checks](DEVELOPMENT.md) ·
-[Historical records](VERIFICATION_HISTORY.md) · [12:37 checkpoint](VERIFICATION_2026-11-16_1237.md)
+[← README](../README.md) · [Docs index](README.md) · [How to run checks](DEVELOPMENT.md) · [Historical records](VERIFICATION_HISTORY.md) · [12:37 checkpoint](VERIFICATION_2026-11-16_1237.md)
 
 ## New 5e character: first-load rest, race and background traits, 2026-11-23
 
