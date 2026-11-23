@@ -65,7 +65,7 @@ export async function prepareImport(inputBytes: Uint8Array, source: string): Pro
     return prepareSystem(decodeUtf8(bytes), source);
   }
   if (typeof DecompressionStream === 'undefined') throw new Error('Questo browser non supporta gzip. Aggiorna il browser oppure importa il sistema JSON.');
-  const input = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(bytes); controller.close(); } });
+  const input = new ReadableStream<Uint8Array<ArrayBuffer>>({ start(controller) { controller.enqueue(bytes); controller.close(); } });
   let expanded: Uint8Array<ArrayBuffer>;
   try { expanded = await readBounded(input.pipeThrough(new DecompressionStream('gzip'))); }
   catch (error) {
