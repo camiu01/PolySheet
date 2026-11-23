@@ -27,7 +27,9 @@ export const combatSchema = z.object({
     instance_resource_id: z.string().nullable().optional(),
     side: z.string(), shows_in_party: z.boolean().optional(),
     header_view: viewSchema.nullable().optional(), card_view: viewSchema.nullable().optional(),
-    on_create: nodeSchema.nullable().optional()
+    on_create: nodeSchema.nullable().optional(),
+    /** Boolean formula in the combatant scope (5e `current_hp <= 0`); shown, never used to skip turns. */
+    is_defeated: nodeSchema.nullable().optional()
   }).passthrough()).max(100),
   initiative_system: z.object({
     when_to_set: z.string(), has_turns: z.boolean(),

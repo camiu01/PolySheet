@@ -4,6 +4,7 @@
  * the gzip-JSON adapter produce monolithic input before reaching this boundary.
  * @see https://docs.rpg-companion.app/GettingStarted/SystemCreation
  */
+import { sortOptions } from '../engine/resource-sort';
 import { formulaFields, formulaHandlers, statPath } from '../engine/formulas';
 import { viewBindings } from './view-bindings';
 import { characterEventPlan } from '../engine/character-events';
@@ -394,8 +395,12 @@ export function diagnose(system: SystemDefinition): Diagnostic[] {
         || !eventNames(m.event_names).some(name => resourceEventSupported(system, r.id, { name })))).length;
       if (manual) report(`${p}.mechanics`, `${mechanics.length - manual} di ${mechanics.length} meccaniche risorsa eseguite; ${manual} non eseguibili perché richiedono una finestra o input esterni.`);
     }
-    // `search_filters` feed the local picker prefilter engine; sort options stay unimplemented.
-    fields(r, ['id', 'name', 'plural', 'abbreviation', 'translatable', 'display_name', 'stats', 'display_view', 'edit_view', 'list_view', 'search_item_view', 'mechanics', 'indexed_stats', 'core', 'color', 'search_filters'], p);
+    // `search_filters` feed the local picker prefilter engine; `sort_options` order local searches.
+    try { sortOptions(r, system.enumerated_types); }
+    catch (error) { report(`${p}.sort_options`, error instanceof Error ? error.message : String(error)); }
+    // A combatant entry only feeds automatic encounter generation, which the app does not offer.
+    if (r.is_combatant_entry === true) report(`${p}.is_combatant_entry`, 'Voce combattente riconosciuta: la generazione automatica degli incontri non è disponibile, aggiungi i combattenti dal tracker.');
+    fields(r, ['id', 'name', 'plural', 'abbreviation', 'translatable', 'display_name', 'stats', 'display_view', 'edit_view', 'list_view', 'search_item_view', 'mechanics', 'indexed_stats', 'core', 'color', 'search_filters', 'sort_options', 'is_combatant_entry'], p);
     for (const field of ['display_view', 'edit_view', 'list_view', 'search_item_view'] as const)
       if (r[field]) checkView(r[field], `${p}.${field}`, r.stats);
   });
@@ -417,7 +422,8 @@ export function diagnose(system: SystemDefinition): Diagnostic[] {
       const stats = t.instance_resource_id ? system.resources.find(r => r.id === t.instance_resource_id)?.stats
         : t.template_resource_id === 'character' ? system.character_stats : system.resources.find(r => r.id === t.template_resource_id)?.stats;
       if (!stats) { report(path, 'Definizione combattente mancante', 'error'); return; }
-      fields(t, ['type', 'id', 'name', 'plural', 'abbreviation', 'translatable', 'template_resource_id', 'instance_resource_id', 'side', 'shows_in_party', 'header_view', 'card_view', 'on_create'], path);
+      fields(t, ['type', 'id', 'name', 'plural', 'abbreviation', 'translatable', 'template_resource_id', 'instance_resource_id', 'side', 'shows_in_party', 'header_view', 'card_view', 'on_create', 'is_defeated'], path);
+      if (t.is_defeated) checkFormula(t.is_defeated, `${path}.is_defeated`, stats);
       if (t.header_view) checkView(t.header_view, `${path}.header_view`, stats);
       if (t.card_view) checkView(t.card_view, `${path}.card_view`, stats);
       if (init.roll_formula) checkFormula(init.roll_formula, `${p}.initiative_system.roll_formula`, stats);

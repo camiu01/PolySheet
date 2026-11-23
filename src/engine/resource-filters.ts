@@ -39,7 +39,7 @@ const catalogValues = new WeakMap<ResourceInstance, Record<string, unknown>>();
  * Values a filter can read. Catalog roots keep values only in their exact original, so their
  * top-level typed base values are read from it (nested resources are not materialized here).
  */
-function filterValues(record: ResourceInstance, definition: ResourceDefinition): Record<string, unknown> {
+export function filterValues(record: ResourceInstance, definition: ResourceDefinition): Record<string, unknown> {
   if (!record.catalogSource) return record.values;
   const cached = catalogValues.get(record);
   if (cached) return cached;

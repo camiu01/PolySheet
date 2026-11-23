@@ -184,9 +184,9 @@ for (const [file, version] of [
 }
 
 for (const [id, version, digest, stats, definitions, warnings] of [
-  ['5e', '0.9.1', '5de5642ad7281d7a99566a518d916e43c24f0c2046c4c40b8042e5074ac3ea3b', 317, 50, 33],
-  ['5e2024', '0.9.1', 'ce0ff5a339a0412b5c5c971680c5d009c2a7e04bd9cb65b9cafd8670966c9ad6', 317, 50, 33],
-  ['pf2e', '0.3.0', 'a0f6f3d56e432e1f60625b06e374c21af8237ec01f3ef93024ed45c321b3e679', 760, 61, 52]
+  ['5e', '0.9.1', '5de5642ad7281d7a99566a518d916e43c24f0c2046c4c40b8042e5074ac3ea3b', 317, 50, 22],
+  ['5e2024', '0.9.1', 'ce0ff5a339a0412b5c5c971680c5d009c2a7e04bd9cb65b9cafd8670966c9ad6', 317, 50, 22],
+  ['pf2e', '0.3.0', 'a0f6f3d56e432e1f60625b06e374c21af8237ec01f3ef93024ed45c321b3e679', 760, 61, 38]
 ] as const) {
   const file = resolve(`.reference/official-releases-2026-11-16/${id}-system.rpg`);
   it.skipIf(!existsSync(file))(`imports unchanged official ${id} and sorts omitted sortBy orders ascending`, async () => {
@@ -201,6 +201,12 @@ for (const [id, version, digest, stats, definitions, warnings] of [
     expect(imported.diagnostics).toHaveLength(warnings);
     expect(imported.diagnostics.filter(d => /sortBy/.test(d.message))).toEqual([]);
     expect(imported.diagnostics.filter(d => /synchronous/.test(d.message))).toEqual([]);
+    // The real `is_defeated = current_hp <= 0` formula checks cleanly; combatant entries name the missing generator.
+    expect(imported.diagnostics.filter(d => d.path.includes('is_defeated'))).toEqual([]);
+    // Every declared sort option resolves its stat, enumeration or option resource.
+    expect(imported.diagnostics.filter(d => d.path.includes('sort_options'))).toEqual([]);
+    expect(imported.diagnostics.filter(d => d.path.endsWith('.is_combatant_entry')).map(d => d.message))
+      .toEqual([expect.stringContaining('generazione automatica degli incontri')]);
     expect(artifactBytes(imported.artifact!.base64)).toEqual(bytes);
     if (id === '5e') {
       const sort = imported.definition.character_stats.find(s => s.id === 'race_traits')!.components!;

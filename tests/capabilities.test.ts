@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { createEvaluator, formatSourceDate, RuntimeResource } from '../src/engine/formulas';
-import { combatContext, advanceCombat, initiativeOrder } from '../src/engine/combat';
+import { combatContext, advanceCombat, eligibleCombatants, initiativeOrder, isDefeated } from '../src/engine/combat';
 import { isPhoto, photoFromBytes, photoImageUrl } from '../src/domain/photo';
 import { isResourceReference, type Combat, type ResourceInstance } from '../src/domain/model';
 import { SheetDatabase, createCharacter, installSystem, setCharacterValue } from '../src/persistence/db';
@@ -129,6 +129,39 @@ describe('typed persistence and combat', () => {
     await commandCombat(combat.id, { type: 'add', typeId: 'scout' }, database);
     expect((await database.combats.get(combat.id))?.combatants[0].overrides.hp).toBe(3);
     expect(system.diagnostics.some(d => d.message.includes('synchronous'))).toBe(false);
+  });
+  it('evaluates is_defeated in the combatant scope without skipping the defeated turn', async () => {
+    // 5e monster_instance declares `is_defeated = current_hp <= 0`; here hp is the instance stat.
+    const source = capabilitySystem;
+    const { database, system } = await setup({ ...source, combat_system: { ...source.combat_system,
+      combatant_types: [{ ...source.combat_system.combatant_types[0],
+        is_defeated: { type: 'lessThanEquals', components: list(stat('hp'), constant(0)) } }]
+    } });
+    expect(system.diagnostics.filter(d => d.path.includes('is_defeated'))).toEqual([]);
+    const combat = await createCombat(system.key, 'Defeat', database);
+    await commandCombat(combat.id, { type: 'add', typeId: 'scout' }, database);
+    await commandCombat(combat.id, { type: 'add', typeId: 'scout' }, database);
+    let stored = (await database.combats.get(combat.id))!;
+    const [first, second] = stored.combatants;
+    await commandCombat(combat.id, { type: 'value', id: first.id, statId: 'hp', value: 0 }, database);
+    stored = (await database.combats.get(combat.id))!;
+    const context = combatContext(system, stored, [], []);
+    expect(isDefeated(context, stored, first.id)).toBe(true);
+    expect(isDefeated(context, stored, second.id)).toBe(false);
+    for (const fighter of stored.combatants) await commandCombat(combat.id, { type: 'initiative', id: fighter.id, value: fighter.id === first.id ? 9 : 1 }, database);
+    await commandCombat(combat.id, { type: 'start' }, database);
+    stored = (await database.combats.get(combat.id))!;
+    expect(eligibleCombatants(system, stored).map(f => f.id)).toContain(first.id);
+  });
+  it('rejects a non-boolean is_defeated result instead of guessing', async () => {
+    const source = capabilitySystem;
+    const { database, system } = await setup({ ...source, combat_system: { ...source.combat_system,
+      combatant_types: [{ ...source.combat_system.combatant_types[0], is_defeated: constant(1) }]
+    } });
+    const combat = await createCombat(system.key, 'Numeric defeat', database);
+    await commandCombat(combat.id, { type: 'add', typeId: 'scout' }, database);
+    const stored = (await database.combats.get(combat.id))!;
+    expect(() => isDefeated(combatContext(system, stored, [], []), stored, stored.combatants[0].id)).toThrow('booleano');
   });
   it('preserves resource references, blocks dangling/cross-version links and restores v4', async () => {
     const { database, system } = await setup();

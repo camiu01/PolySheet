@@ -140,6 +140,18 @@ export function rollInitiatives(system: StoredSystem, combat: Combat, characters
   }
   combat.combatants = initiativeOrder(combat).order;
 }
+/**
+ * Evaluate the source's `is_defeated` formula for one combatant.
+ * @returns null when the type declares none. Defeat is informational: turns never skip a defeated actor.
+ */
+export function isDefeated(context: ReturnType<typeof combatContext>, combat: Combat, id: string): boolean | null {
+  const fighter = combat.combatants.find(f => f.id === id);
+  const formula = context.definition.combatant_types.find(t => t.id === fighter?.typeId)?.is_defeated;
+  if (!formula) return null;
+  const value = context.actor(id).evaluate(formula);
+  if (typeof value !== 'boolean') throw new Error('is_defeated deve restituire un valore booleano.');
+  return value;
+}
 /** Return actors eligible for this pass; never silently skip a dead actor. */
 export function eligibleCombatants<T extends { initiative: number | null }>(system: StoredSystem, combat: { pass: number; combatants: T[] }) {
   const init = system.definition.combat_system?.initiative_system;
