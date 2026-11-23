@@ -46,7 +46,7 @@
 - [Current D&D 5e audit](DND5E_AUDIT.md): tested workflows, missing catalogs,
   partial rules and verified source mismatches.
 
-- [Remaining work](../todo.md): current priorities, reported diagnostic groups,
+- [Remaining work](../TODO.md): current priorities, reported diagnostic groups,
   completed work and verification gaps.
 - [Reading import results](COMPATIBILITY.md#reading-import-results): decoding,
   definition validation, runtime support and actual usability.

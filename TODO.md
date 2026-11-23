@@ -1,13 +1,167 @@
-# PolySheet TODO
+# TODO
 
-## UX/UI review follow-up, 2026-11-18
+> Last reviewed: 2026-11-23
 
-All items below remain **to do**. Implementation was deferred at the user's
-request. Evidence comes from production screenshots at 1440 x 1000 and
-390 x 844 and interaction checks using the UI UX Pro Max checklist.
+This records remaining work, not authorization to implement everything or a claim that any
+imported game is fully playable. Current evidence: [compatibility](docs/COMPATIBILITY.md),
+[source views](docs/VIEWS.md), [combat](docs/COMBAT.md) and
+[executed verification](docs/VERIFICATION.md).
+
+## Compatibility policy and diagnostics
+
+The unchanged official 5e system now has 333 warnings (previously 338 / 339 / 479).
+Repeated paths often describe one missing feature, not separate implementations.
+The displayed list is truncated, so it cannot establish the complete backlog.
+
+- [ ] **`$.currencies` contract** — inspect and implement the verified contract. Do not invent
+  denominations, exchange rates or automatic inventory effects.
+- [ ] **`$.macros` semantics** — inspect and establish its actual runtime/data semantics before
+  implementation. Do not confuse it with RPGScript authoring macros or execute
+  imported JavaScript.
+- [ ] **`$.live_session_enabled`** — determine what it requires and whether it has any
+  meaningful local-only behavior. Networked sessions, accounts or a backend
+  need a separate product decision and explicit approval; they are not approved
+  by this TODO.
+- [ ] **Omitted `sortBy.order`** — verify upstream behavior at the reported
+  `$.character_stats[171].components.order`, `[236]` and `[237]`.
+  Sorting is already implemented using the user-approved ascending policy.
+  Keep the warning unless evidence resolves the difference; do not list this
+  as an unimplemented sort.
+- [ ] **Policy vs missing-feature labels** — distinguish compatibility-policy warnings from unimplemented features in
+  diagnostic labels. Do not hide either category or treat import success as
+  proof of playable rules.
+- [ ] **Full diagnostic audit** — audit the complete diagnostic array and group remaining warnings by
+  feature and dependency. Record pinned source paths and expected behavior
+  before extending support.
+
+## Verification and platforms
+
+- [ ] **Missing reference system** — obtain the missing original `.reference/reported-system.rpg` and rerun
+  the three skipped HP/AC regression cases without substituting another file.
+- [ ] **Upstream workflow comparison** — compare complete creation, leveling, equipment, spell, rest and combat
+  workflows against independently verified upstream behavior.
+- [ ] **Other browsers and real install** — check Safari/Firefox and actual mobile installation, not only Chromium
+  desktop/phone emulation.
+- [ ] **Assistive technology** — test assistive technology, keyboard flows and full-interface accessibility
+  beyond the checked palette pairs and existing focus assertions.
+- [ ] **Storage and worker updates** — test storage quota/eviction behavior and a deployed two-version worker
+  update without losing local data.
+- [ ] **Development-dependency audit** — run a full development-dependency audit separately from the completed
+  runtime-only audit.
+- [x] Obtain explicit authorization for commit and push of all project changes.
+  The existing workflow gates Pages publication; local checks alone do not prove deployment.
+- [x] Run type/unit, production build, dependency audit and desktop/mobile
+  acceptance checks; record current evidence and remaining limits.
+- [x] Review all project changes for the authorized commit and push.
+  Delivery revision and push outcome belong in Git history and the delivery
+  report, not this pre-commit checklist. A push to main triggers the existing
+  gated GitHub Pages workflow; successful deployment must be verified separately.
+- [x] Current unit/build checks: 240 unit tests passed with one skip; build and
+  runtime audit passed. Complete final browser results are recorded in
+  `docs/VERIFICATION.md`, not combined with earlier root/live runs.
+
+## Catalogs and import
+
+- [ ] **19 blocked 5e2024 originals** — recheck them against verified upstream changes:
+  three classes and three backgrounds with fractional weights declared as
+  integers, plus 13 species with a different system ID. Preserve originals
+  and blockers; do not cast constants or rewrite system IDs to make them pass.
+- [ ] **Full compendia** — verify resource-archive framing, tooling and licensing before supporting
+  full item/spell/book compendia beyond the current JSON catalog roots.
+- [ ] **Source compilation** — Blocked: remains deferred. Establish usable, current official
+  tooling before proposing a desktop or browser workflow. The approved current
+  flow remains compiled-system file once plus automatic GitHub catalogs.
+- [x] Background catalog discovery, private assignment, saving and backup.
+- [x] Source-declared subrace selection using original scalar IDs, with stale
+  selection guards and dependent clearing on catalog-panel race changes.
+- [x] Druid assignment for 5e and 5e2024, validated `remove_ids` history and
+  offline refresh of old cached blockers without changing originals.
+
+## Rules, events and effects
+
+- [ ] **Source-defined effects through the pipeline** — connect source-defined class/origin privileges, bonuses, proficiencies,
+  equipment and HP effects through that pipeline. Do not invent rules or infer
+  automatic effects from manual catalog assignment.
+- [ ] **More avatar events** — extend avatar events beyond the verified read-only popup/roll subset.
+  Verify each handler and the right-button contract before adding it.
+- [x] Add explicitly guided manual advancement using imported level/HP formulas,
+  subclass options and ceiling, with transactional multiclass/private graphs
+  and a manual prerequisite acknowledgement. Other choices remain a checklist;
+  this is not the general persistent-effect pipeline below.
+- [x] Support nullable resource predicates used by race weapons/attunement,
+  without introducing arbitrary object equality.
+- [x] Apply visible, removable source prefilters to local resource selection,
+  including the original Spells class-name filter. Keep unsupported types and
+  invalid formulas visible; this does not install a spell compendium.
+- [x] Implement the general event/effect pipeline after verifying source scopes,
+  execution order, aggregation, reversal and failure behavior. Existing combat
+  initialization and explicit character showPopUp/roll commands are bounded
+  subsets, not this pipeline.
+- [x] Implement bounded character stat tap and long-tap actions, including the reported
+  `$.character_sheet_sections[2].view.content[0..14].on_tap_event`,
+  corresponding actions in sections 4, 5 and 6, and
+  `$.character_sheet_sections[7].view.content[0].content[*].on_tap_event` /
+  `on_long_tap_event`. Verify source-defined rolls rather than substitute a
+  generic dice roll. General effects and resource-scoped events remain separate work.
+- [x] Execute the original INFORMATION avatar event through a read-only
+  `showPopUp` command, without automatic effects or editable popup semantics.
+- [x] First source-event presentation effects: character INFORMATION and
+  source stat rolls, using fresh snapshots without persistent mutation.
+- [x] Finish and test bounded character tap/long-press handlers and editable
+  proficiency popups. Keep unsupported effects and resource scopes diagnosed.
+- [x] Verify titled numeric adjustments and formula colors against real 5e input.
+
+## Source views and controls
+
+- [ ] **`should_auto_save` on unsupported controls** — implement the behavior reported
+  under `$.character_sheet_sections[3].view.content[0..1].subviews[1..3]`.
+  Preserve validated drafts and explicit Save/Cancel where required. This is
+  not a blanket missing feature: select/ticker already support their documented
+  autosave subset.
+- [ ] **Other documented view gaps** — dynamic chips, selection filters,
+  resource search/sort, nested draft-resource editing, inline `create_if_empty`
+  and remaining popup options. Verify each contract separately.
+- [x] Implement scoped stat-detail `bottom_sheet_view`, `bottom_sheet_in_edit_mode`
+  and `sheet_title`, starting with
+  `$.character_sheet_sections[4].view.content[2]` and `[5]`.
+  Honor the source content while keeping dialogs centered on desktop and phone,
+  as requested; do not restore bottom-anchored phone dialogs.
+- [x] Implement dynamic `stat_color` and `name_color`, including section 7's
+  nested stat controls, through the existing safe color handling.
+
+## Character creation and progression
+
+- [ ] **Official creation and progression** — implement it with original
+  choices, validations, page lifecycle effects and level-dependent changes.
+  Test repeated operations, cancellation, rollback and incomplete characters.
+- [x] Optional automatic first-level D&D HP on new character creation: final
+  class die plus Constitution, current HP equals maximum, negative modifiers
+  preserved, manual fallback and no resets of existing characters.
+- [x] Beginner ability explanations, manual/standard-array/point-buy/dice
+  methods, unique roll assignment and explicit draft application for supported
+  D&D systems. Other systems retain manual typed values.
+- [x] Guided manual creation/configuration, scoped character ownership, private
+  feat copying, stat details/colors and stable scrolling source forms.
+- [x] Add manual inventory creation to character setup, with atomic Save/Cancel.
+
+## Interface and UX
+
+UX/UI review follow-up, 2026-11-18. Evidence comes from production screenshots at
+1440 x 1000 and 390 x 844 and interaction checks using the UI UX Pro Max checklist.
 Preserve the charcoal/brass design, Italian application copy, original source
-labels, local-first data ownership and visible compatibility limits.
+labels, local-first data ownership and visible compatibility limits. The seven
+fixes below are implemented; they still need the validation item before they
+count as verified.
 
+- [ ] **Validate the completed UX fixes** — do this before marking them done.
+  Add regressions for all seven items, cancellation/no unintended writes,
+  system/filter changes, repeated navigation and nested source validation.
+  Inspect fresh desktop/mobile screenshots in both themes, keyboard focus,
+  footer geometry and horizontal overflow. Run `npm run check`,
+  `npm run build`, `npm audit --omit=dev`, then isolated production
+  Playwright on port 4183 with `PLAYWRIGHT_BASE_PATH=/PolySheet/`; also test
+  `/` because navigation changes are in scope. Preserve the preview on 4173
+  and record actual results/skips in `docs/VERIFICATION.md`.
 - [x] **P1 — Make the resource archive searchable and bounded.**
   The reviewed archive renders 212 cards and a roughly 58,106 px mobile page.
   Add name search, definition-type and catalog/local filters, result counts,
@@ -19,7 +173,6 @@ labels, local-first data ownership and visible compatibility limits.
   Relevant files: `src/ui/Tools.tsx`, `src/ui/LocalResourcePicker.tsx`,
   `src/ui/it.ts`. Update existing browser assertions that expect 74 mounted
   cards to check bounded rendering and the full result count instead.
-
 - [x] **P1 — Make the mobile navigation drawer keyboard-accessible.**
   Opening currently leaves focus on the trigger; Escape does not close the
   drawer, and background controls remain keyboard-reachable. Move focus inside,
@@ -27,7 +180,6 @@ labels, local-first data ownership and visible compatibility limits.
   control and restore focus on dismissal. Handle destination selection and
   resizing to desktop without leaving inert content or a locked scroll.
   Relevant file: `src/App.tsx`.
-
 - [x] **P2 — Keep guided creation actions visible.**
   The initial wizard footer was below the viewport on desktop (y=1318) and
   mobile (y=1754). Extend the existing constrained form/scrollport layout to
@@ -35,7 +187,6 @@ labels, local-first data ownership and visible compatibility limits.
   Preserve centered dialogs, nested draft forms and busy dismissal protection.
   Relevant files: `src/ui/CreationFlow.tsx`, `src/ui/CharacterCreator.tsx`,
   `src/styles.css`. Test footer geometry before and after scrolling.
-
 - [x] **P2 — Prioritize playable sheet information above profile space.**
   The profile/photo panel, headings and warnings occupy almost the whole first
   desktop viewport before HP, armor class and initiative. Compact the profile
@@ -44,7 +195,6 @@ labels, local-first data ownership and visible compatibility limits.
   reorder arbitrary imported sections by guessed game-specific labels.
   Relevant files: `src/ui/Characters.tsx`, `src/ui/SheetSections.tsx`,
   `src/ui/renderer.tsx`, `src/styles.css`.
-
 - [x] **P2 — Group repeated incomplete-sheet errors without hiding them.**
   The intentionally incomplete Human Fighter 20, missing Background, renders
   20 errors for `background.current_level_features`. Retain the existing
@@ -54,7 +204,6 @@ labels, local-first data ownership and visible compatibility limits.
   the missing origin refreshes both fields and grouped errors.
   Relevant files: `src/ui/Characters.tsx`, `src/ui/renderer.tsx`.
   This evidence does not establish failure of a fully configured character.
-
 - [x] **P2 — Reset scroll and focus on local destination changes.**
   Navigating between mobile screens retained scroll (observed y=44), leaving
   headings partly behind the top bar. Put the new destination at its readable
@@ -62,7 +211,6 @@ labels, local-first data ownership and visible compatibility limits.
   navigation buttons, browser Back/Forward and closing the drawer. Keep
   section-anchor scrolling and deployment base paths working.
   Relevant files: `src/App.tsx`, `src/ui/navigation.ts`.
-
 - [x] **P2 — Associate validation with its fields and screen.**
   Rejected guided creation shows three alerts but no corresponding
   `aria-invalid`/`aria-describedby`, and focus stays on Next. Use unique
@@ -75,177 +223,17 @@ labels, local-first data ownership and visible compatibility limits.
   Relevant files: `src/ui/renderer.tsx`, `src/ui/SourceForm.tsx`,
   `src/ui/SourceStat.tsx`, `src/ui/SourceValueViews.tsx`,
   `src/ui/SourceViews.tsx`, `src/ui/SourceResourceViews.tsx`, `src/ui/Tools.tsx`.
-
-- [ ] **Validate the completed UX fixes before marking them done.**
-  Add regressions for all seven items, cancellation/no unintended writes,
-  system/filter changes, repeated navigation and nested source validation.
-  Inspect fresh desktop/mobile screenshots in both themes, keyboard focus,
-  footer geometry and horizontal overflow. Run `npm run check`,
-  `npm run build`, `npm audit --omit=dev`, then isolated production
-  Playwright on port 4183 with `PLAYWRIGHT_BASE_PATH=/PolySheet/`; also test
-  `/` because navigation changes are in scope. Preserve the preview on 4173
-  and record actual results/skips in `docs/VERIFICATION.md`.
-
-## What remains before this delivery
-
-- [x] Finish and test bounded character tap/long-press handlers and editable
-  proficiency popups. Keep unsupported effects and resource scopes diagnosed.
-- [x] Verify titled numeric adjustments and formula colors against real 5e input.
-- [x] Add manual inventory creation to character setup, with atomic Save/Cancel.
-- [x] Run type/unit, production build, dependency audit and desktop/mobile
-  acceptance checks; record current evidence and remaining limits.
-- [x] Review all project changes for the authorized commit and push.
-  Delivery revision and push outcome belong in Git history and the delivery
-  report, not this pre-commit checklist. A push to main triggers the existing
-  gated GitHub Pages workflow; successful deployment must be verified separately.
-
-Updated 2026-11-16. This records remaining work, not authorization to implement
-everything or a claim that any imported game is fully playable.
-
-Current evidence: [compatibility](docs/COMPATIBILITY.md),
-[source views](docs/VIEWS.md), [combat](docs/COMBAT.md) and
-[executed verification](docs/VERIFICATION.md).
-
-## Current priorities
-
-The unchanged official 5e system now has 333 warnings (previously 338 / 339 / 479).
-Repeated paths often describe one missing feature, not separate implementations.
-The displayed list is truncated, so it cannot establish the complete backlog.
-
-### P1: Rules and source interactions
-
-- [x] Add explicitly guided manual advancement using imported level/HP formulas,
-  subclass options and ceiling, with transactional multiclass/private graphs
-  and a manual prerequisite acknowledgement. Other choices remain a checklist;
-  this is not the general persistent-effect pipeline below.
-
-- [x] Support nullable resource predicates used by race weapons/attunement,
-  without introducing arbitrary object equality.
-- [x] Apply visible, removable source prefilters to local resource selection,
-  including the original Spells class-name filter. Keep unsupported types and
-  invalid formulas visible; this does not install a spell compendium.
-
-- [x] Implement the general event/effect pipeline after verifying source scopes,
-  execution order, aggregation, reversal and failure behavior. Existing combat
-  initialization and explicit character showPopUp/roll commands are bounded
-  subsets, not this pipeline.
-- [ ] Connect source-defined class/origin privileges, bonuses, proficiencies,
-  equipment and HP effects through that pipeline. Do not invent rules or infer
-  automatic effects from manual catalog assignment.
-- [x] Implement bounded character stat tap and long-tap actions, including the reported
-  `$.character_sheet_sections[2].view.content[0..14].on_tap_event`,
-  corresponding actions in sections 4, 5 and 6, and
-  `$.character_sheet_sections[7].view.content[0].content[*].on_tap_event` /
-  `on_long_tap_event`. Verify source-defined rolls rather than substitute a
-  generic dice roll. General effects and resource-scoped events remain separate work.
-- [x] Execute the original INFORMATION avatar event through a read-only
-  `showPopUp` command, without automatic effects or editable popup semantics.
-- [ ] Extend avatar events beyond the verified read-only popup/roll subset.
-  Verify each handler and the right-button contract before adding it.
-- [ ] Implement official character creation and progression, with original
-  choices, validations, page lifecycle effects and level-dependent changes.
-  Test repeated operations, cancellation, rollback and incomplete characters.
-
-### P2: Remaining source controls
-
-- [ ] Implement the unsupported controls' `should_auto_save` behavior reported
-  under `$.character_sheet_sections[3].view.content[0..1].subviews[1..3]`.
-  Preserve validated drafts and explicit Save/Cancel where required. This is
-  not a blanket missing feature: select/ticker already support their documented
-  autosave subset.
-- [x] Implement scoped stat-detail `bottom_sheet_view`, `bottom_sheet_in_edit_mode`
-  and `sheet_title`, starting with
-  `$.character_sheet_sections[4].view.content[2]` and `[5]`.
-  Honor the source content while keeping dialogs centered on desktop and phone,
-  as requested; do not restore bottom-anchored phone dialogs.
-- [x] Implement dynamic `stat_color` and `name_color`, including section 7's
-  nested stat controls, through the existing safe color handling.
-- [ ] Complete the other documented view gaps: dynamic chips, selection filters,
-  resource search/sort, nested draft-resource editing, inline `create_if_empty`
-  and remaining popup options. Verify each contract separately.
-
-### P3: Root fields and compatibility policy
-
-- [ ] Inspect and implement the verified `$.currencies` contract. Do not invent
-  denominations, exchange rates or automatic inventory effects.
-- [ ] Inspect `$.macros` and establish its actual runtime/data semantics before
-  implementation. Do not confuse it with RPGScript authoring macros or execute
-  imported JavaScript.
-- [ ] Determine what `$.live_session_enabled` requires and whether it has any
-  meaningful local-only behavior. Networked sessions, accounts or a backend
-  need a separate product decision and explicit approval; they are not approved
-  by this TODO.
-- [ ] Verify upstream behavior when `sortBy.order` is omitted, at the reported
-  `$.character_stats[171].components.order`, `[236]` and `[237]`.
-  Sorting is already implemented using the user-approved ascending policy.
-  Keep the warning unless evidence resolves the difference; do not list this
-  as an unimplemented sort.
-- [ ] Distinguish compatibility-policy warnings from unimplemented features in
-  diagnostic labels. Do not hide either category or treat import success as
-  proof of playable rules.
-- [ ] Audit the complete diagnostic array and group remaining warnings by
-  feature and dependency. Record pinned source paths and expected behavior
-  before extending support.
-
-## Catalogs and import follow-up
-
-- [ ] Recheck the 19 blocked 5e2024 originals against verified upstream changes:
-  three classes and three backgrounds with fractional weights declared as
-  integers, plus 13 species with a different system ID. Preserve originals
-  and blockers; do not cast constants or rewrite system IDs to make them pass.
-- [ ] Verify resource-archive framing, tooling and licensing before supporting
-  full item/spell/book compendia beyond the current JSON catalog roots.
-- [ ] Source compilation remains deferred. Establish usable, current official
-  tooling before proposing a desktop or browser workflow. The approved current
-  flow remains compiled-system file once plus automatic GitHub catalogs.
-
-## Remaining verification
-
-- [ ] Obtain the missing original `.reference/reported-system.rpg` and rerun
-  the three skipped HP/AC regression cases without substituting another file.
-- [ ] Compare complete creation, leveling, equipment, spell, rest and combat
-  workflows against independently verified upstream behavior.
-- [ ] Check Safari/Firefox and actual mobile installation, not only Chromium
-  desktop/phone emulation.
-- [ ] Test assistive technology, keyboard flows and full-interface accessibility
-  beyond the checked palette pairs and existing focus assertions.
-- [ ] Test storage quota/eviction behavior and a deployed two-version worker
-  update without losing local data.
-- [ ] Run a full development-dependency audit separately from the completed
-  runtime-only audit.
-- [x] Obtain explicit authorization for commit and push of all project changes.
-  The existing workflow gates Pages publication; local checks alone do not prove deployment.
-
-## Completed in the latest increment
-
-- [x] Optional automatic first-level D&D HP on new character creation: final
-  class die plus Constitution, current HP equals maximum, negative modifiers
-  preserved, manual fallback and no resets of existing characters.
-
-- [x] Beginner ability explanations, manual/standard-array/point-buy/dice
-  methods, unique roll assignment and explicit draft application for supported
-  D&D systems. Other systems retain manual typed values.
-- [x] First source-event presentation effects: character INFORMATION and
-  source stat rolls, using fresh snapshots without persistent mutation.
-
-- [x] Background catalog discovery, private assignment, saving and backup.
-- [x] Source-declared subrace selection using original scalar IDs, with stale
-  selection guards and dependent clearing on catalog-panel race changes.
-- [x] Druid assignment for 5e and 5e2024, validated `remove_ids` history and
-  offline refresh of old cached blockers without changing originals.
 - [x] The supplied charcoal/brass direction, dark default with persisted light
   option, local fonts, phone navigation and centered dialogs.
 - [x] Requested workspace/profile/status/sidebar-footer/settings-panel removals.
-- [x] Guided manual creation/configuration, scoped character ownership, private
-  feat copying, stat details/colors and stable scrolling source forms.
-- [x] Current unit/build checks: 240 unit tests passed with one skip; build and
-  runtime audit passed. Complete final browser results are recorded in
-  `docs/VERIFICATION.md`, not combined with earlier root/live runs.
-- [ ] Further reduce the earlier measured throttled-mobile HP latency of
+
+## Performance
+
+- [ ] **Throttled-mobile HP latency** — further reduce the earlier measured latency of
   1,117 ms at 10,000 resources (Monster opening 160 ms). Rebenchmark after the
   beginner/event extension before treating those figures as current.
 
-## Historical 5e 0.6.0 compatibility backlog
+## Historical 5e 0.6.0 compatibility backlog (archive)
 
 The following detailed checklist is retained from 2026-11-14. Its counts and
 source-specific gaps describe that older snapshot, not the current 339-warning
