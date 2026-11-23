@@ -28,7 +28,7 @@ it('requires a deliberate game choice and labels the demo before showing a creat
   expect(screen.getByText(copy.demoDescription)).toBeVisible();
   expect(screen.getByRole('button', { name: copy.create })).toBeEnabled();
   expect(screen.getByRole('spinbutton', { name: 'Vigore' })).toHaveValue(2);
-  expect(screen.getByRole('option', { name: /Sentieri.*Demo · non D&D/ })).toBeInTheDocument();
+  expect(screen.getByRole('option', { name: /Sentieri · Demo ·/ })).toBeInTheDocument();
 });
 
 it('offers the same preparation entry for D&D and guided PF2e without promising automatic PF2e download', () => {

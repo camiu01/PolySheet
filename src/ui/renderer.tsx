@@ -103,7 +103,7 @@ export function ScalarInput({ stat, value, onSave, onDraft, label, min, max, max
 }
 type Renderer = (v: View, ctx: RenderContext, evaluate: (v: unknown) => unknown) => ReactNode;
 function children(items: unknown, ctx: RenderContext) {
-  if (!Array.isArray(items)) throw new Error('Lista di componenti non valida');
+  if (!Array.isArray(items)) throw new Error(it.viewInvalidList);
   // Index-qualified keys: official sources repeat ids on static siblings.
   return items.map((v, i) => <RenderView key={`${String(object(v).id ?? '')}:${i}`} input={v} context={ctx} />);
 }
@@ -187,7 +187,7 @@ export const rendererRegistry = new Map<string, Renderer>([
   ['text', (v, ctx, e) => {
     if (typeof v.edit_stat === 'string') {
       const stat = ctx.stats.find(s => s.id === v.edit_stat);
-      if (!stat || !['string', 'integer', 'decimal', 'bool'].includes(stat.value_type)) throw new Error('Campo non modificabile');
+      if (!stat || !['string', 'integer', 'decimal', 'bool'].includes(stat.value_type)) throw new Error(it.viewNotEditable);
       // A calculated target cannot store input; show its current value read-only (5e `selected_options`).
       if (stat.type !== 'base') return <span className="text-view">{textValue(e({ type: 'stat', stat: stat.id }))}</span>;
       if (ctx.onChange) return <ScalarInput key={ctx.drafts ? v.id : `${stat.id}:${String(ctx.values[stat.id])}`} stat={stat}
@@ -226,7 +226,7 @@ export const rendererRegistry = new Map<string, Renderer>([
   ['divider', () => <hr />], ['spacer', () => <span className="spacer" />],
   ['checkbox', (v, ctx, e) => {
     const stat = ctx.stats.find(s => s.id === v.stat && s.type === 'base' && s.value_type === 'bool');
-    if (!stat) throw new Error('Checkbox senza statistica booleana base');
+    if (!stat) throw new Error(it.viewCheckboxStat);
     // `switcher` is the same boolean input presented as an accessible switch.
     return <><label className={`check-field ${v.label_alignment === 'left' ? 'check-label-left' : ''} ${v.style === 'switcher' ? 'switch-field' : ''}`}><input type="checkbox" role={v.style === 'switcher' ? 'switch' : undefined} checked={inputValue(v, ctx, stat) === true}
       disabled={!ctx.onChange || (v.enabled != null && e(v.enabled) !== true)}

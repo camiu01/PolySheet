@@ -1,11 +1,26 @@
 /** @file Search every eligible local instance while bounding mounted option controls. */
-import { useMemo, useRef, useState } from 'react';
+import { Fragment, useMemo, useRef, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
-import type { ResourceInstance } from '../domain/model';
-import { it } from './it';
+import type { ResourceDefinition, ResourceInstance } from '../domain/model';
+import type { EvaluationEnvironment } from '../engine/formulas';
+import { sortOptions, sortResources } from '../engine/resource-sort';
+import { currentLocale, it } from './it';
 
 const pageSize = 50;
-const number = new Intl.NumberFormat('it');
+
+/** Source sort options for one resource type, when the caller knows it. */
+export interface ResourceSorting { definition: ResourceDefinition; environment: EvaluationEnvironment }
+
+/** "Sort by" select over the source options; the empty value keeps the caller's default order. */
+export function SortSelect({ options, value, disabled, onChange }: {
+  options: { name: string }[]; value: string; disabled?: boolean; onChange: (value: string) => void;
+}) {
+  if (!options.length) return null;
+  return <label className="field"><span>{it.sortBy}</span><select value={value} disabled={disabled} onChange={e => onChange(e.target.value)}>
+    <option value="">{it.sortDefault}</option>
+    {options.map((option, index) => <option key={index} value={String(index)}>{option.name}</option>)}
+  </select></label>;
+}
 
 function readableSource(source: string) {
   try {
@@ -65,10 +80,14 @@ export function spellLevel(record: ResourceInstance) {
 }
 
 /** Keep search/page state local; selection still uses the owner's atomic command. */
-export function LocalResourcePicker({ resources, busy, onSelect }: {
-  resources: ResourceInstance[]; busy: boolean; onSelect: (record: ResourceInstance) => void;
+export function LocalResourcePicker({ resources, busy, onSelect, sorting }: {
+  resources: ResourceInstance[]; busy: boolean; onSelect: (record: ResourceInstance) => void; sorting?: ResourceSorting;
 }) {
+  const number = new Intl.NumberFormat(currentLocale());
   const [query, setQuery] = useState('');
+  const [sortIndex, setSortIndex] = useState('');
+  const options = useMemo(() => sorting ? sortOptions(sorting.definition, sorting.environment.enumerations as unknown[]) : [], [sorting]);
+  const option = sortIndex ? options[Number(sortIndex)] : undefined;
   const [page, setPage] = useState(0);
   const startRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -78,9 +97,11 @@ export function LocalResourcePicker({ resources, busy, onSelect }: {
     const search = normalize(query);
     const found = search ? resources.filter(r => normalize(r.name).includes(search)) : resources;
     // Spells read by level first; entries without a level keep alphabetical order after them.
+    if (option && sorting) return sortResources(found, sorting.definition, option, sorting.environment, it.notStat);
     const rank = (r: ResourceInstance) => levels.get(r.id) ?? 10;
-    return [...found].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name, 'it'));
-  }, [resources, query, levels]);
+    return [...found].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name, currentLocale()))
+      .map(record => ({ record, group: null as string | null }));
+  }, [resources, query, levels, option, sorting]);
   const sources = useMemo(() => duplicateSourceLabels(resources), [resources]);
   const pages = Math.max(1, Math.ceil(matches.length / pageSize));
   const current = Math.min(page, pages - 1), start = current * pageSize;
@@ -96,17 +117,19 @@ export function LocalResourcePicker({ resources, busy, onSelect }: {
           placeholder={it.resourceSearchPlaceholder}
           onChange={event => { setQuery(event.target.value); setPage(0); }} />
       </label>
+      <SortSelect options={options} value={sortIndex} disabled={busy} onChange={value => { setSortIndex(value); setPage(0); }} />
       <p role="status">{matches.length ? `${number.format(start + 1)}–${number.format(Math.min(start + pageSize, matches.length))} / ${number.format(matches.length)}` : it.noMatchingResources}</p>
       {!matches.length && query && <button type="button" className="link-button" disabled={busy}
         onClick={() => { setQuery(''); setPage(0); searchRef.current?.focus(); }}>{it.clearResourceSearch}</button>}
     </div>
-    <div className="local-resource-options">{matches.slice(start, start + pageSize).map(record =>
-      <button type="button" key={record.id} className="button secondary" disabled={busy} onClick={() => onSelect(record)}>
+    <div className="local-resource-options">{matches.slice(start, start + pageSize).map(({ record, group }, index, page) => <Fragment key={record.id}>
+      {group !== null && group !== (index ? page[index - 1].group : matches[start - 1]?.group ?? null) && <h3 className="resource-group">{group}</h3>}
+      <button type="button" className="button secondary" disabled={busy} onClick={() => onSelect(record)}>
         <span>{record.name}{levels.get(record.id) != null && <small className="resource-source-label">{it.spellLevelLabel(levels.get(record.id)!)}</small>}
           {sources.has(record.id) && <small className="resource-source-label">{sources.get(record.id)}</small>}</span>
         <ChevronRight size={16} aria-hidden="true" />
       </button>
-    )}</div>
+    </Fragment>)}</div>
     {pages > 1 && <nav className="button-row" aria-label={it.pages}>
       <button type="button" className="button secondary" disabled={busy || current === 0} onClick={() => changePage(current - 1)}>{it.previousPage}</button>
       <span>{number.format(current + 1)} / {number.format(pages)}</span>

@@ -54,7 +54,8 @@ export function CharacterCatalog({ character, system, resources, run }: {
           </select>
         </label>;
       })}
-      {subrace && <label className="field"><span>{subrace.selection.name}</span>
+      {/* Only a race with declared children, or a saved value still to clear, earns the field. */}
+      {subrace && (options.length > 0 || (typeof subraceValue === 'string' && !!subraceValue)) && <label className="field"><span>{subrace.selection.name}</span>
         <select aria-label={subrace.selection.name} aria-describedby={subraceHelpId}
           disabled={!isResourceReference(race)} value={typeof subraceValue === 'string' ? subraceValue : ''} onChange={e => {
           const value = e.target.value;

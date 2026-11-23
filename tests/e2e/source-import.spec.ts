@@ -59,6 +59,7 @@ test('repository JSON and RPGScript import without a picker, cancel safely and s
   await choose(page);
   await preview.getByRole('button', { name: it.confirmImport, exact: true }).click();
   await expect(preview).not.toBeVisible();
+  await page.getByRole('button', { name: it.systems, exact: true }).first().click();
   await expect(page.locator('.system-card')).toHaveCount(1);
   expect(pickers).toBe(0);
   const sourceDownload = page.waitForEvent('download');
@@ -110,6 +111,7 @@ for (const [id, expected, blocked, label] of [
   await page.screenshot({ path: resolve(`.reference/ui-review/${info.project.name}-${id}-repository-source-preview.png`), fullPage: true });
   await preview.getByRole('button', { name: it.confirmImport, exact: true }).click();
   await expect(preview).not.toBeVisible({ timeout: 30000 });
+  await page.getByRole('button', { name: it.systems, exact: true }).first().click();
   await expect(page.locator('.system-card')).toHaveCount(1);
   await expect(page.getByRole('button', { name: it.repositoryExportSources, exact: true })).toBeVisible();
 });

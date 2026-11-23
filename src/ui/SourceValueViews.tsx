@@ -58,7 +58,7 @@ export function SourceTicker({ node: v, context: ctx, evaluate }: {
 }) {
   const stat = ctx.stats.find(s => s.id === v.stat);
   if (!stat) throw new Error(`Statistica mancante: ${String(v.stat)}`);
-  if (!['integer', 'decimal'].includes(stat.value_type)) throw new Error('Il contatore richiede una statistica numerica');
+  if (!['integer', 'decimal'].includes(stat.value_type)) throw new Error(it.viewCounterNumeric);
   // A calculated value on a resource card is edited as that instance's override (5e effect charges).
   const overridable = stat.type === 'calculated' && ctx.onOverride !== undefined && !ctx.eventBusy;
   const editable = stat.type === 'base' && ctx.onChange !== undefined || overridable;
@@ -112,7 +112,8 @@ export function SourceTicker({ node: v, context: ctx, evaluate }: {
       : <button type="button" className="source-ticker-value" disabled={!editable}
         aria-label={`${it.edit} ${stat.name}`} onClick={() => editable && setEditing(true)}>{shown}</button>;
   const labelElement = label ? <span className="source-ticker-label">{label}</span> : null;
-  const pair = <>{decrement}{increment}</>;
+  // The two steppers stay together when a narrow card wraps the row.
+  const pair = <span className="ticker-buttons">{decrement}{increment}</span>;
   const labelFirst = v.label_alignment === 'left';
   const headingLevel = ({ headline: 2, title: 3, section: 4, subhead: 5 } as Record<string, number>)[String(v.style)];
   return <div className={`source-ticker source-ticker-${typeof v.style === 'string' ? v.style : 'text'}`}>
@@ -208,7 +209,7 @@ export function SourceSelect({ node: v, context: ctx, evaluate }: {
   const [local, setLocal] = useState<string[]>();
   const targetId = typeof v.stat === 'string' ? v.stat
     : v.meta_stat != null ? textValue(evaluate(v.meta_stat)) : '';
-  if (!targetId || targetId.includes('.')) throw new Error('Il selettore richiede un campo base diretto');
+  if (!targetId || targetId.includes('.')) throw new Error(it.viewPickerBase);
   const stat = ctx.stats.find(s => s.id === targetId);
   if (!stat) throw new Error(`Statistica mancante: ${targetId}`);
   const multi = v.multi_select === true;

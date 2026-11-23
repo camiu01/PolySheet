@@ -70,7 +70,7 @@ export const sourceIcons: Record<string, typeof Shield> = {
 /** Render a scalar source value as text; complex values are never coerced. */
 export function textValue(value: unknown) {
   if (value === null || value === undefined) return '';
-  if (typeof value === 'object') throw new Error('Valore complesso non visualizzabile come testo');
+  if (typeof value === 'object') throw new Error(it.viewComplexValue);
   return String(value);
 }
 
@@ -125,15 +125,21 @@ export function resourceReferenceIds(value: unknown): string[] {
   return items.map(resourceReferenceId).filter((id): id is string => id !== undefined);
 }
 
+/** Narrowest readable card: a title beside a counter with two 44px steppers. */
+const MIN_CARD_WIDTH = 220;
 /**
  * CSS grid tracks for a source `content_item_min_width`.
- * @remarks A fraction up to 1 is a share of the row, so 0.5 always yields two
- * columns; larger values are pixel minimums that wrap to the available width.
+ * @remarks A fraction up to 1 is a share of the row (0.5: at most two columns); larger values are
+ * pixel minimums. Phone-sized values squeeze a card's title beside its counter, so a column never
+ * drops below {@link MIN_CARD_WIDTH} and wraps instead; a wider source value still applies.
  */
 export function gridColumns(value: unknown): string {
   const width = typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 160;
-  if (width <= 1) return `repeat(${Math.min(12, Math.max(1, Math.floor(1 / width + 1e-9)))},minmax(0,1fr))`;
-  return `repeat(auto-fit,minmax(min(100%,${Math.min(800, width)}px),1fr))`;
+  if (width <= 1) {
+    const count = Math.min(12, Math.max(1, Math.floor(1 / width + 1e-9)));
+    return `repeat(auto-fit,minmax(min(100%,max(${MIN_CARD_WIDTH}px,calc(${(100 / count).toFixed(4)}% - 12px))),1fr))`;
+  }
+  return `repeat(auto-fit,minmax(min(100%,${Math.min(800, Math.max(MIN_CARD_WIDTH, width))}px),1fr))`;
 }
 
 /** Readable fallback for a source identifier shown where the source gives no title. */

@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { Character, Combat, ResourceInstance, StoredSystem } from '../domain/model';
-import { combatContext, eligibleCombatants, initiativeOrder } from '../engine/combat';
+import { combatContext, eligibleCombatants, initiativeOrder, isDefeated } from '../engine/combat';
 import { commandCombat, createCombat, type CombatCommand } from '../persistence/combat';
 import { db } from '../persistence/db';
 import { commitCombatView, type ValuePatch } from '../persistence/views';
@@ -81,11 +81,15 @@ function CombatDetail({ system, combat, resources, characters, run }: {
           onClick={() => chosen && execute({ type: 'add', typeId: chosen.id, sourceId: source?.id })}>{it.addCombatant}</button>
       </div>}
       {chosen?.template_resource_id === 'monster' && isDndCatalogSystem(system.definition.id) && <p className="muted">{it.monsterWhere}</p>}
+      {/* Only the commands valid in the current phase are shown, instead of a row of disabled buttons. */}
       <div className="combat-toolbar">
-        <button className="button secondary" disabled={!combat.combatants.length || combat.status === 'active'} onClick={() => execute({ type: 'roll' })}>{it.rollInitiative}</button>
-        <button className="button primary" disabled={!combat.combatants.length || order.unresolved || combat.status === 'active'} onClick={() => execute({ type: 'start' })}>{it.startCombat}</button>
-        <button className="button primary" disabled={combat.status !== 'active'} onClick={() => execute({ type: 'next' })}>{definition.initiative_system.has_turns ? it.nextTurn : it.nextRound}</button>
-        <button className="button secondary" disabled={combat.status === 'finished'} onClick={() => execute({ type: 'finish' })}>{it.finishCombat}</button>
+        {combat.status === 'active' ? <>
+          <button className="button primary" onClick={() => execute({ type: 'next' })}>{definition.initiative_system.has_turns ? it.nextTurn : it.nextRound}</button>
+          <button className="button secondary" onClick={() => execute({ type: 'finish' })}>{it.finishCombat}</button>
+        </> : combat.status !== 'finished' && <>
+          <button className="button secondary" disabled={!combat.combatants.length} onClick={() => execute({ type: 'roll' })}>{it.rollInitiative}</button>
+          <button className="button primary" disabled={!combat.combatants.length || order.unresolved} onClick={() => execute({ type: 'start' })}>{it.startCombat}</button>
+        </>}
         <button className="button secondary danger-text" onClick={() => setDeleting(true)}>{it.delete}</button>
       </div>
       {combat.combatants.some(f => f.initiative !== null) && order.unresolved && <Warning>{it.unresolvedInitiative}</Warning>}
@@ -103,8 +107,12 @@ function CombatDetail({ system, combat, resources, characters, run }: {
           enumerations: system.definition.enumerated_types,
           onChange: (statId: string, value: unknown) => execute({ type: 'value', id: f.id, statId, value }),
           onCommit: (patch: ValuePatch, additions?: ResourceInstance[]) => commitCombatView(combat.id, f.id, patch, additions) };
-        return <article key={f.id} className={`combatant-card ${current?.id === f.id ? 'combatant-current' : ''}`}>
-          <div className="combat-meta"><h3>{title}</h3><span className="badge">{type.side}</span>{current?.id === f.id && <strong>{it.currentTurn}</strong>}</div>
+        let defeated: boolean | null = null, defeatedError = '';
+        try { defeated = isDefeated(context, combat, f.id); } catch (e) { defeatedError = e instanceof Error ? e.message : String(e); }
+        return <article key={f.id} className={`combatant-card ${current?.id === f.id ? 'combatant-current' : ''} ${defeated ? 'combatant-defeated' : ''}`}>
+          <div className="combat-meta"><h3>{title}</h3><span className="badge">{type.side}</span>
+            {defeated && <span className="badge badge-error">{it.defeated}</span>}{current?.id === f.id && <strong>{it.currentTurn}</strong>}</div>
+          {defeatedError && <Warning>{defeatedError}</Warning>}
           <label className="field"><span>{it.initiative} · {title}</span><input aria-label={`${it.initiative} · ${title}`} type="number" step={1} disabled={combat.status === 'active'}
             defaultValue={f.initiative ?? ''} key={String(f.initiative)} onBlur={e => {
               if (e.currentTarget.value.trim()) execute({ type: 'initiative', id: f.id, value: Number(e.currentTarget.value) });
@@ -131,7 +139,10 @@ function CombatDetail({ system, combat, resources, characters, run }: {
           catch (e) { return <p className="unsupported">{String(e)}</p>; }
         })()}
       </details>
-      {deleting && <Modal title={it.deleteCombat} onClose={() => setDeleting(false)}><button className="button danger" onClick={() => void run(async () => { await db.combats.delete(combat.id); setDeleting(false); })}>{it.delete}</button></Modal>}
+      {deleting && <Modal title={it.deleteCombat} onClose={() => setDeleting(false)}><div className="modal-actions">
+        <button className="button secondary" onClick={() => setDeleting(false)}>{it.cancel}</button>
+        <button className="button danger" onClick={() => void run(async () => { await db.combats.delete(combat.id); setDeleting(false); })}>{it.delete}</button>
+      </div></Modal>}
     </section>;
   } catch (error) { return <Warning>{error instanceof Error ? error.message : String(error)}</Warning>; }
 }

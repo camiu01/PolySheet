@@ -5,6 +5,7 @@ import { Library } from '../src/ui/Library';
 import { ImportDiagnostics, SystemImportOptions } from '../src/ui/SystemImport';
 import { db } from '../src/persistence/db';
 import { it as copy } from '../src/ui/it';
+import { useUi } from '../src/ui/store';
 
 beforeAll(() => {
   HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
@@ -19,7 +20,6 @@ it('offers distinct file, folder, link and example actions and disables them whi
   fireEvent.click(screen.getByRole('button', { name: copy.importUrl }));
   fireEvent.click(screen.getByRole('button', { name: copy.demoAction }));
   for (const callback of [onFile, onFolder, onLink, onDemo]) expect(callback).toHaveBeenCalledTimes(1);
-  expect(screen.getByRole('list', { name: copy.importSteps }).children).toHaveLength(3);
   rerender(<SystemImportOptions onFile={onFile} onFolder={onFolder} onLink={onLink} onDemo={onDemo} busy />);
   for (const button of screen.getAllByRole('button')) expect(button).toBeDisabled();
 });
@@ -49,18 +49,15 @@ it('removes the duplicate import action and only exposes the optional reference 
   expect(screen.queryByRole('dialog')).toBeNull();
 });
 
-it('previews the example and cancels without installing a system', async () => {
+it('installs the bundled example in one step and opens the character list', async () => {
   const before = await db.systems.count();
+  useUi.setState({ page: 'systems' });
   render(<Library systems={[]} run={async work => { await work(); }} />);
   fireEvent.click(screen.getByRole('button', { name: copy.demoAction }));
-  await screen.findByRole('dialog', { name: copy.importPreview });
-  expect(screen.getByText(copy.importReviewHelp)).toBeVisible();
-  expect(screen.getByText((_, element) => element?.tagName === 'P'
-    && element.textContent === '7 statistiche · 3 sezioni · 1 tipo di risorsa')).toBeVisible();
-  expect(await db.systems.count()).toBe(before);
-  fireEvent.click(screen.getByRole('button', { name: copy.cancel }));
-  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-  expect(await db.systems.count()).toBe(before);
+  await waitFor(async () => expect(await db.systems.count()).toBe(before + 1));
+  expect(screen.queryByRole('dialog', { name: copy.importPreview })).toBeNull();
+  await waitFor(() => expect(useUi.getState().page).toBe('characters'));
+  expect((await db.systems.toArray()).some(s => s.definition.id === 'polysheet-sentieri' && s.key === useUi.getState().systemKey)).toBe(true);
 });
 
 it('expands blocking errors and counts all warnings while bounding the visible detail list', () => {
@@ -73,6 +70,11 @@ it('expands blocking errors and counts all warnings while bounding the visible d
   expect(screen.getByText('Invalid source field').closest('details')).toHaveAttribute('open');
   expect(screen.getByText(copy.diagnosticGroups.fields).closest('details')).not.toHaveAttribute('open');
   expect(screen.getByText('(101)')).toBeInTheDocument();
-  expect(screen.getAllByText('Campo conservato, ma non interpretato.')).toHaveLength(100);
+  // Repeated messages collapse to one entry; the fields stay readable and the exact paths stay bounded.
+  expect(screen.getByText('Campo conservato, ma non interpretato.')).toBeInTheDocument();
+  expect(screen.getByText('×101')).toBeInTheDocument();
+  expect(screen.getByText('future_0', { selector: 'code' })).toBeInTheDocument();
+  expect(screen.getByText('$.future_99', { selector: 'code' })).toBeInTheDocument();
+  expect(screen.queryByText('$.future_100', { selector: 'code' })).toBeNull();
   expect(screen.getByText(copy.displayedDiagnostics)).toBeInTheDocument();
 });

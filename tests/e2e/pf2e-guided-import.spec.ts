@@ -37,7 +37,7 @@ test('PF2e prepares from the shared game action, validates the file and preserve
     return route.fulfill({ body: files.get(path), contentType: 'application/json' });
   });
   await page.goto('./');
-  await page.getByRole('button', { name: it.newCharacter, exact: true }).first().click();
+  await page.getByRole('button', { name: it.importSystem, exact: true }).click();
   const prepare = page.getByRole('button', { name: `${it.gamePrepare} · Pathfinder 2e`, exact: true });
   await prepare.click();
   const source = page.getByRole('dialog', { name: it.repositoryChooseTitle, exact: true });
@@ -73,6 +73,7 @@ test('PF2e prepares from the shared game action, validates the file and preserve
   await load.click();
   await preview.getByRole('button', { name: it.confirmImport, exact: true }).click();
   await expect(preview).not.toBeVisible();
+  await page.getByRole('button', { name: it.systems, exact: true }).first().click();
   await expect(page.locator('.system-card')).toHaveCount(1);
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: it.exportPackage, exact: true }).click();

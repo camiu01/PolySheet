@@ -9,7 +9,7 @@ import { it } from './it';
 
 /** Render source children, preserving their own ids and failures. */
 function children(items: unknown, context: RenderContext) {
-  if (!Array.isArray(items)) throw new Error('Lista di componenti non valida');
+  if (!Array.isArray(items)) throw new Error(it.viewInvalidList);
   return items.map((v, i) => <RenderView key={`${String((v as { id?: string }).id ?? '')}:${i}`} input={v} context={context} />);
 }
 
@@ -69,11 +69,11 @@ export function SourceViewPager({ node: v, context, evaluate }: {
   node: Record<string, unknown>; context: RenderContext; evaluate: (value: unknown) => unknown;
 }) {
   const [page, setPage] = useState(0);
-  if (!Array.isArray(v.subviews)) throw new Error('Viste delle pagine richieste');
+  if (!Array.isArray(v.subviews)) throw new Error(it.viewPagesRequired);
   const rawNames = evaluate(v.names);
   if (!Array.isArray(rawNames) || rawNames.some(name => typeof name !== 'string'))
     throw new Error('I nomi delle pagine devono essere una lista di testi');
-  if (rawNames.length !== v.subviews.length) throw new Error('Nomi e pagine non coincidono');
+  if (rawNames.length !== v.subviews.length) throw new Error(it.viewPageNames);
   const names = rawNames as string[];
   const color = viewColor(v.color, evaluate);
   const index = Math.min(page, names.length - 1);

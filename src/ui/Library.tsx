@@ -53,7 +53,6 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
   const localSystem = repositoryUpload ?? matchingSystems.find(s => s.key === repositoryLocalKey);
   const systemDownload = repository && repositorySystemDownload(repository, repositoryPath);
   const { navigate, selectSystem, systemKey } = useUi();
-  async function prepare(original: string, source: string) { setCatalogs([]); setPreview(await prepareSystem(original, source)); }
   async function prepareFolder(files: FolderFile[], path: string) {
     setCatalogProgress(`${it.repositoryCatalogProgress}: 0`);
     try {
@@ -155,7 +154,7 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
       const f = e.target.files?.[0]; e.target.value = '';
       if (f) void run(() => load(async () => {
         if (!/\.(json|rpg)$/i.test(f.name)) throw new Error(it.invalidFile);
-        if (f.size > MAX_SYSTEM_BYTES) throw new Error('File troppo grande: massimo 8 MB.');
+        if (f.size > MAX_SYSTEM_BYTES) throw new Error(it.fileTooLarge(8));
         setCatalogs([]); setPreview(await prepareImport(new Uint8Array(await f.arrayBuffer()), f.name));
       }));
     }} />
@@ -191,7 +190,11 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
       onFolder={() => { setImportError(''); folderInput.current?.click(); }}
       onLink={() => { setRepository(null); setImportError(''); setShowUrl(true); }}
       onDemo={systems.some(s => s.definition.id === 'polysheet-sentieri') ? undefined
-        : () => void run(() => prepare(demoOriginal, 'PolySheet · contenuto originale MIT'))} />
+        // The bundled demo is original, error-free content: install it directly and go create a character.
+        : () => void run(() => load(async () => {
+          const demo = await prepareSystem(demoOriginal, 'PolySheet · contenuto originale MIT');
+          await installSystem(demo); selectSystem(demo.key); navigate('characters');
+        }), it.imported)} />
     {loading && catalogProgress && !showUrl && !preview && <p role="status" className="muted">{catalogProgress}</p>}
     <div className="footnote"><BookOpen size={18} /><div><strong>{it.versions}</strong><p>{it.versionHelp}</p></div></div>
     {deleting && <Modal title={it.removeSystemTitle} onClose={() => !busy.current && setDeleting(null)}>
@@ -239,7 +242,7 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
               const f = e.target.files?.[0]; e.target.value = '';
               if (f) void run(() => load(async () => {
                 if (!/\.(json|rpg)$/i.test(f.name)) throw new Error(it.invalidFile);
-                if (f.size > MAX_SYSTEM_BYTES) throw new Error('File troppo grande: massimo 8 MB.');
+                if (f.size > MAX_SYSTEM_BYTES) throw new Error(it.fileTooLarge(8));
                 const prepared = await prepareImport(new Uint8Array(await f.arrayBuffer()), f.name);
                 if (prepared.definition.id !== sourceSystem.id || prepared.definition.version !== sourceSystem.version
                   || prepared.diagnostics.some(d => d.severity === 'error')) throw new Error(it.repositoryLocalMismatch);
@@ -363,7 +366,7 @@ export function Library({ systems, run }: { systems: StoredSystem[]; run: Run })
         <button className="button primary" disabled={loading || preview.diagnostics.some(d => d.severity === 'error')} onClick={() => void run(() => load(async () => {
           if (catalogs.length) await installRepositoryBundle(preview, catalogs);
           else await installSystem(preview);
-          selectSystem(preview.key); setPreview(null); setCatalogs([]);
+          selectSystem(preview.key); setPreview(null); setCatalogs([]); navigate('characters');
         }), it.imported)}>{loading ? it.loading : it.confirmImport}</button></div>
       </div>
     </Modal>}

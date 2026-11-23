@@ -365,6 +365,8 @@ for (const id of ['5e', '5e2024', 'pf2e']) {
     if (id === '5e') await page.screenshot({ path: testInfo.outputPath('official-5e-import-warning.png'), fullPage: true });
     await preview.getByRole('button', { name: 'Conferma importazione' }).click();
     await expect(preview).not.toBeVisible();
+    await expect(page.getByRole('heading', { name: copy.allCharacters })).toBeVisible();
+    await navigate(page, copy.systems);
     await expect(page.locator('.system-card')).toHaveCount(1);
     await page.locator('.system-card .card-footer .link-button').click();
     await expect(page.locator('main')).not.toContainText('sortBy senza order');
@@ -589,6 +591,7 @@ test('URL imports report HTTP and CORS errors and import a permitted JSON respon
   await page.getByRole('button', { name: 'Carica anteprima' }).click();
   await expect(page.getByRole('dialog', { name: 'Prima di importare' })).toBeVisible();
   await page.getByRole('button', { name: 'Conferma importazione' }).click();
+  await navigate(page, copy.systems);
   await expect(page.getByRole('heading', { name: 'Sentieri', exact: true })).toBeVisible();
 });
 
@@ -741,6 +744,7 @@ test('GitHub clone URL discovers files, validates selection and retains an immut
   await page.getByRole('button', { name: 'Carica anteprima' }).click();
   await page.getByRole('button', { name: 'Carica file selezionato' }).click();
   await page.getByRole('button', { name: 'Conferma importazione' }).click();
+  await navigate(page, copy.systems);
   await expect(page.getByRole('heading', { name: 'Sentieri', exact: true })).toBeVisible();
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Esporta .rpg originale' }).click();
@@ -944,6 +948,7 @@ test('direct raw .rpg imports the supplied repository system', async ({ page }) 
   await expect(page.getByRole('dialog').getByText('Supporto parziale', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Conferma importazione' }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
+  await navigate(page, copy.systems);
   const event = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Esporta .rpg originale', exact: true }).click();
   expect(readFileSync((await (await event).path())!)).toEqual(bytes);
@@ -970,6 +975,7 @@ test('.rpg expanded byte ceiling rejects 8 MiB plus one and accepts exactly 8 Mi
   await expect(page.getByRole('dialog', { name: 'Prima di importare' })).toBeVisible();
   await page.getByRole('button', { name: 'Conferma importazione' }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
+  await navigate(page, copy.systems);
   await expect(page.locator('.system-card')).toHaveCount(1);
 });
 
@@ -1181,7 +1187,7 @@ test('background and subrace selections retain upstream IDs through offline use 
   const background = aside.getByRole('combobox', { name: 'background', exact: true });
   const race = aside.getByRole('combobox', { name: 'race', exact: true });
   const subrace = aside.getByRole('combobox', { name: 'subrace_id', exact: true });
-  await expect(subrace).toBeDisabled();
+  await expect(subrace).toHaveCount(0);
   await background.selectOption({ label: 'Cartografo' });
   await race.selectOption({ label: 'Valle' });
   await expect(subrace.getByRole('option')).toHaveText([copy.choose, 'Riva']);
@@ -1208,12 +1214,12 @@ test('background and subrace selections retain upstream IDs through offline use 
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await page.getByRole('button', { name: /Origini conservate/ }).click();
   await expect(subrace).toHaveValue('upstream-subrace');
+  // A race without declared subraces clears the choice and hides the field.
   await race.selectOption({ label: 'Collina' });
-  await expect(subrace).toHaveValue('');
-  await expect(subrace).toContainText(copy.noSubraces);
+  await expect(subrace).toHaveCount(0);
   await expect(background.locator('option:checked')).toHaveText('Cartografo');
   await race.selectOption('');
-  await expect(subrace).toBeDisabled();
+  await expect(subrace).toHaveCount(0);
   await background.selectOption('');
   await expect(background).toHaveValue('');
 });

@@ -161,6 +161,7 @@ main{max-width:1440px}
 .source-avatar-section,.base-editor{border-radius:4px}
 .combatant-card{background:var(--surface);border-color:var(--line);border-radius:4px}
 .combatant-current{outline-color:var(--accent)}
+.combatant-defeated h3{text-decoration:line-through;color:var(--muted)}
 .source-ticker .ticker-button{width:44px;min-width:44px;height:44px}
 .theme-option{border-radius:4px}
 dialog{position:fixed;inset:0;margin:auto;height:fit-content;background:var(--surface);border-radius:8px;box-shadow:0 4px 24px #0007}
@@ -485,3 +486,7 @@ details:not(.sheet-section,.diagnostic-group,.source-collapsible)[open]>summary:
 .source-resource-section .source-resource-item .source-resource-array .source-resource-item { padding: 0; background: none; border: 0; box-shadow: none; }
 /* A source list with `hide_line` (5e `classes` in Traits & Features) shows its entries flat, like Racial traits. */
 .source-resource-array.no-line > .source-resource-item { padding: 0; background: none; border: 0; box-shadow: none; }
+/* Narrow resource cards: the text column takes the full row before it is squeezed beside a counter. */
+.source-resource-item .view-composite>.view-wrapper:has(>.view-list){flex:1 1 200px;min-width:0}
+.ticker-buttons{display:inline-flex;gap:8px}
+.source-ticker-row{row-gap:6px}

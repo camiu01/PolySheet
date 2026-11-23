@@ -30,3 +30,25 @@ it('searches accent-insensitively, filters by origin and mounts at most 50 cards
   fireEvent.change(screen.getByLabelText('Cerca per nome'), { target: { value: 'nessuno' } });
   expect(screen.getByText('Nessuna risorsa corrisponde ai filtri.')).toBeTruthy();
 });
+
+it('offers the source sort options once a type is chosen and groups cards under enumeration headers', async () => {
+  // Original shape: 5e spell `{ name: 'by level', stat: 'level', options: 'spell_level' }`.
+  const source = structuredClone(demo) as unknown as Omit<typeof demo, 'enumerated_types'> & { enumerated_types: unknown[] };
+  source.enumerated_types = [{ id: 'tono', types: [{ id: 'lieto', name: 'Lieto' }, { id: 'cupo', name: 'Cupo' }] }];
+  const resource = source.resources[0] as typeof source.resources[0] & { sort_options?: unknown[] };
+  resource.stats = [...resource.stats, { id: 'tono', name: 'Tono', type: 'base', value_type: 'string', default_value: '' }];
+  resource.sort_options = [{ name: 'per tono', stat: 'tono', options: 'tono' }];
+  const system = await prepareSystem(JSON.stringify(source), 'sorted demo');
+  expect(system.diagnostics.filter(d => d.path.includes('sort_options'))).toEqual([]);
+  await installSystem(system);
+  await db.resources.bulkAdd([['s1', 'Alba', 'cupo'], ['s2', 'Brezza', 'lieto'], ['s3', 'Cenere', 'cupo']].map(([id, name, tono]) =>
+    ({ id, systemKey: system.key, definitionId: 'ricordo', name, values: { titolo: name, testo: '', tono } }) as ResourceInstance));
+  render(<Resources systems={[system]} system={system} characters={[]} run={async task => { await task(); }} />);
+  await screen.findByText('3 risorse');
+  expect(screen.queryByLabelText('Ordina per')).toBeNull();
+  fireEvent.change(screen.getByLabelText('Tipo di risorsa'), { target: { value: 'ricordo' } });
+  fireEvent.change(screen.getByLabelText('Ordina per'), { target: { value: '0' } });
+  const grid = document.querySelector('.resource-grid')!;
+  expect([...grid.querySelectorAll('h3.resource-group, article.resource-card h2')].map(node => node.textContent))
+    .toEqual(['Lieto', 'Brezza', 'Cupo', 'Alba', 'Cenere']);
+});

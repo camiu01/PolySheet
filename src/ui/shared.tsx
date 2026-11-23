@@ -52,6 +52,6 @@ export function downloadBlob(blob: Blob, name: string) {
 }
 /** Check the browser's file byte count before materializing its text. */
 export async function readFile(file: File, maxBytes: number) {
-  if (file.size > maxBytes) throw new Error(`File troppo grande: massimo ${maxBytes / 1024 / 1024} MB.`);
+  if (file.size > maxBytes) throw new Error(it.fileTooLarge(maxBytes / 1024 / 1024));
   return decodeUtf8(await file.arrayBuffer());
 }

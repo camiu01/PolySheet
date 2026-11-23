@@ -84,7 +84,7 @@ export function SourceResourceView({ node: v, context: ctx }: { node: View; cont
   const [error, setError] = useState('');
   const definition = ctx.resourceDefinitions?.find(d => d.id === v.resource_id);
   if (!definition) throw new Error(it.noResourceType);
-  if (typeof v.stat !== 'string') throw new Error('Percorso della risorsa richiesto');
+  if (typeof v.stat !== 'string') throw new Error(it.viewResourcePath);
   const value = referenceValue(ctx, v);
   const id = resourceReferenceIds(value)[0];
   const field = ctx.stats.find(s => s.id === v.stat && s.type === 'base');
@@ -253,6 +253,6 @@ function referenceValue(ctx: RenderContext, v: View): unknown {
   const field = ctx.stats.find(s => s.id === v.stat);
   if (field?.type === 'base') return createEvaluator(ctx.stats,
     { ...(ctx.previewValues ?? ctx.values), [field.id]: inputValue(v, ctx, field) }, undefined, ctx).get(field.id);
-  if (typeof v.stat !== 'string') throw new Error('Percorso della risorsa richiesto');
+  if (typeof v.stat !== 'string') throw new Error(it.viewResourcePath);
   return createEvaluator(ctx.stats, ctx.previewValues ?? ctx.values, undefined, ctx).get(v.stat);
 }

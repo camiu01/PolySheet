@@ -3,9 +3,10 @@ import { expect, test } from '@playwright/test';
 import { resolve } from 'node:path';
 import { it } from '../../src/ui/it';
 
-test('a novice can identify the game, cancel the demo, create deliberately, edit and return with browser Back', async ({ page }, info) => {
+test('a novice can identify the game, try the demo, create deliberately, edit and return with browser Back', async ({ page }, info) => {
   await page.goto('./');
-  await page.getByRole('button', { name: it.newCharacter, exact: true }).first().click();
+  await expect(page.getByRole('button', { name: it.newCharacter, exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: it.importSystem, exact: true }).click();
   await expect(page.getByRole('heading', { name: it.systems, exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'A quale GDR stai giocando?', exact: true })).toBeVisible();
   for (const name of [it.game2014, it.game2024])
@@ -20,16 +21,10 @@ test('a novice can identify the game, cancel the demo, create deliberately, edit
   await page.screenshot({ path: resolve(`.reference/ui-review/${info.project.name}-game-choices.png`), fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole('button', { name: it.demoAction, exact: true }).click();
-  let dialog = page.getByRole('dialog');
-  await expect(dialog.getByText(it.demoDescription, { exact: true })).toBeVisible();
-  await dialog.getByRole('button', { name: it.cancel, exact: true }).click();
-  await expect(page.locator('.system-card')).toHaveCount(0);
-  await page.getByRole('button', { name: it.demoAction, exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: it.confirmImport, exact: true }).click();
-  await expect(page.locator('.system-card').getByText(it.demoBadge)).toBeVisible();
-  await page.getByRole('button', { name: it.useGame, exact: true }).click();
+  await expect(page.getByRole('heading', { name: it.allCharacters, exact: true })).toBeVisible();
+  await expect(page.getByText(it.emptyCharactersReady, { exact: true })).toBeVisible();
   await page.getByRole('button', { name: it.newCharacter, exact: true }).first().click();
-  dialog = page.getByRole('dialog');
+  let dialog = page.getByRole('dialog');
   await expect(dialog.getByRole('combobox', { name: it.chooseSystem, exact: true })).toHaveValue('');
   await expect(dialog.getByRole('button', { name: it.create, exact: true })).toHaveCount(0);
   await dialog.getByRole('combobox', { name: it.chooseSystem, exact: true }).selectOption({ index: 1 });
@@ -69,28 +64,30 @@ test('a novice can identify the game, cancel the demo, create deliberately, edit
 test('failed game preparation offers recovery and never installs an incomplete game', async ({ page }) => {
   await page.route('https://api.github.com/**', route => route.abort('failed'));
   await page.goto('./');
-  await page.getByRole('button', { name: it.newCharacter, exact: true }).first().click();
+  await page.getByRole('button', { name: it.importSystem, exact: true }).click();
   const choose = page.getByRole('button', { name: `${it.gamePrepare} · ${it.game2024}`, exact: true });
   await choose.click();
   await expect(page.getByRole('alert')).toBeVisible();
   await expect(page.getByTestId('save-status')).toHaveText(it.error);
   await expect(choose).toBeEnabled();
   await expect(page.locator('.system-card')).toHaveCount(0);
+  // The bundled demo still installs after a failed download, and only the demo is installed.
   await page.getByRole('button', { name: it.demoAction, exact: true }).click();
-  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.getByRole('heading', { name: it.allCharacters, exact: true })).toBeVisible();
   await expect(page.getByTestId('save-status')).toHaveText(it.saved);
-  await page.getByRole('dialog').getByRole('button', { name: it.cancel, exact: true }).click();
-  await expect(page.locator('.system-card')).toHaveCount(0);
+  await page.getByRole('button', { name: it.systems, exact: true }).first().click();
+  await expect(page.locator('.system-card')).toHaveCount(1);
+  await expect(page.locator('.system-card').getByText(it.demoBadge, { exact: true })).toBeVisible();
 });
 
 test('game choices and save feedback fit a narrow phone viewport', async ({ page }, info) => {
   await page.setViewportSize({ width: 320, height: 740 });
   await page.goto('./');
-  await page.getByRole('button', { name: it.newCharacter, exact: true }).first().click();
+  await page.getByRole('button', { name: it.importSystem, exact: true }).click();
   await expect(page.getByTestId('save-status')).toBeVisible();
   const status = (await page.getByTestId('save-status').boundingBox())!;
   expect(status.x).toBeGreaterThanOrEqual(0); expect(status.x + status.width).toBeLessThanOrEqual(320);
-  for (const button of await page.locator('main .import-source-row button').all()) {
+  for (const button of await page.locator('main .import-source-choices button').all()) {
     const box = (await button.boundingBox())!;
     expect(box.width).toBeGreaterThanOrEqual(44); expect(box.height).toBeGreaterThanOrEqual(44);
     expect(box.x + box.width).toBeLessThanOrEqual(320);
@@ -105,7 +102,7 @@ test('choosing a game shows its download progress and failure in the tapped row,
   const held = new Promise<void>(resolve => { release = resolve; });
   await page.route(/github\.com|githubusercontent\.com/, async route => { await held; await route.abort('internetdisconnected'); });
   await page.goto('./');
-  await page.getByRole('button', { name: it.newCharacter, exact: true }).first().click();
+  await page.getByRole('button', { name: it.importSystem, exact: true }).click();
   const choose = page.getByRole('button', { name: `${it.gamePrepare} · ${it.game2024}`, exact: true });
   await choose.click();
   const row = page.locator('.import-source-row').filter({ has: choose });

@@ -1,11 +1,11 @@
 /** @file Manual character creation and source-generated character sheets. */
 import { memo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ArrowLeft, ArrowUpRight, BookOpen, Check, ListChecks, Plus, ScrollText, Search, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, BookOpen, ListChecks, Plus, ScrollText, Search, Trash2 } from 'lucide-react';
 import { isResourceReference, object, type Character, type StoredSystem, type View } from '../domain/model';
 import { db, detachResource, setCharacterValue } from '../persistence/db';
 import { CompatibilityBadge, Empty, Modal, PageHeading, Warning, type Run } from './shared';
-import { it } from './it';
+import { currentLocale, it } from './it';
 import { useUi } from './store';
 import { commitCharacterView, commitResourceView } from '../persistence/views';
 import { setResourceOverride } from '../persistence/resources';
@@ -18,6 +18,7 @@ import { BaseValueEditor } from './BaseValueEditor';
 import { RuntimeResource } from '../engine/formulas';
 import { CharacterCreator } from './CharacterCreator';
 import { useCharacterEvents } from './CharacterEvents';
+import { runCharacterLoaded } from '../persistence/character-events';
 import { resolveCharacterOverrides } from '../engine/overrides';
 import { CharacterProgression } from './CharacterProgression';
 import { catalogFields } from '../persistence/catalog';
@@ -46,7 +47,7 @@ export function Characters({ systems, characters, run }: { systems: StoredSystem
   const onlyDemo = characters.every(c => systems.find(s => s.key === c.systemKey)?.definition.id === 'polysheet-sentieri');
   return <>
     <PageHeading title={it.allCharacters} description={it.characterSubtitle}
-      action={<button className="button primary" onClick={() => systems.length ? setCreating(true) : navigate('systems')}><Plus size={18} />{it.newCharacter}</button>} />
+      action={characters.length > 0 && <button className="button primary" onClick={() => setCreating(true)}><Plus size={18} />{it.newCharacter}</button>} />
     {searchable && <div className="character-toolbar"><div className="tab-label"><span className="tab-dot" />{it.allCharactersTab} <span className="count">{characters.length}</span></div>
       <label className="search"><Search size={17} /><input aria-label={it.search} placeholder={it.search} value={search} onChange={e => setSearch(e.target.value)} /></label></div>}
     {rosterSystems.length > 1 && <div className="roster-filters" role="group" aria-label={it.chooseSystem}>
@@ -55,7 +56,10 @@ export function Characters({ systems, characters, run }: { systems: StoredSystem
         aria-pressed={filter === s.key} onClick={() => setFilter(s.key)}>{s.definition.name} <span>{characters.filter(c => c.systemKey === s.key).length}</span></button>)}
     </div>}
     {characters.length === 0 ? <Empty title={it.emptyCharacters} icon={<ScrollText size={26} />}
-      action={<button className="button secondary" onClick={() => navigate('systems')}><BookOpen size={17} />{it.importSystem}</button>}>{it.emptyCharactersHelp}</Empty>
+      action={systems.length
+        ? <button className="button primary" onClick={() => setCreating(true)}><Plus size={17} />{it.newCharacter}</button>
+        : <button className="button secondary" onClick={() => navigate('systems')}><BookOpen size={17} />{it.importSystem}</button>}>
+      {systems.length ? it.emptyCharactersReady : it.emptyCharactersHelp}</Empty>
       : filtered.length ? <div className="character-grid">{filtered.map((c, index) => {
       const s = systems.find(s => s.key === c.systemKey);
       return <button className={`character-card ${highlightRecent && index === 0 ? 'character-recent' : ''}`} key={c.id} onClick={() => openCharacter(c.id)}>
@@ -63,14 +67,13 @@ export function Characters({ systems, characters, run }: { systems: StoredSystem
         <div className="character-art" aria-hidden="true"><div className="character-monogram">{c.name.slice(0, 2).toLocaleUpperCase('it')}</div><span className="character-system">{s?.definition.abbreviation ?? '?'}</span></div>
         <div className="character-card-body"><div className="card-title-row"><h2>{c.name}</h2></div><p className="muted">{s?.definition.name} · v{s?.definition.version}</p>
           {s?.definition.id === 'polysheet-sentieri' && <p className="badge badge-warning">{it.demoBadge}</p>}
-          <div className="character-card-meta"><span><i />{it.saved}</span><small>{new Date(c.updatedAt).toLocaleDateString('it')}</small></div>
+          <div className="character-card-meta"><span><i />{it.saved}</span><small>{new Date(c.updatedAt).toLocaleDateString(currentLocale())}</small></div>
           <div className="card-open-row">{s && s.diagnostics.length > 0 && <CompatibilityBadge system={s} />}<span>{it.openSheet}<ArrowUpRight size={15} /></span></div></div>
       </button>;
     })}<button className="add-character-card" onClick={() => setCreating(true)}><Plus size={28} /><span>{it.newCharacter}</span><small>{it.anotherStory}</small></button></div> : <Empty title={it.noResults} />}
-    <div className="privacy-strip"><Check size={16} /><span>{it.local}.</span><span className="muted">{it.noAccount}</span></div>
     {characters.length > 0 && onlyDemo && <div className="getting-started"><BookOpen size={24} /><div><strong>{it.chooseRules}</strong><p className="muted">{it.chooseRulesHelp}</p></div><button className="button secondary" onClick={() => navigate('systems')}>{it.systems}</button></div>}
     {creating && <CharacterCreator systems={systems} onSystemChange={selectSystem} run={run}
-      onClose={() => setCreating(false)} onDone={id => { setCreating(false); openCharacter(id); }} />}
+      onClose={() => setCreating(false)} onDone={id => { setCreating(false); void run(() => runCharacterLoaded(id)).finally(() => openCharacter(id)); }} />}
   </>;
 }
 /** Render the pinned snapshot, not unrelated shell save-status changes; writes patch the latest record. */
@@ -112,7 +115,7 @@ export const CharacterSheet = memo(function CharacterSheet({ character, system, 
     {events.dialog}
     <button className="link-button back-link" onClick={() => navigate('characters')}><ArrowLeft size={17} />{it.back}</button>
     <PageHeading title={character.name}
-      description={`${system.definition.name} · v${system.definition.version} · ${system.digest.slice(0, 8)} · ${it.sheet}`}
+      description={`${system.definition.name} · v${system.definition.version}`}
       action={<div className="button-row character-sheet-actions">
         {system.definition.progression_systems.experience_levelling_system != null
           && <button type="button" className="button secondary" onClick={() => setProgression(true)}>{it.progression}</button>}
@@ -139,8 +142,9 @@ export const CharacterSheet = memo(function CharacterSheet({ character, system, 
       </Modal>}
       {!system.definition.character_sheet_sections.length && <Warning>{it.noSections}</Warning>}
       <BaseValueEditor stats={system.definition.character_stats} values={character.values} resources={resources} onSave={change} />
-    </div><aside className="sheet-aside sheet-anchor" id="sheet-related-resources" tabIndex={-1}><CharacterCatalog key={character.id} character={character} system={system} resources={resources} run={run} /><div className="aside-note"><h2>{it.assigned}</h2><p className="muted">{it.resourceHelp}</p>
-      {!character.resourceIds.length && <p>{it.noAssigned}</p>}
+    </div><aside className="sheet-aside sheet-anchor" id="sheet-related-resources" tabIndex={-1}><CharacterCatalog key={character.id} character={character} system={system} resources={resources} run={run} /><div className="aside-note"><h2>{it.assigned}</h2>
+      {/* The explanation matters only until the first resource is linked. */}
+      {!character.resourceIds.length && <><p>{it.noAssigned}</p><p className="muted">{it.resourceHelp}</p></>}
       {character.resourceIds.map(id => {
         const resource = resources.find(r => r.id === id);
         return <div className="attached-resource" key={id}><strong>{resource?.name ?? id}</strong><button className="link-button" onClick={() => void run(() => detachResource(character.id, id))}>{it.detach}</button></div>;
@@ -152,7 +156,7 @@ export const CharacterSheet = memo(function CharacterSheet({ character, system, 
       <button className="button danger" onClick={() => void run(async () => {
         await db.transaction('rw', db.characters, db.rolls, db.combats, async () => {
           if ((await db.combats.where('systemKey').equals(character.systemKey).toArray()).some(c => c.combatants.some(f => f.characterId === character.id)))
-            throw new Error('Personaggio usato in un incontro: rimuovilo prima dal combattimento.');
+            throw new Error(it.characterInCombat);
           await db.characters.delete(character.id);
           await db.rolls.filter(r => r.characterId === character.id).delete();
         }); navigate('characters');

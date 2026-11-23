@@ -2,7 +2,7 @@
  * @file Local resource, dice, compatibility, and backup screens.
  * @remarks Resource links are PolySheet notebook metadata, not RPG rule effects.
  */
-import { useRef, useState, type ReactNode } from 'react';
+import { Fragment, useRef, useState, type ReactNode } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ArrowDownToLine, Dices, FileCheck2, HardDrive, Moon, Plus, ShieldCheck, Sun, Trash2, Upload } from 'lucide-react';
 import { type Character, type Preferences, type ResourceInstance, type StoredSystem } from '../domain/model';
@@ -14,9 +14,13 @@ import { exportBackup, restoreBackup, validateBackup, type ValidBackup } from '.
 import { RenderView } from './renderer';
 import { CompatibilityBadge, Empty, Modal, PageHeading, SystemSelect, Warning, download, readFile, type Run } from './shared';
 import { useUi } from './store';
-import { it, detectLocale, setLocale, type Locale } from './it';
+import { it, currentLocale, detectLocale, setLocale, type Locale } from './it';
 import { CatalogImport } from './CatalogImport';
 import { groupDiagnostics } from '../importing/diagnostic-groups';
+import type { EvaluationEnvironment } from '../engine/formulas';
+import { sortOptions, sortResources, type SortedResource, type SortOption } from '../engine/resource-sort';
+import { SortSelect } from './LocalResourcePicker';
+import { DiagnosticItems } from './SystemImport';
 
 interface SystemPageProps { systems: StoredSystem[]; system?: StoredSystem; run: Run }
 function Selector({ systems, system }: Omit<SystemPageProps, 'run'>) {
@@ -39,7 +43,7 @@ export function Resources({ systems, system, characters, run }: SystemPageProps 
     <PageHeading title={it.resources} description={it.resourceSubtitle}
       action={<button className="button primary" disabled={!defs.length} onClick={() => { setDefinitionId(defs[0]?.id ?? ''); setEditing('new'); }}><Plus size={18} />{it.newResource}</button>} />
     <Selector systems={systems} system={system} />
-    {!system ? <Empty title={it.noSystemSelected} /> : resources.length ? <ResourceArchive key={system.key} defs={defs}
+    {!system ? <Empty title={it.noSystemSelected} /> : resources.length ? <ResourceArchive key={system.key} defs={defs} environment={{ resources, resourceDefinitions: defs, enumerations: system.definition.enumerated_types }}
       records={resources.filter(r => !r.catalogGroup || r.catalogGroup === r.id)} render={r => {
       const d = defs.find(d => d.id === r.definitionId);
       return <article key={r.id} className="resource-card"><div className="card-title-row"><span className="eyebrow">{d?.name}</span><button className="icon-button danger-text" aria-label={`${it.delete} ${r.name}`} onClick={() => setDeleting(r)}><Trash2 size={17} /></button></div>
@@ -98,7 +102,7 @@ export function DicePage({ systems, system, preferences, run }: SystemPageProps 
       {latest && <div className="dice-result" aria-live="polite"><span className="eyebrow">{it.result}</span><output>{latest.total}</output><span>{latest.formula} · [{latest.results.join(', ')}]</span></div>}
     </section><section className="history-panel"><div className="section-title"><h2>{it.history}</h2><span className="count">{sorted.length}</span></div>
       {!sorted.length && <Empty title={it.noRolls} />}
-      {sorted.slice(0, 100).map(r => <div className="roll-row" key={r.id}><span className="roll-icon"><Dices size={18} /></span><div><strong>{r.formula}</strong><small className="muted">[{r.results.join(', ')}] · {new Date(r.createdAt).toLocaleString('it')}</small></div><output>{r.total}</output></div>)}
+      {sorted.slice(0, 100).map(r => <div className="roll-row" key={r.id}><span className="roll-icon"><Dices size={18} /></span><div><strong>{r.formula}</strong><small className="muted">[{r.results.join(', ')}] · {new Date(r.createdAt).toLocaleString(currentLocale())}</small></div><output>{r.total}</output></div>)}
     </section></div>
   </>;
 }
@@ -114,8 +118,7 @@ export function Diagnostics({ systems, system }: Omit<SystemPageProps, 'run'>) {
         {groupDiagnostics(system.diagnostics).map(group => <details className="diagnostic-group" key={group.category} open={group.category === 'error'}>
           <summary><span className={`badge ${group.category === 'error' ? 'badge-error' : 'badge-warning'}`}>{group.items.length}</span>
             <span><strong>{it.diagnosticGroups[group.category]}</strong><small className="muted">{it.diagnosticGroupNotes[group.category]}</small></span></summary>
-          <div className="diagnostic-list">{group.items.slice(0, 100).map((d, i) => <article key={i}><div><code>{d.path}</code><p>{d.message}</p></div></article>)}</div>
-          {group.items.length > 100 && <p className="muted">{it.displayedDiagnostics}</p>}
+          <div className="diagnostic-list"><DiagnosticItems items={group.items} /></div>
         </details>)}</> : <div className="notice notice-success"><ShieldCheck size={20} /><p>{it.noDiagnostics}</p></div>}
     </> : <Empty title={it.noSystemSelected} />}
   </>;
@@ -164,24 +167,35 @@ const folded = (text: string) => text.normalize('NFD').replace(/\p{Diacritic}/gu
  * @remarks Keyed by system, so filters reset when the system changes. Catalog entries are the
  * records that keep an imported original (`catalogSource`), not private copies of a catalog graph.
  */
-function ResourceArchive({ records, defs, render }: {
-  records: ResourceInstance[]; defs: StoredSystem['definition']['resources']; render: (record: ResourceInstance) => ReactNode;
+function ResourceArchive({ records, defs, environment, render }: {
+  records: ResourceInstance[]; defs: StoredSystem['definition']['resources']; environment: EvaluationEnvironment;
+  render: (record: ResourceInstance) => ReactNode;
 }) {
   const [query, setQuery] = useState(''), [type, setType] = useState(''), [origin, setOrigin] = useState('');
+  const [sortIndex, setSortIndex] = useState('');
   const [page, setPage] = useState(0);
   const needle = folded(query.trim());
   const matches = records.filter(r => (!needle || folded(r.name).includes(needle)) && (!type || r.definitionId === type)
     && (!origin || (origin === 'catalog') === !!r.catalogSource));
+  // Source sort options belong to one resource type, so they appear once a type is chosen.
+  const definition = defs.find(d => d.id === type);
+  let options: SortOption[] = [], sorted: SortedResource[] = matches.map(record => ({ record, group: null })), sortError = '';
+  try {
+    options = definition ? sortOptions(definition, environment.enumerations as unknown[]) : [];
+    const option = sortIndex ? options[Number(sortIndex)] : undefined;
+    if (definition && option) sorted = sortResources(matches, definition, option, environment, it.notStat);
+  } catch (error) { sortError = error instanceof Error ? error.message : String(error); }
   const pages = Math.max(1, Math.ceil(matches.length / archivePage)), current = Math.min(page, pages - 1);
+  const shown = sorted.slice(current * archivePage, (current + 1) * archivePage);
   const types = defs.filter(d => records.some(r => r.definitionId === d.id));
   const filtered = !!needle || !!type || !!origin;
-  const reset = () => { setQuery(''); setType(''); setOrigin(''); setPage(0); };
+  const reset = () => { setQuery(''); setType(''); setOrigin(''); setSortIndex(''); setPage(0); };
   return <>
     <div className="archive-filters" role="search">
       <label className="field"><span>{it.searchResources}</span>
         <input type="search" value={query} onChange={e => { setQuery(e.target.value); setPage(0); }} /></label>
       <label className="field"><span>{it.resourceType}</span>
-        <select value={type} onChange={e => { setType(e.target.value); setPage(0); }}>
+        <select value={type} onChange={e => { setType(e.target.value); setSortIndex(''); setPage(0); }}>
           <option value="">{it.allTypes}</option>
           {types.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
         </select></label>
@@ -191,10 +205,14 @@ function ResourceArchive({ records, defs, render }: {
           <option value="catalog">{it.originCatalog}</option>
           <option value="local">{it.originLocal}</option>
         </select></label>
+      <SortSelect options={options} value={sortIndex} onChange={value => { setSortIndex(value); setPage(0); }} />
       {filtered && <button type="button" className="button secondary" onClick={reset}>{it.clearFilters}</button>}
     </div>
     <p className="muted" role="status" data-testid="resource-count">{it.resourceResults(matches.length, records.length)}</p>
-    {matches.length ? <div className="resource-grid">{matches.slice(current * archivePage, (current + 1) * archivePage).map(render)}</div>
+    {sortError && <Warning>{sortError}</Warning>}
+    {matches.length ? <div className="resource-grid">{shown.map(({ record, group }, index) => <Fragment key={record.id}>
+      {group !== null && group !== (index ? shown[index - 1].group : sorted[current * archivePage - 1]?.group ?? null) && <h3 className="resource-group">{group}</h3>}
+      {render(record)}</Fragment>)}</div>
       : <Empty title={it.noResourceMatches}><button type="button" className="button secondary" onClick={reset}>{it.clearFilters}</button></Empty>}
     {pages > 1 && <nav className="archive-pages" aria-label={it.resourcePages}>
       <button type="button" className="button secondary" disabled={current === 0} onClick={() => setPage(current - 1)}>{it.previousPage}</button>

@@ -12,8 +12,8 @@ test('system import separates sources, opens the real file picker and cancels be
   await page.locator('main').getByRole('button', { name: it.importSystem, exact: true }).click();
   const main = page.locator('main');
   await expect(main.locator('.page-heading button')).toHaveCount(0);
-  await expect(main.getByRole('heading', { name: it.importFileTitle })).toBeVisible();
-  await expect(main.getByRole('heading', { name: it.importLinkTitle })).toBeVisible();
+  await expect(main.locator('.import-source-choices').getByRole('button', { name: it.localFile, exact: true })).toBeVisible();
+  await expect(main.locator('.import-source-choices').getByRole('button', { name: it.importUrl, exact: true })).toBeVisible();
   await expect(main.getByText(it.importBeforeConfirm)).toBeVisible();
   await expect(main.locator('.import-format-help').filter({ hasText: it.importFormatsTitle })).not.toHaveAttribute('open');
   await page.evaluate(() => window.scrollTo(0, 0));
@@ -46,7 +46,7 @@ test('folder import selects one system and reviews its own catalogs before writi
     await page.goto('./');
     await page.locator('main').getByRole('button', { name: it.importSystem, exact: true }).click();
     const picker = page.waitForEvent('filechooser');
-    await page.locator('main .import-source-row button').filter({ hasText: it.localFolder }).click();
+    await page.locator('main .import-source-choices button').filter({ hasText: it.localFolder }).click();
     await (await picker).setFiles(folder);
     const choose = page.getByRole('dialog', { name: it.folderPreviewTitle });
     await expect(choose).toBeVisible();
@@ -58,6 +58,7 @@ test('folder import selects one system and reviews its own catalogs before writi
     await expect(preview.getByText(`${it.repositoryCatalogs}: 1`)).toBeVisible();
     await preview.getByRole('button', { name: it.confirmImport }).click();
     await expect(preview).not.toBeVisible();
+    await page.getByRole('button', { name: it.systems, exact: true }).first().click();
     await expect(page.locator('.system-card')).toHaveCount(1);
     await expect(page.locator('.system-card')).toContainText('Cartella B');
   } finally { rmSync(root, { recursive: true, force: true }); }
@@ -76,9 +77,10 @@ test('catalog-only folder adds its originals to an installed system', async ({ p
       name: 'song.system.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(catalogSystem))
     });
     await page.getByRole('dialog', { name: it.importPreview }).getByRole('button', { name: it.confirmImport }).click();
+    await page.getByRole('button', { name: it.systems, exact: true }).first().click();
     await expect(page.locator('.system-card')).toHaveCount(1);
     const picker = page.waitForEvent('filechooser');
-    await page.locator('main .import-source-row button').filter({ hasText: it.localFolder }).click();
+    await page.locator('main .import-source-choices button').filter({ hasText: it.localFolder }).click();
     await (await picker).setFiles(folder);
     const dialog = page.getByRole('dialog', { name: it.folderCatalogsTitle });
     await expect(dialog).toBeVisible();

@@ -28,7 +28,7 @@ export function FilteredResourcePicker({ input, definition, context, resources, 
           <span>{filter.name}: {filter.values.map(value => typeof value === 'boolean' ? value ? it.yes : it.no : String(value)).join(', ')}</span>
         </label>)}
       </fieldset>}
-      <LocalResourcePicker resources={matches} busy={busy} onSelect={onSelect} />
+      <LocalResourcePicker resources={matches} busy={busy} onSelect={onSelect} sorting={{ definition, environment: context }} />
     </>;
   } catch (error) {
     return <p role="alert" data-view-error className="unsupported">{error instanceof Error ? error.message : String(error)}</p>;

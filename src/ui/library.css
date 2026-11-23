@@ -1,8 +1,6 @@
 .system-import{margin-bottom:32px;border:1px solid var(--line);border-radius:4px;background:var(--surface);padding:24px}
 .system-import>h2{font:500 26px/1.25 var(--heading)}
 .system-import>p{max-width:68ch;margin-top:8px;font-size:14px}
-.import-steps{display:flex;flex-wrap:wrap;gap:8px 32px;list-style:decimal;padding-left:20px;margin:20px 0 24px;color:var(--muted);font-size:12px}
-.import-steps li{padding-left:4px}
 .import-source-row{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:16px;align-items:center;padding:24px 0;border-top:1px solid var(--line)}
 .import-source-row>svg,.import-demo>svg{color:var(--muted)}
 .import-source-row>.button{max-width:100%}
@@ -12,7 +10,9 @@
 .import-format-help{margin-top:12px;font-size:13px}
 .import-format-help>summary,.import-advanced>summary,.import-diagnostic-group>summary,.import-source-details>summary{min-height:44px;align-content:center;cursor:pointer}
 .import-format-help>p{max-width:68ch;color:var(--muted);margin:4px 0 12px;line-height:1.65}
-.import-demo{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:16px;align-items:center;margin-top:20px;padding-top:20px;border-top:1px solid var(--line)}
+.import-demo{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:16px;align-items:center;margin-bottom:24px;padding:16px 20px;border:1px solid var(--line);border-radius:12px;background:var(--accent-soft)}
+.import-source-choices{display:flex;flex-wrap:wrap;gap:12px;margin:16px 0}
+.import-source-choices>.button{flex:1 1 180px;justify-content:center}
 .import-link-intro,.import-review-help{margin-top:16px;font-size:14px;color:var(--muted);max-width:68ch}
 .import-link-help{padding-left:20px;font-size:13px;line-height:1.7;color:var(--muted)}
 .import-link-help li+li{margin-top:8px}
@@ -38,7 +38,6 @@
 @media(max-width:760px){
   .system-import{padding:20px 16px}
   .system-import>h2{font-size:24px}
-  .import-steps{gap:8px 24px}
   .import-source-row{grid-template-columns:24px minmax(0,1fr);gap:8px 12px;padding:20px 0}
   .import-source-row>.button{grid-column:2;justify-self:start;margin-top:8px}
   .import-demo{grid-template-columns:24px minmax(0,1fr);gap:8px 12px}
@@ -54,3 +53,14 @@
 .game-failed strong{color:var(--danger)}
 .spin{animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+.diagnostic-items{list-style:none;margin:0;padding:0}
+.diagnostic-items>li{padding:14px 18px;border-bottom:1px solid var(--line)}
+.diagnostic-items>li:last-child{border-bottom:0}
+.diagnostic-items p{margin:0;font-size:13px}
+.diagnostic-fields{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px!important}
+.diagnostic-fields code{font-size:11px;padding:2px 6px;border-radius:4px;background:var(--surface-soft)}
+.diagnostic-items details{margin-top:8px;font-size:12px}
+.diagnostic-items summary{cursor:pointer;color:var(--muted);min-height:32px;display:flex;align-items:center}
+.diagnostic-items details ul{margin:6px 0 0;padding-left:18px}
+.resource-group{grid-column:1/-1;margin:16px 0 4px;font:600 13px/1.4 "Plus Jakarta Sans","Segoe UI",sans-serif;letter-spacing:.4px;color:var(--accent)}
+.resource-group:first-child{margin-top:0}
