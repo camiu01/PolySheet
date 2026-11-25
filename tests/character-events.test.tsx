@@ -6,7 +6,8 @@ import { expect, it, vi } from 'vitest';
 import { characterEventEffect, executeCharacterEvent, rollEventDice } from '../src/engine/character-events';
 import { eventNames } from '../src/engine/effects';
 import { RuntimeResource } from '../src/engine/formulas';
-import { prepareSystem } from '../src/importing/system';
+import { diagnose, prepareSystem } from '../src/importing/system';
+import type { SystemDefinition } from '../src/domain/model';
 import { createCharacter, db, installSystem, SheetDatabase } from '../src/persistence/db';
 import { demo } from '../src/demo';
 import { base, constant, list, stat } from './fixtures/capabilities';
@@ -26,6 +27,26 @@ it('accepts empty subscriptions without accepting empty event names in a list', 
     { ...definition.mechanics[0], revert_event_names: '' },
     { id: 'unsubscribed', event_names: '', revert_event_names: '', effects: { type: 'unsupported' } }
   ] }, event)).toEqual(roll);
+});
+
+it('accepts resource card events only when that resource has an executable handler', () => {
+  const tap = (id: string) => ({ id, type: 'stat', stat: 'bonus', on_tap_event: { name: 'cardRoll', payload: { stat: 'bonus' } } });
+  const resource = (id: string, mechanics: unknown[]) => ({
+    id, name: id, display_name: 'bonus', stats: [{ id: 'bonus', name: 'Bonus', type: 'base', value_type: 'integer', default_value: 0 }],
+    display_view: { id: `${id}_display`, type: 'list', subviews: [tap(`${id}_card`)] },
+    search_item_view: tap(`${id}_search`), mechanics
+  });
+  const source = { ...definition, resources: [
+    resource('handled', [{ id: 'card_roll', event_names: 'cardRoll', effects: roll }]),
+    resource('unhandled', [])
+  ] };
+  const events = diagnose(source as unknown as SystemDefinition)
+    .filter(item => item.path.endsWith('on_tap_event')).map(item => [item.path, item.message]);
+  expect(events).toEqual([
+    ['$.resources[0].search_item_view.on_tap_event', 'Evento "cardRoll" disponibile solo nella scheda del personaggio o nelle schede risorsa, non in popup, ricerca o bozze.'],
+    ['$.resources[1].display_view.subviews[0].on_tap_event', 'Evento "cardRoll" senza un gestore eseguibile nella risorsa unhandled: il tocco resta inattivo.'],
+    ['$.resources[1].search_item_view.on_tap_event', 'Evento "cardRoll" disponibile solo nella scheda del personaggio o nelle schede risorsa, non in popup, ricerca o bozze.']
+  ]);
 });
 
 async function fixture() {

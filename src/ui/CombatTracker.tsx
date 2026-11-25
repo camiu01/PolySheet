@@ -7,7 +7,9 @@ import { commandCombat, createCombat, type CombatCommand } from '../persistence/
 import { db } from '../persistence/db';
 import { commitCombatView, type ValuePatch } from '../persistence/views';
 import { FieldInput } from './FieldInput';
-import { RenderView } from './renderer';
+import { RenderView, type RenderContext } from './renderer';
+import { useCharacterEvents } from './CharacterEvents';
+import type { RuntimeResource } from '../engine/formulas';
 import { Empty, Modal, PageHeading, SystemSelect, Warning, type Run } from './shared';
 import { useUi } from './store';
 import { it } from './it';
@@ -40,6 +42,26 @@ export function CombatTracker({ systems, system, characters, run }: {
     </>}
   </>;
 }
+function CombatantViews({ context, card, header }: { context: RenderContext; card?: unknown; header?: unknown }) {
+  return <>
+    {card != null && <RenderView input={card} context={context} />}
+    {header != null && <RenderView input={header} context={context} />}
+  </>;
+}
+
+/** A character combatant runs its own mechanics (5e initiative `rollStat`), as on its sheet; resource combatants have none. */
+function CharacterCombatantViews({ system, character, scope, onInitiative, ...views }: {
+  system: StoredSystem; character: Character; scope: RuntimeResource; context: RenderContext; card?: unknown; header?: unknown;
+  /** Present while initiative is editable: the user may copy a roll total into it. */
+  onInitiative?: (value: number) => void;
+}) {
+  const events = useCharacterEvents(system, character, onInitiative);
+  // `canSourceEvent` accepts only views evaluated on the character's own stats; `scope` is exactly that.
+  const context: RenderContext = { ...views.context, character: scope,
+    canEvent: events.canEvent, onEvent: events.onEvent, eventBusy: events.eventBusy };
+  return <><CombatantViews {...views} context={context} />{events.dialog}</>;
+}
+
 function CombatDetail({ system, combat, resources, characters, run }: {
   system: StoredSystem; combat: Combat; resources: ResourceInstance[]; characters: Character[]; run: Run;
 }) {
@@ -117,8 +139,15 @@ function CombatDetail({ system, combat, resources, characters, run }: {
             defaultValue={f.initiative ?? ''} key={String(f.initiative)} onBlur={e => {
               if (e.currentTarget.value.trim()) execute({ type: 'initiative', id: f.id, value: Number(e.currentTarget.value) });
             }} /></label>
-          {type.card_view && <RenderView input={type.card_view} context={renderContext} />}
-          {current?.id === f.id && type.header_view && <RenderView input={type.header_view} context={renderContext} />}
+          {(() => {
+            // While preparing, every header is shown: that is when initiative is rolled and still editable.
+            const header = combat.status === 'preparing' || current?.id === f.id ? type.header_view : undefined;
+            const character = characters.find(c => c.id === f.characterId);
+            return character
+              ? <CharacterCombatantViews system={system} character={character} scope={scope} context={renderContext} card={type.card_view} header={header}
+                onInitiative={combat.status === 'active' ? undefined : value => execute({ type: 'initiative', id: f.id, value })} />
+              : <CombatantViews context={renderContext} card={type.card_view} header={header} />;
+          })()}
           <details className="base-editor"><summary>{it.baseValues} · {title}</summary><div className="base-grid">
             {scope.stats.filter(s => s.type === 'base').map(s => <FieldInput key={s.id} stat={s}
               value={Object.hasOwn(f.overrides, s.id) ? f.overrides[s.id] : scope.values[s.id]} resources={resources}

@@ -29,7 +29,8 @@ function MessageList({ messages }: { messages: { text: string; type: string }[] 
 }
 
 /** Serialize commands and retain the opening source event for popup saves; never roll during rendering or restore. */
-export function useCharacterEvents(system: StoredSystem, character: Character) {
+/** @param onRollTotal Offers each roll total to the caller (the tracker's initiative); nothing is applied unasked. */
+export function useCharacterEvents(system: StoredSystem, character: Character, onRollTotal?: (total: number) => void) {
   const lock = useRef(false);
   const [busy, setBusy] = useState(false);
   const [display, setDisplay] = useState<Awaited<ReturnType<typeof runCharacterEvent>> & { event: unknown }>();
@@ -87,6 +88,9 @@ export function useCharacterEvents(system: StoredSystem, character: Character) {
           {result.kind === 'roll' && result.rolls.map((row, index) => <section key={index} className="event-roll">
             <h3>{row.text}</h3>
             <output className="event-roll-total" aria-label={`${it.eventTotal} ${row.text}`}>{row.results.reduce((sum, roll) => sum + roll.total, 0)}</output>
+            {onRollTotal && <button type="button" className="button secondary" aria-label={`${it.useAsInitiative} · ${row.text}`} onClick={() => {
+              onRollTotal(row.results.reduce((sum, roll) => sum + roll.total, 0)); setDisplay(undefined);
+            }}>{it.useAsInitiative}</button>}
             {row.results.map((roll, i) => <p key={i} className="muted event-roll-detail">{roll.expression}{roll.dice.length ? ` · [${roll.dice.join(', ')}]` : ''}{row.results.length > 1 && roll.dice.length ? ` = ${roll.total}` : ''}</p>)}
           </section>)}
           {result.kind === 'roll' && result.messages.length === 0 && <p className="muted event-roll-note">{it.eventRollHelp}</p>}

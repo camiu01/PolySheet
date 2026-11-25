@@ -35,6 +35,7 @@ export const it = {
   eventAppliedHelp: 'La regola della scheda è stata applicata e salvata.',
   eventReverted: 'Effetti annullati:',
   eventRollHelp: 'Il tiro non cambia la scheda e non entra nello storico dei dadi.',
+  useAsInitiative: 'Usa come iniziativa',
   loadEventRolls: "L'evento di apertura della scheda tirerebbe dadi: non eseguito.",
   eventOwnerMissing: 'Il personaggio o il suo sistema non è più disponibile.',
   eventFailed: 'Impossibile eseguire l’azione',

@@ -2,6 +2,26 @@
 
 [← README](../README.md) · [Docs index](README.md) · [How to run checks](DEVELOPMENT.md) · [Historical records](VERIFICATION_HISTORY.md) · [12:37 checkpoint](VERIFICATION_2026-11-16_1237.md)
 
+## Resource card event diagnostics, 2026-11-25
+
+- The Archer import no longer reports
+  `resources[6].list_view.subviews[1].content[1].on_tap_event`, because the
+  companion's own `companion_list_roll_stat` handler runs at runtime. The
+  `rollStat` reports for `resources[34]` and the `player` combatant remain, now
+  with a specific reason. The `player_character` combatant header runs the
+  character's own `rollStat` in the tracker; while preparing, its total can be
+  copied into the combatant's initiative.
+- Official package warnings drop to 20 / 20 / 35 for 5e / 5e2024 / PF2e. The
+  only removed reports are list or card events with their own handler (5e
+  `resources[6]`, PF2e `resources[8]` and `resources[34].list_view`) and the
+  5e character combatant header.
+- Checks: `tests/character-events.test.tsx` (resource card event gate),
+  `tests/combat-events.test.tsx` (tracker roll and inert resource combatant),
+  `npm run check` 425 passed, 1 skipped, after fixing the two TypeScript 7
+  byte-array errors in `tests/local-folder.test.ts`. Full e2e on desktop and
+  mobile under `/PolySheet/`: 119 passed, 3 skipped. In the dev browser a
+  tracker roll of 21 became the character combatant's initiative.
+
 ## New 5e character: first-load rest, race and background traits, 2026-11-23
 
 Found by walking 5e from scratch (system, catalogs, guided bard creation): a new
