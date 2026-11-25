@@ -37,6 +37,7 @@ export const en: Copy = {
   eventAppliedHelp: 'The sheet rule was applied and saved.',
   eventReverted: 'Effects reverted:',
   eventRollHelp: 'The roll does not change the sheet and is not added to the dice history.',
+  useAsInitiative: 'Use as initiative',
   loadEventRolls: 'The sheet-opening event would roll dice: not run.',
   eventOwnerMissing: 'The character or its system is no longer available.',
   eventFailed: 'Could not run the action',

@@ -220,6 +220,8 @@ export function diagnose(system: SystemDefinition): Diagnostic[] {
       checkFormula(node[field], `${path}.${field}`, stats, inner, allowRoll);
     }
   }
+  /** Resource whose sheet card or list row is being checked; its own mechanics handle view events. */
+  let eventResource: string | undefined;
   function checkView(input: unknown, path: string, stats: Stat[], parentInputs = new Map<string, Stat>(), root = true) {
     if (!input || typeof input !== 'object' || Array.isArray(input)) { report(path, 'Vista non valida', 'error'); return; }
     const v = object(input);
@@ -237,8 +239,17 @@ export function diagnose(system: SystemDefinition): Diagnostic[] {
     if (!allowed) report(`${path}.type`, `Componente non supportato: ${v.type}`);
     else fields(v, [...commonViewFields, ...allowed, ...eventFields], path);
     for (const key of eventFields) if (v[key] != null) {
-      if (stats !== system.character_stats || !path.startsWith('$.character_sheet_sections[') || path.includes('.pop_up_view'))
-        report(`${path}.${key}`, 'Evento disponibile solo nella scheda del personaggio, non in risorse, combattimento o bozze.');
+      const name = String(object(v[key]).name);
+      // Sheet cards and list rows run their own resource's mechanics, exactly as `canSourceEvent` gates them.
+      if (eventResource && !path.includes('.pop_up_view')) {
+        if (!resourceEventSupported(system, eventResource, v[key]))
+          report(`${path}.${key}`, `Evento "${name}" senza un gestore eseguibile nella risorsa ${eventResource}: il tocco resta inattivo.`);
+      } else if (path.startsWith('$.combat_system.') && stats !== system.character_stats)
+        // Only a character combatant has an owner whose mechanics can run; resource combatants have none.
+        report(`${path}.${key}`, `Evento "${name}" non disponibile per questo combattente: nel tracker solo i personaggi eseguono eventi.`);
+      else if (stats !== system.character_stats || path.includes('.pop_up_view')
+        || !['$.character_sheet_sections[', '$.combat_system.combatant_types['].some(prefix => path.startsWith(prefix)))
+        report(`${path}.${key}`, `Evento "${name}" disponibile solo nella scheda del personaggio o nelle schede risorsa, non in popup, ricerca o bozze.`);
       else try { characterEventPlan(system, v[key]); }
       catch (error) { report(`${path}.${key}`, error instanceof Error ? error.message : String(error)); }
     }
@@ -401,8 +412,13 @@ export function diagnose(system: SystemDefinition): Diagnostic[] {
     // A combatant entry only feeds automatic encounter generation, which the app does not offer.
     if (r.is_combatant_entry === true) report(`${p}.is_combatant_entry`, 'Voce combattente riconosciuta: la generazione automatica degli incontri non è disponibile, aggiungi i combattenti dal tracker.');
     fields(r, ['id', 'name', 'plural', 'abbreviation', 'translatable', 'display_name', 'stats', 'display_view', 'edit_view', 'list_view', 'search_item_view', 'mechanics', 'indexed_stats', 'core', 'color', 'search_filters', 'sort_options', 'is_combatant_entry'], p);
-    for (const field of ['display_view', 'edit_view', 'list_view', 'search_item_view'] as const)
-      if (r[field]) checkView(r[field], `${p}.${field}`, r.stats);
+    for (const field of ['display_view', 'edit_view', 'list_view', 'search_item_view'] as const) {
+      if (!r[field]) continue;
+      // Only sheet cards and list rows receive a resource event scope at runtime.
+      eventResource = field === 'display_view' || field === 'list_view' ? r.id : undefined;
+      checkView(r[field], `${p}.${field}`, r.stats);
+      eventResource = undefined;
+    }
   });
   if (system.combat_system) {
     const c = system.combat_system, p = '$.combat_system';

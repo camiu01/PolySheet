@@ -12,7 +12,7 @@ import { catalogSystem, classOriginal, raceOriginal } from './fixtures/catalog';
 
 const systemText = JSON.stringify(catalogSystem);
 const entry = (path: string, text: string): FolderFile =>
-  ({ path, size: Buffer.byteLength(text), bytes: async () => new TextEncoder().encode(text) });
+  ({ path, size: Buffer.byteLength(text), bytes: async () => new Uint8Array(new TextEncoder().encode(text)) });
 const folder = () => [
   entry('export/song.system.json', systemText),
   entry('export/catalogs/class/viandante.json', classOriginal),
@@ -96,7 +96,7 @@ it('rejects folders without a system, unsafe paths and oversized metadata', asyn
 it('surfaces the failing catalog path and changed bytes instead of hiding them', async () => {
   const files = [...folder(), entry('export/catalogs/class/broken.json', '{}')];
   await expect(prepareLocalBundle(files, 'export/song.system.json')).rejects.toThrow('export/catalogs/class/broken.json');
-  const changed: FolderFile[] = [{ path: 'export/song.system.json', size: 1, bytes: async () => new TextEncoder().encode(systemText) }];
+  const changed: FolderFile[] = [{ path: 'export/song.system.json', size: 1, bytes: async () => new Uint8Array(new TextEncoder().encode(systemText)) }];
   await expect(prepareLocalSystem(changed, 'export/song.system.json')).rejects.toThrow(copy.folderChanged);
   await expect(prepareLocalSystem(folder(), 'export/catalogs/manifest.json')).rejects.toThrow(copy.folderInvalid);
 });

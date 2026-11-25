@@ -366,6 +366,23 @@ invalid. The charge and card-input increment below supersedes the earlier
 Second Wind restriction. These scoping rules are inferred from the 5e source,
 not verified upstream.
 
+Import diagnostics follow the same gate (2026-11-25): a stat or chip event in a
+resource `display_view` or `list_view` is reported only when that resource has
+no handler `resourceEventSupported` accepts. The message names the event and the
+reason: no handler in the resource, a combatant without its own mechanics, or a
+popup, search row or draft. In the combat tracker a character combatant's
+`card_view`/`header_view` events run that character's mechanics, exactly as on
+its sheet (5e `player_character` initiative `rollStat`). While the encounter is
+preparing, every combatant shows its `header_view` (afterwards only the current
+one), and a roll result offers "Usa come iniziativa", which copies that total
+into the combatant's initiative only when the user presses it. Resource and
+instance combatants own no mechanics: 5e/PF2e monsters declare no events, and
+`player` requests `rollStat`, whose only handler reads the character-only
+`advantages`/`all_disadvantages`, so those events stay inert and reported.
+A card event never falls back to the character
+handler: Archer `player` (`resources[34]`) has its own base `initiative`, so the
+character `rollStat` would roll the wrong bonus.
+
 Unsupported: arbitrary `$view`-dependent scopes, resource mechanics outside scoped
 `eventName` dispatch or resource card actions, popups fired from a resource
 handler, `showResource`, `dismissResource`, executing `delayed` (except `dismissResource`), `copyResource`,
