@@ -1,5 +1,9 @@
 # Content provenance and third-party notices
 
+## License scope
+
+This license covers the new application and original Sentieri example only. It does not relicense imported third-party systems, rules, images, or tools.
+
 ## Distributed material
 
 | Material | Author | Source | License |
